@@ -158,7 +158,16 @@ class AppState:
             result["backup"] = str(dest)
         finally:
             self.apply_lock.release()
-        self.ensure_library(refresh=True)
+        # 4) Only now, with the database committed, move rejected songs' files to the Trash.
+        # trash() takes a fresh snapshot and refuses any file Serato still uses.
+        doomed = [r["path"] for r in result.get("removed", []) if r.get("deleteFile")]
+        if doomed:
+            try:
+                result["trashed"] = self.trash(doomed)["results"]
+            except Exception as e:  # the Serato write already succeeded; report, don't fail it
+                result["trashed"] = [{"path": p, "ok": False, "error": str(e)} for p in doomed]
+        else:
+            self.ensure_library(refresh=True)
         return result
 
     def restore_serato(self, backup_dir: str) -> dict:

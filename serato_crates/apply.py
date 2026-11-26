@@ -16,9 +16,16 @@ How Serato 4 stores the local drive's library
 - Master triggers write UI notification rows (updated_container, moved_container, …). They are
   empty while Serato is closed, so we clear what our changes added.
 
+- Removing a song (removeTrack) is what Serato itself does on Cmd+Delete, verified by diffing the
+  files before and after: delete the song's space_asset rows in both files and let the triggers
+  delete the asset. Foreign keys then drop its crate memberships and set history_entry.asset_id
+  to NULL (each history row keeps its own copy of title, artist and path, so play history stays).
+  Serato also drops the song from its cached list tables (anonymous_table_*); their maintenance
+  triggers only exist while Serato runs, so we delete those rows ourselves. The file on disk is
+  not touched here; the server moves it to the Trash after a successful commit when asked to.
+
 Supported plan ops: createCrate, renameCrate, moveCrate, deleteCrate, mergeCrate, add, remove,
-relocate. removeTrack is refused for now: deleting songs also touches play history and
-Serato's removed_asset bookkeeping.
+relocate, removeTrack.
 
 Before committing we run integrity and foreign-key checks, check that master and root mirror
 each other, and check that every crate's contents equal what the app expected. If anything
@@ -37,7 +44,11 @@ from pathlib import Path
 
 LIBRARY = "Serato Library"
 LOCAL = 1  # location id of the local drive (root.sqlite)
-SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate"}
+# PRAGMA user_version of master.sqlite and root.sqlite that this writer has been verified against.
+# 202 = Serato DJ Pro 4.0.x. A newer Serato migrates the files on launch; we refuse to write until
+# the new schema has been checked, because the triggers and tables we rely on may have changed.
+KNOWN_SCHEMAS = {202}
+SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate", "removeTrack"}
 NOTIFY_TABLES = (
     "updated_container",
     "moved_container",
@@ -146,6 +157,13 @@ class _Writer:
         self.rev = q("SELECT revision FROM db1.serato").fetchone()[0]
         self.now = int(time.time())
         self.new_ids: dict[str, int] = {}  # plan's "new-…" ids -> master container ids
+        self.removed: list[dict] = []  # songs removed by removeTrack: {asset, path, deleteFile}
+        # Serato's cached asset lists ("All...", search results): anonymous_table_N with an asset_id column.
+        self.list_caches = [
+            t
+            for (t,) in q("SELECT name FROM main.sqlite_master WHERE type = 'table' AND name LIKE 'anonymous\\_table\\_%' ESCAPE '\\'")
+            if any(c[1] == "asset_id" for c in q(f"PRAGMA main.table_info('{t}')"))
+        ]
 
     # -- lookups --
     def _one(self, sql: str, args=()) -> object:
@@ -311,6 +329,19 @@ class _Writer:
         self.con.execute("UPDATE main.asset SET portable_id = ? WHERE id = ? AND location_id = ?", (pid, aid, LOCAL))
         self.con.execute("UPDATE db1.asset SET portable_id = ?, revision = ? WHERE id = ?", (pid, self.rev, rasset))
 
+    def remove_track(self, op: dict) -> None:
+        aid = int(op["asset"])
+        rasset, _, _ = self.asset(aid)  # must be a song of the local Serato Library
+        pid = self._one("SELECT portable_id FROM main.asset WHERE id = ?", (aid,))
+        # Every space the song is in (a few are also in Prepare), so the triggers delete the asset itself.
+        self.con.execute("DELETE FROM db1.space_asset WHERE asset_id = ?", (rasset,))
+        self.con.execute("DELETE FROM main.space_asset WHERE asset_id = ?", (aid,))
+        for t in self.list_caches:
+            self.con.execute(f"DELETE FROM main.'{t}' WHERE asset_id = ?", (aid,))
+        if self._one("SELECT COUNT(*) FROM main.asset WHERE id = ?", (aid,)) or self._one("SELECT COUNT(*) FROM db1.asset WHERE id = ?", (rasset,)):
+            raise ApplyError(f"歌曲 #{aid} 沒有被完整移除")
+        self.removed.append({"asset": aid, "path": "/" + pid, "deleteFile": bool(op.get("deleteFile"))})
+
     def run(self, op: dict) -> None:
         kind = op.get("type")
         if kind not in SUPPORTED:
@@ -324,6 +355,7 @@ class _Writer:
             "add": self.add,
             "remove": self.remove,
             "relocate": self.relocate,
+            "removeTrack": self.remove_track,
         }[kind](op)
 
     # -- verification --
@@ -386,6 +418,10 @@ class _Writer:
         )
         if orphans:
             problems.append(f"root 裡有 {orphans} 個 crate 在 master 裡沒有對應")
+        m_assets = {r[0] for r in self.con.execute("SELECT external_id FROM main.asset WHERE location_id = ?", (LOCAL,))}
+        r_assets = {r[0] for r in self.con.execute("SELECT id FROM db1.asset")}
+        if m_assets != r_assets:
+            problems.append(f"歌曲清單不一致：只在 master {len(m_assets - r_assets)} 首、只在 root {len(r_assets - m_assets)} 首")
         return problems[:20]
 
 
@@ -395,9 +431,17 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
     try:
         con.execute("PRAGMA foreign_keys = ON")
         con.execute("ATTACH DATABASE ? AS db1", (str(root),))
+        versions = {schema: con.execute(f"PRAGMA {schema}.user_version").fetchone()[0] for schema in ("main", "db1")}
+        if not set(versions.values()) <= KNOWN_SCHEMAS:
+            raise ApplyError(
+                f"Serato 資料庫的版本是 {versions['main']}（root {versions['db1']}），"
+                f"Backstage 只驗證過 {', '.join(map(str, sorted(KNOWN_SCHEMAS)))}（Serato DJ Pro 4.0）。"
+                "可能是 Serato 更新過了。為了安全，在確認新版的資料庫格式之前不會寫入，什麼都沒有改。"
+            )
         con.execute("BEGIN IMMEDIATE")
         w = _Writer(con)
         before = {t: w._one(f"SELECT COUNT(*) FROM main.{t}") for t in NOTIFY_TABLES}
+        history_before = w._one("SELECT COUNT(*) FROM main.history_entry")
         applied = 0
         for change in changes:
             for op in change.get("ops", []):
@@ -419,6 +463,10 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         if fk:
             raise ApplyError(f"外鍵檢查失敗：{fk[:3]}")
         checks.append("資料庫完整性、外鍵檢查通過")
+        if w._one("SELECT COUNT(*) FROM main.history_entry") != history_before:
+            raise ApplyError("播放紀錄的筆數變了，為了安全不寫入")
+        if w.removed:
+            checks.append(f"移除 {len(w.removed)} 首歌，播放紀錄 {history_before} 筆全部保留")
         problems = w.mirror_problems()
         if problems:
             raise ApplyError("master / root 不一致：" + "；".join(problems))
@@ -450,7 +498,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         else:
             con.execute("COMMIT")
             con.execute("PRAGMA main.wal_checkpoint(TRUNCATE)")  # leave the files as a cleanly closed Serato would
-        return {"ok": True, "applied": applied, "checks": checks, "newIds": w.new_ids, "dryRun": dry_run}
+        return {"ok": True, "applied": applied, "checks": checks, "newIds": w.new_ids, "removed": w.removed, "dryRun": dry_run}
     except Exception:
         if con.in_transaction:
             con.execute("ROLLBACK")

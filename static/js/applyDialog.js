@@ -41,6 +41,24 @@ function expectedTree(changes) {
   return out;
 }
 
+function trashNote(trashed) {
+  if (!trashed?.length) return null;
+  const failed = trashed.filter((r) => !r.ok);
+  const ok = trashed.length - failed.length;
+  return h(
+    'div',
+    { class: `fnote ${failed.length ? 'fnote-danger' : 'fnote-ok'}` },
+    h(
+      'span',
+      {},
+      ok ? `✓ ${ok} 個「不要」的檔案已丟到垃圾桶。` : '',
+      failed.length
+        ? [h('br'), `${failed.length} 個檔案沒有丟掉（Serato 裡已經移除了，檔案還在原處）：`, h('ul', {}, failed.slice(0, 5).map((r) => h('li', {}, fmt.shortPath(r.path), '：', r.error)))]
+        : null,
+    ),
+  );
+}
+
 const count = (changes) => {
   const c = {};
   for (const ch of changes) for (const op of ch.ops) c[op.type] = (c[op.type] || 0) + 1;
@@ -64,6 +82,7 @@ export async function openApplyDialog() {
     const { supported, later } = split();
     const c = count(supported);
     const nOps = supported.reduce((n, ch) => n + ch.ops.length, 0);
+    const nTrash = supported.reduce((n, ch) => n + ch.ops.filter((o) => o.type === 'removeTrack' && o.deleteFile).length, 0);
     if (phase === 'running') {
       clear(bodyEl, h('div', { class: 'apply-progress' }, h('div', { class: 'mark-spin' }, '◐'), h('p', {}, '套用中：預演 → 備份 → 寫入 → 檢查…'), h('p', { class: 'muted small' }, '請不要打開 Serato DJ')));
       return;
@@ -73,6 +92,7 @@ export async function openApplyDialog() {
         bodyEl,
         h('div', { class: 'fnote fnote-ok' }, h('strong', {}, `✓ 已經寫入 Serato：${result.applied} 個動作`)),
         h('ul', { class: 'apply-checks' }, result.checks.map((x) => h('li', {}, '✓ ', x))),
+        trashNote(result.trashed),
         h('p', { class: 'muted small' }, '套用前的資料庫備份在：', h('code', {}, fmt.shortPath(result.backup))),
         h('p', {}, '請打開 Serato DJ 確認 crate 看起來正確。如果有問題，先關掉 Serato，再到「變更計畫」按「還原上次套用前的備份」。'),
         h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onclick: () => closeFn?.() }, '完成')),
@@ -90,8 +110,9 @@ export async function openApplyDialog() {
           ]
         : h('p', {}, '變更計畫裡沒有可以套用的動作。'),
       later.length
-        ? h('p', { class: 'muted small' }, `還不能套用、會留在計畫裡：${Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join('、')}（移除歌曲之後會支援）`)
+        ? h('p', { class: 'muted small' }, `還不能套用、會留在計畫裡：${Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join('、')}`)
         : null,
+      nTrash ? h('p', { class: 'muted small' }, `其中 ${nTrash} 首標記「不要」的歌，會在寫入成功之後把檔案丟到垃圾桶（可以從垃圾桶或「資料夾」頁還原）。其他移除的歌只從 Serato 移除，檔案不動。`) : null,
       h(
         'div',
         { class: `fnote ${!status ? '' : blocked ? 'fnote-danger' : 'fnote-ok'}` },

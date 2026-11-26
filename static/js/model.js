@@ -20,7 +20,7 @@ function push(map, key, value) {
 const sameName = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0;
 
 // Plan ops that Apply to Serato can write (see serato_crates/apply.py).
-export const APPLY_SUPPORTED = new Set(['createCrate', 'renameCrate', 'moveCrate', 'deleteCrate', 'mergeCrate', 'add', 'remove', 'relocate']);
+export const APPLY_SUPPORTED = new Set(['createCrate', 'renameCrate', 'moveCrate', 'deleteCrate', 'mergeCrate', 'add', 'remove', 'relocate', 'removeTrack']);
 
 // ---------- Effective state ----------
 export function applyPlan(base, changes) {
