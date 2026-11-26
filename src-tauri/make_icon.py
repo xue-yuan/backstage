@@ -1,6 +1,6 @@
 """Draw the Backstage app icon (a vinyl record with the app's blue label) as a 1024px PNG.
 
-Pure standard library so it runs anywhere:  python3 src-tauri/make_icon.py src-tauri/icon-source.png
+Pure standard library so it runs anywhere:  uv run --no-project src-tauri/make_icon.py src-tauri/icon-source.png
 Then:  pnpm tauri icon src-tauri/icon-source.png
 """
 import math

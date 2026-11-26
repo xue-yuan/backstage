@@ -1,7 +1,8 @@
 // Backstage Mac app: a native window around the existing local server.
 //
 // On launch it starts the bundled Python server (app.py) on a fixed local port, waits until it
-// answers, then points the window at it. The server stops when the app quits (and on its own if
+// answers, then points the window at it. Python is a uv-managed interpreter located with
+// `uv python find`; it is started directly (not via `uv run`) so quitting the app can stop it. The server stops when the app quits (and on its own if
 // the app ever dies, via --exit-with-parent). The port is fixed so the page's saved settings
 // (localStorage is per origin) survive restarts.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
@@ -20,7 +21,10 @@ use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 const PORT: u16 = 47615;
-const PYTHONS: [&str; 3] = ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3"];
+// GUI apps get a minimal PATH, so look for uv where its installers put it.
+const UV_PATHS: [&str; 2] = ["/opt/homebrew/bin/uv", "/usr/local/bin/uv"];
+const UV_HOME_PATHS: [&str; 2] = [".local/bin/uv", ".cargo/bin/uv"];
+const PYTHON_REQUEST: &str = ">=3.12";
 
 struct Server(Mutex<Option<Child>>);
 
@@ -54,8 +58,31 @@ fn port_open() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
-fn find_python() -> Option<&'static str> {
-    PYTHONS.into_iter().find(|p| Path::new(p).exists())
+fn find_uv() -> Option<PathBuf> {
+    let home = home();
+    UV_PATHS
+        .iter()
+        .map(PathBuf::from)
+        .chain(UV_HOME_PATHS.iter().map(|p| home.join(p)))
+        .find(|p| p.is_file())
+}
+
+/// A uv-managed Python interpreter (never the system one).
+fn find_python() -> Result<PathBuf, String> {
+    let uv = find_uv().ok_or("找不到 uv。請先安裝 uv（例如 brew install uv）。")?;
+    let out = Command::new(&uv)
+        .args(["python", "find", "--no-project", "--managed-python", PYTHON_REQUEST])
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|e| format!("無法執行 {}：{e}", uv.display()))?;
+    let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
+    if !out.status.success() || !path.is_file() {
+        return Err(format!(
+            "uv 找不到符合 {PYTHON_REQUEST} 的 Python。\n請在終端機執行：uv python install 3.14\n\n{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    Ok(path)
 }
 
 fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
@@ -64,14 +91,15 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
             "127.0.0.1:{PORT} 已經被其他程式使用（可能是另一個 Backstage 還開著）。\n請關掉它之後再打開 Backstage。"
         ));
     }
-    let python = find_python().ok_or("找不到 python3。請安裝 Xcode Command Line Tools 或 Homebrew 的 Python。")?;
+    let python = find_python()?;
+    app_log(&format!("python: {}", python.display()));
     std::fs::create_dir_all(data_dir).map_err(|e| format!("無法建立資料夾 {}：{e}", data_dir.display()))?;
     let log = OpenOptions::new()
         .create(true)
         .append(true)
         .open(data_dir.join("server.log"))
         .map_err(|e| format!("無法寫入 server.log：{e}"))?;
-    Command::new(python)
+    Command::new(&python)
         .arg("-B") // never write __pycache__ into the app bundle
         .arg(server_dir.join("app.py"))
         .args(["--port", &PORT.to_string(), "--no-browser", "--exit-with-parent", "--data-dir"])
@@ -81,7 +109,7 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log)
         .spawn()
-        .map_err(|e| format!("無法啟動 {python}：{e}"))
+        .map_err(|e| format!("無法啟動 {}：{e}", python.display()))
 }
 
 fn show_error(window: &WebviewWindow, message: &str) {

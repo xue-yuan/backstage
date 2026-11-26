@@ -13,6 +13,8 @@ pnpm app:build        # builds src-tauri/target/release/bundle/macos/Backstage.a
 
 The Mac app is a Tauri window. On launch it starts the same Python server in the background (fixed at `127.0.0.1:47615`) and stops it when the app quits.
 
+Python comes from [uv](https://docs.astral.sh/uv/): the app runs the uv-managed interpreter that `uv python find --managed-python ">=3.12"` returns, never the system Python. If none is installed, run `uv python install 3.14`.
+
 Data lives in `~/Library/Application Support/Backstage/`:
 
 - the Serato snapshot
@@ -26,11 +28,11 @@ Data lives in `~/Library/Application Support/Backstage/`:
 ## Running in a browser
 
 ```bash
-python3 app.py            # opens http://127.0.0.1:8765 (same data folder as the Mac app)
-python3 app.py --port 9000 --no-browser
+uv run --no-project app.py            # opens http://127.0.0.1:8765 (same data folder as the Mac app)
+uv run --no-project app.py --port 9000 --no-browser
 ```
 
-The server uses only the Python standard library and the front end is plain JavaScript; nothing to install. Do not run the browser version and the Mac app at the same time: both write the same plan.
+The server uses only the Python standard library and the front end is plain JavaScript; there are no packages to install. Do not run the browser version and the Mac app at the same time: both write the same plan.
 
 ## Views
 

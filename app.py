@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Backstage — organise your Serato DJ library: folders, crates, screening and applying changes.
 
-    python3 app.py            # opens http://127.0.0.1:8765
-    python3 app.py --port 9000 --no-browser
+    uv run --no-project app.py            # opens http://127.0.0.1:8765
+    uv run --no-project app.py --port 9000 --no-browser
 
 The Mac app (src-tauri/) starts this same server in the background and shares
 its data folder (~/Library/Application Support/Backstage).
