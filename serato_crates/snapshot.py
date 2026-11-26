@@ -85,12 +85,20 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
             "source": str(source),
             "sourceModifiedAt": datetime.fromtimestamp(src_stat.st_mtime, timezone.utc).isoformat(),
             "attempts": attempt + 1,
+            # size + mtime of master.sqlite and its WAL, verified unchanged during the copy;
+            # the page's watcher compares the live files against it (see server.watch)
+            "sourceSignature": [list(x) if x else None for x in before],
         }
         (data_dir / "snapshot.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
         return meta
 
     shutil.rmtree(work, ignore_errors=True)
     raise SnapshotError(tr("Could not get a consistent snapshot ({problem}). Please try again in a moment", problem=last_problem))
+
+
+def source_signature(source: Path = DEFAULT_SOURCE) -> list:
+    """Size and modification time of master.sqlite and its WAL: changes whenever Serato writes."""
+    return [list(x) if x else None for x in _signature([source, source.with_name(source.name + "-wal")])]
 
 
 def load_meta(data_dir: Path) -> dict | None:

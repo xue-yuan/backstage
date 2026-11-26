@@ -4,11 +4,14 @@ import { clear, fmt, h, isTyping, modal, prefs, toast } from './ui.js';
 import { createCleanupView } from './views/cleanup.js';
 import { createFoldersView } from './views/folders.js';
 import { createInboxView } from './views/inbox.js';
+import { createOverviewView } from './views/overview.js';
 import { createPlanView } from './views/plan.js';
 import { createStructureView } from './views/structure.js';
+import { startWatch } from './watch.js';
 import { _, _n, lang, setLang, switchTo, syncServerLang } from './i18n.js';
 
 const VIEWS = {
+  home: { label: _('Overview'), create: createOverviewView },
   folders: { label: _('Folders'), create: createFoldersView },
   inbox: { label: _('Sort'), create: createInboxView },
   cleanup: { label: _('Cleanup'), create: createCleanupView },
@@ -25,7 +28,7 @@ let current = null;
 let currentName = null;
 
 function navigate(name) {
-  if (!VIEWS[name]) name = 'inbox';
+  if (!VIEWS[name]) name = 'home';
   current?.destroy?.();
   currentName = name;
   prefs.set('view', name);
@@ -132,7 +135,8 @@ async function boot() {
     current?.update?.();
   });
   store.loadAudioInfo(); // background: reads each file's real codec / bit rate
-  navigate(location.hash.slice(1) || prefs.get('view', 'inbox'));
+  navigate(location.hash.slice(1) || 'home'); // the app opens on the Overview
+  startWatch(); // reload after Serato changes its library; offer to apply when Serato closes
 }
 
 window.__crateDesk = { store, player, toast }; // toast is also used by the Mac app (download finished)

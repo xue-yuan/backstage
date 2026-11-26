@@ -34,6 +34,10 @@ uv run --no-project app.py --port 9000 --no-browser
 
 The server uses only the Python standard library and the front end is plain JavaScript; there are no packages to install. Do not run the browser version and the Mac app at the same time: both write the same plan.
 
+## Watching Serato
+
+While the page is open it asks the server every few seconds whether Serato DJ is running and whether its library changed since the last snapshot (size and modification time of `master.sqlite` and its WAL; Serato's files are never opened). After a change it reloads the snapshot once the database has been quiet for 2 seconds (15 seconds while Serato is open, so a set is not interrupted by reloads). When Serato DJ closes and the plan has changes that can be applied, it offers to apply them.
+
 ## Language
 
 The interface is in English by default; the button at the top right switches to Traditional Chinese and back. The choice is saved in the page and in `settings.json` in the data folder, so server messages and the Mac app's startup messages follow it.
@@ -44,6 +48,7 @@ Strings are written in English in the code and wrapped in `_()` / `_n()` (front 
 
 | View | What it does |
 |---|---|
+| Overview | The start page: songs left to sort, files left to screen per folder, staged changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality). Every card opens the view that handles it |
 | Folders | Scans `~/Music/DJ` and labels every song: sorted, unsorted, not imported, copy, rejected or missing. Shows which folders are done, real audio format and quality, and lets you screen files and open folders in Finder |
 | Sort | Go through unsorted songs (a crate under Inbox, a disk folder, songs in no crate, recently added) and sort them. Keys 1–9 add to pinned crates, ⇧+number adds a suggested crate, `/` searches or creates a crate, `X` rejects |
 | Cleanup | Missing files (relocate, or merge into the record that already points at the moved file), duplicates (keep one, merge crates), empty crates |

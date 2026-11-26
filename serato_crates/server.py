@@ -19,7 +19,7 @@ from .apply import ApplyError, apply_changes, backup as backup_serato, files_in_
 from .audioinfo import AudioInfoProber
 from .folders import scan_folders
 from .library import load_library, scan_audio_files
-from .snapshot import DEFAULT_SOURCE, SnapshotError, load_meta, take_snapshot
+from .snapshot import DEFAULT_SOURCE, SnapshotError, load_meta, source_signature, take_snapshot
 from .trash import move_to_trash, restore_from_trash
 from . import i18n
 from .i18n import tr
@@ -80,6 +80,16 @@ class AppState:
                 self.library = load_library(self.data_dir / "snapshot.sqlite")
                 self.track_paths = {t["id"]: t["path"] for t in self.library["tracks"]}
             return {"snapshot": self.meta, "readOnly": True, **self.library}
+
+    def watch(self) -> dict:
+        """Cheap status for the page's poll: is Serato open, and has its library changed since our snapshot?"""
+        signature = source_signature(SERATO_LIBRARY / "master.sqlite")
+        meta = load_meta(self.data_dir)
+        return {
+            "seratoRunning": serato_running(),
+            "signature": signature,
+            "libraryChanged": meta is not None and meta.get("sourceSignature") != signature,
+        }
 
     def read_plan(self) -> dict:
         if self.plan_path.exists():
@@ -387,6 +397,8 @@ def make_handler(state: AppState, port: int):
                     return self._send_static(p[len("/static/"):])
                 if p == "/api/library":
                     return self._json(state.ensure_library())
+                if p == "/api/watch":
+                    return self._json(state.watch())
                 if p == "/api/settings":
                     return self._json({"lang": i18n.lang()})
                 if p == "/api/plan":

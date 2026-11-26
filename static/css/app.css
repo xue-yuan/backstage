@@ -507,3 +507,29 @@ select.input-sm { flex: none; min-width: 0; }
 .apply-progress { text-align: center; padding: 24px 0; }
 .mark-spin { font-size: 34px; color: var(--accent); animation: spin 2.4s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Overview ---------- */
+.overview { overflow: auto; padding: 20px 24px 32px; max-width: 1180px; margin: 0 auto; }
+.ov-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.ov-head h2 { margin: 0; font-size: 20px; }
+.ov-serato { font-size: 12px; padding: 2px 10px; border-radius: 999px; }
+.ov-serato.is-open { background: var(--warn-soft); color: var(--warn); }
+.ov-serato.is-closed { background: var(--ok-soft); color: var(--ok); }
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.ov-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font: inherit; color: inherit;
+  background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: var(--radius);
+  padding: 12px 14px; cursor: pointer;
+}
+button.ov-card:hover { border-color: var(--muted); }
+.ov-card.is-zero { opacity: .6; }
+.ov-card.is-unsorted { border-left-color: var(--st-unsorted); }
+.ov-card.is-notImported { border-left-color: var(--st-notImported); }
+.ov-card.is-missing { border-left-color: var(--st-missing); }
+.ov-card.is-warn { border-left-color: var(--warn); }
+.ov-card.is-accent { border-left-color: var(--accent); }
+.ov-plan { cursor: default; }
+.ov-num { font-size: 26px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.ov-label { font-weight: 500; }
+.ov-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+

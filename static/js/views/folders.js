@@ -25,6 +25,16 @@ export function createFoldersView({ navigate }) {
   let sortBy = prefs.get('folders.sort', 'name');
   let statusFilter = 'all';
   let lowOnly = false;
+  // One-shot link from the Overview: open this folder, optionally showing only low-quality files.
+  const link = prefs.get('folders.link', null);
+  if (link) {
+    prefs.set('folders.link', null);
+    if (link.key) {
+      selectedKey = link.key;
+      for (let k = link.key; k.includes('/'); k = k.slice(0, k.lastIndexOf('/'))) expanded.add(k); // reveal it in the tree
+    }
+    lowOnly = !!link.lowOnly;
+  }
   let includeSub = prefs.get('folders.includeSub', true);
   let filter = '';
   let visibleRows = [];
