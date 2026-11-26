@@ -512,7 +512,7 @@ export function createFoldersView({ navigate }) {
 
   function playKey(f) {
     const p = playable(f);
-    return p ? (p.key ?? `t${p.id}`) : null;
+    return p ? player.playId(p) : null;
   }
 
   const isPlaying = (f) => player.playing && player.current?.key === playKey(f);
@@ -533,7 +533,10 @@ export function createFoldersView({ navigate }) {
     const next = fileItems[fileIndex(f.path) + 1]?.path;
     const wasPlaying = isPlaying(f);
     if (f.viaPlan) {
-      store.revertOps((op) => op.type === 'removeTrack' && op.deleteFile && op.asset === f.assetId);
+      // A merged duplicate stays merged (only its file is kept); a plain reject is undone.
+      const merged = store.findOps((op) => op.type === 'removeTrack' && op.deleteFile && op.asset === f.assetId && op.group != null).length;
+      if (merged) store.keepFileOf(f.assetId);
+      else store.revertOps((op) => op.type === 'removeTrack' && op.deleteFile && op.asset === f.assetId);
       return;
     }
     if (f.status === 'rejected') {
@@ -560,12 +563,25 @@ export function createFoldersView({ navigate }) {
       return;
     }
     store.setScreenMark([f.path], 'keep');
+    if (f.inSerato) {
+      const twin = store.base.tracks.get(f.inSerato[0]);
+      toast(_('Serato already has this song ({dir}). Importing this file too would make a duplicate.', { dir: twin ? fmt.shortPath(dirOf(effectivePath(store.eff, twin))) : '' }), { tone: 'warn', timeout: 7000 });
+    }
     advanceFrom(f.path, next, wasPlaying);
   }
 
   function cratesCell(f) {
     const eff = store.eff;
-    if (f.status === 'notImported') return h('span', { class: 'muted' }, '—');
+    if (f.status === 'notImported') {
+      if (!f.inSerato) return h('span', { class: 'muted' }, '—');
+      const twin = store.base.tracks.get(f.inSerato[0]);
+      const ok = f.inSerato.some((id) => isClassified(eff, store.rules, id));
+      return h(
+        'span',
+        { class: 'ellipsis warn-text', title: inSeratoTip(f) },
+        _('Serato already has it: {dir} ({status})', { dir: twin ? fmt.shortPath(dirOf(effectivePath(eff, twin))) : '', status: ok ? _('Sorted') : _('Unsorted') }),
+      );
+    }
     if (f.status === 'rejected')
       return h('span', { class: 'muted' }, f.viaPlan ? _('Reject · removed and trashed when you apply to Serato') : _('Reject · not moved to the Trash yet'));
     if (f.status === 'copy') {
@@ -587,10 +603,19 @@ export function createFoldersView({ navigate }) {
     );
   }
 
+  /** Tooltip listing the Serato tracks that look like the same song as file `f`. */
+  function inSeratoTip(f) {
+    const lines = f.inSerato.map((id) => {
+      const t = store.base.tracks.get(id);
+      return t ? `${store.trackLabel(id)}\n   ${effectivePath(store.eff, t)}${t.exists ? '' : ` (${_('Missing file')})`}` : `#${id}`;
+    });
+    return `${_('Serato already has a song with this name. Importing this file too would make a duplicate:')}\n${lines.join('\n')}`;
+  }
+
   function playable(f) {
     if (f.status === 'missing') return null;
     if (f.assetId != null) return store.base.tracks.get(f.assetId);
-    return { key: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: _('File not in Serato') };
+    return { playKey: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: _('File not in Serato') };
   }
 
   function renderFile(f) {
@@ -598,7 +623,7 @@ export function createFoldersView({ navigate }) {
     const node = selected();
     const rel = node && f.node !== node ? f.node.path.slice(node.path.length + 1) : '';
     const play = playable(f);
-    const key = play ? (play.key ?? `t${play.id}`) : null;
+    const key = play ? player.playId(play) : null;
     const title = t ? t.title || stripExt(f.name) : stripExt(f.name);
     const sub = [t ? t.artist : `${fmt.size(f.size)} · ${fmt.date(f.mtime)}`, rel && `📁 ${rel}`].filter(Boolean).join(' · ');
     const canKeep = f.assetId == null && f.status !== 'missing';
@@ -628,7 +653,13 @@ export function createFoldersView({ navigate }) {
       h(
         'div',
         { class: 'trow-main' },
-        h('div', { class: 'trow-title', title: f.path }, title, f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null),
+        h(
+          'div',
+          { class: 'trow-title', title: f.path },
+          title,
+          f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null,
+          f.inSerato ? h('span', { class: 'tag tag-warn', title: inSeratoTip(f) }, _('Already in Serato')) : null,
+        ),
         h('div', { class: 'trow-sub' }, sub),
       ),
       cratesCell(f),

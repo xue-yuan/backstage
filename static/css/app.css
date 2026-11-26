@@ -358,6 +358,8 @@ select.input-sm { flex: none; min-width: 0; }
   background: var(--panel-2); border: 1px solid var(--border); box-shadow: var(--shadow); animation: toast-in .18s ease-out;
 }
 .toast-danger { border-color: var(--danger); color: var(--danger); }
+.toast-warn { border-color: var(--warn); color: var(--warn); }
+.warn-text { color: var(--warn); }
 @keyframes toast-in { from { transform: translateY(6px); opacity: 0; } }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .5); display: grid; place-items: start center; padding-top: 12vh; z-index: 200; }
 .modal { width: min(440px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; }

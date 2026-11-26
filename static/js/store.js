@@ -324,8 +324,30 @@ class Store {
   opMerge(from, into) {
     return { type: 'mergeCrate', from, into, text: _('Merge "{from}" into "{into}"', { from: this.crateLabel(from), into: this.crateLabel(into) }) };
   }
-  opRemoveTrack(asset, reason) {
-    return { type: 'removeTrack', asset, reason, text: `${_('Remove from the Serato library (file kept): {track}', { track: this.trackLabel(asset) })}${reason ? _(' ({reason})', { reason }) : ''}` };
+  /** deleteFile: also move the file to the Trash once the removal is written to Serato. */
+  opRemoveTrack(asset, reason, { deleteFile = false } = {}) {
+    const track = this.trackLabel(asset);
+    const main = deleteFile ? _('Remove from the Serato library and move the file to the Trash: {track}', { track }) : _('Remove from the Serato library (file kept): {track}', { track });
+    const op = { type: 'removeTrack', asset, reason, text: `${main}${reason ? _(' ({reason})', { reason }) : ''}` };
+    if (deleteFile) op.deleteFile = true;
+    return op;
+  }
+  /** Keep the file of a staged removal that would have moved it to the Trash (the removal itself stays). */
+  keepFileOf(asset) {
+    let touched = 0;
+    for (const ch of this.plan.changes) {
+      ch.ops = ch.ops.map((op) => {
+        if (op.type !== 'removeTrack' || op.asset !== asset || !op.deleteFile) return op;
+        touched++;
+        const { deleteFile, ...rest } = op; // keep group / keeper / missing tags
+        return { ...rest, ...this.opRemoveTrack(asset, op.reason) };
+      });
+    }
+    if (touched) {
+      this.recompute();
+      this.persist();
+    }
+    return touched;
   }
   opReject(asset) {
     return { type: 'removeTrack', asset, reason: _('Reject'), deleteFile: true, text: _('Reject: remove from Serato and move the file to the Trash: {track}', { track: this.trackLabel(asset) }) };

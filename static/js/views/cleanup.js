@@ -1,5 +1,5 @@
 // Cleanup view: missing files (relocate / remove), duplicates (merge into a keeper), empty crates.
-import { findDuplicates, findEmptyCrates, findUncategorized } from '../model.js';
+import { effectivePath, findDuplicates, findEmptyCrates, findUncategorized, liveTracks, pathKey } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge, qualityScore } from '../quality.js';
 import { api, store } from '../store.js';
@@ -33,6 +33,8 @@ export function createCleanupView({ navigate }) {
   });
 
   const missingAll = () => [...store.base.tracks.values()].filter((t) => !t.exists);
+  // The music-folder scan says which files may go to the Trash (the Overview usually loaded it already).
+  if (!store.folderScan) store.loadFolders().catch(() => {});
 
   function renderTabs() {
     const eff = store.eff;
@@ -135,7 +137,7 @@ export function createCleanupView({ navigate }) {
       const relocatedTo = eff.relocated.get(t.id);
       const removed = eff.removedTracks.has(t.id);
       const cands = candidates?.[t.id] || [];
-      const pick = chosen.get(t.id) ?? cands[0]?.path;
+      const pick = cands.some((c) => c.path === chosen.get(t.id)) ? chosen.get(t.id) : cands[0]?.path; // a pick gone after a rescan falls back
       const crates = store.base.baseCratesOf.get(t.id) || [];
       let body;
       if (relocatedTo || removed) {
@@ -170,7 +172,7 @@ export function createCleanupView({ navigate }) {
                         render();
                       },
                     }),
-                    playBtn(`f${c.path}`, { key: `f${c.path}`, src: `/api/audio-file?path=${encodeURIComponent(c.path)}`, title: t.title || t.fileName, artist: _('Candidate file') }),
+                    playBtn(`f${c.path}`, { playKey: `f${c.path}`, src: `/api/audio-file?path=${encodeURIComponent(c.path)}`, title: t.title || t.fileName, artist: _('Candidate file') }),
                     h('span', { class: 'cand-path', title: c.path }, fmt.shortPath(c.path)),
                     libraryTrackAt(c.path) != null ? h('span', { class: 'tag tag-edit', title: _('This file already has another record in Serato') }, _('In library')) : null,
                     h('span', { class: 'muted small' }, `${fmt.size(c.size)} · ${fmt.date(c.modifiedAt)}`),
@@ -267,7 +269,13 @@ export function createCleanupView({ navigate }) {
     const head = h(
       'div',
       { class: 'cleanup-intro' },
-      h('p', {}, _('Finds duplicates by "artist + title". Pick the one to keep: the crates of the others are merged into it, then the others are removed from the library (files are not deleted).')),
+      h(
+        'p',
+        {},
+        _('Finds duplicates by "artist + title". Pick the one to keep: the crates of the others are merged into it, then the others are removed from the library (files are not deleted).'),
+        ' ',
+        _('"…and Trash the other files" also moves their files to the Trash after Apply to Serato, so they cannot be imported again by mistake.'),
+      ),
       h(
         'div',
         { class: 'toolbar' },
@@ -300,6 +308,7 @@ export function createCleanupView({ navigate }) {
 
     const stagedCards = [...staged].map(([key, ops]) => {
       const removed = ops.filter((o) => o.type === 'removeTrack').map((o) => base.tracks.get(o.asset));
+      const nTrash = ops.filter((o) => o.type === 'removeTrack' && o.deleteFile).length;
       const keeper = base.tracks.get(ops.find((o) => o.keeper)?.keeper);
       return h(
         'div',
@@ -309,14 +318,19 @@ export function createCleanupView({ navigate }) {
           { class: 'staged' },
           h('span', { class: 'tag tag-ok' }, _('Staged')),
           ` ${_n(removed.length, 'keep {keeper}, remove {n} duplicate', 'keep {keeper}, remove {n} duplicates', { keeper: keeper ? _('{title} ({quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }) : '' })}`,
+          nTrash ? h('span', { class: 'tag tag-danger' }, _n(nTrash, '{n} file to the Trash', '{n} files to the Trash')) : null,
           h('button', { class: 'btn btn-ghost btn-xs', onclick: () => store.revertOps((op) => op.group === key) }, _('Cancel')),
         ),
       );
     });
 
+    const owners = pathOwners();
     const cards = groups.map((g) => {
-      const keep = keepers.get(g.key) ?? g.keeper;
+      // A remembered pick that has left the group (e.g. removed under Missing files) falls back to the suggestion.
+      const picked = keepers.get(g.key);
+      const keep = g.tracks.some((t) => t.id === picked) ? picked : g.keeper;
       const first = g.tracks[0];
+      const trashable = trashableOthers(g, keep, owners);
       return h(
         'div',
         { class: 'card' },
@@ -357,6 +371,17 @@ export function createCleanupView({ navigate }) {
           'div',
           { class: 'row-actions' },
           h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeDupes(g, keep) }, _('Keep the selected one, merge the others')),
+          trashable.length
+            ? h(
+                'button',
+                {
+                  class: 'btn btn-sm btn-danger-ghost',
+                  title: `${_('After Apply to Serato succeeds, these files go to the macOS Trash (restorable):')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
+                  onclick: () => mergeDupes(g, keep, { trash: true }),
+                },
+                _n(trashable.length, '…and Trash the other file', '…and Trash the other {n} files'),
+              )
+            : null,
           h('button', {
             class: 'btn btn-sm btn-ghost',
             onclick: () => {
@@ -371,9 +396,43 @@ export function createCleanupView({ navigate }) {
     return [head, h('div', { class: 'cards' }, stagedCards, cards.length ? cards : h('div', { class: 'empty' }, _('No duplicates 🎉')))];
   }
 
-  function mergeDupes(g, keepId) {
+  /** pathKey -> ids of live tracks using that file (memoised per plan/snapshot version). */
+  let _owners = null;
+  let _ownersFor = -1;
+  function pathOwners() {
+    if (_ownersFor !== store.version) {
+      _owners = new Map();
+      for (const t of liveTracks(store.eff)) {
+        const k = pathKey(effectivePath(store.eff, t));
+        _owners.set(k, [...(_owners.get(k) || []), t.id]);
+      }
+      _ownersFor = store.version;
+    }
+    return _owners;
+  }
+
+  /**
+   * The other tracks of a group whose files may go to the Trash: the file exists, lies inside the
+   * scanned music folders (the server refuses anything else) and no record that stays in Serato uses it
+   * (two records can point at the same file).
+   */
+  function trashableOthers(g, keepId, owners = pathOwners()) {
+    const eff = store.eff;
+    const roots = (store.folderScan?.roots || []).map((r) => `${pathKey(r)}/`);
+    const leaving = new Set(g.tracks.filter((t) => t.id !== keepId).map((t) => t.id));
+    return g.tracks.filter((t) => {
+      if (!leaving.has(t.id) || (!t.exists && !eff.relocated.has(t.id))) return false;
+      const k = pathKey(effectivePath(eff, t));
+      if (!roots.some((r) => k.startsWith(r))) return false;
+      return (owners.get(k) || []).every((id) => leaving.has(id));
+    });
+  }
+
+  function mergeDupes(g, keepId, { trash = false } = {}) {
+    if (!g.tracks.some((t) => t.id === keepId)) return; // never remove every copy
     const eff = store.eff;
     const keepCrates = new Set(eff.cratesOf.get(keepId) || []);
+    const toTrash = new Set(trash ? trashableOthers(g, keepId).map((t) => t.id) : []);
     const ops = [];
     for (const t of g.tracks) {
       if (t.id === keepId) continue;
@@ -383,10 +442,11 @@ export function createCleanupView({ navigate }) {
           ops.push({ ...store.opAdd(c, keepId), group: g.key, keeper: keepId });
         }
       }
-      ops.push({ ...store.opRemoveTrack(t.id, _('Duplicate')), group: g.key, keeper: keepId });
+      ops.push({ ...store.opRemoveTrack(t.id, _('Duplicate'), { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
     }
     const keeper = store.base.tracks.get(keepId);
-    store.commit(_('Merge duplicates: {title} (keep {quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }), ops);
+    const label = _('Merge duplicates: {title} (keep {quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label });
+    store.commit(toTrash.size ? `${label}${_n(toTrash.size, ', {n} file to the Trash', ', {n} files to the Trash')}` : label, ops);
   }
 
   // ---------- empty crates ----------

@@ -1,6 +1,6 @@
 // Folder status report: match files found on disk to Serato tracks and roll the status up per folder.
 // Pure data (no DOM), used by the Folders view.
-import { baseName, dirOf, effectivePath, isClassified, liveTracks, pathKey } from './model.js';
+import { baseName, dirOf, effectivePath, isClassified, liveTracks, norm, pathKey } from './model.js';
 import { fmt } from './ui.js';
 import { _, _n } from './i18n.js';
 
@@ -17,6 +17,40 @@ export const HINT = {
 export const BAR = ['classified', 'unsorted', 'notImported', 'copy', 'rejected'];
 const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, kept: 0 });
 export const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+
+// "Serato already has this song": for a file Serato does not use, find live Serato tracks that are
+// the same song by name, so importing the file would make a duplicate (Serato writes its analysis
+// into the tags, so such copies are rarely byte-identical). A match is the same file name; or
+// "Artist - Title" with the same title and a shared artist word; or a title of 3+ words on its own.
+const ARTIST_STOP = new Set(['feat', 'ft', 'featuring', 'vs', 'x', 'and', 'with', 'the', 'dj', 'mc']);
+const artistWords = (s) => new Set(norm(s).split(' ').filter((w) => w.length > 1 && !ARTIST_STOP.has(w)));
+const stemOf = (name) => name.replace(/\.[^./]+$/, '');
+
+export function songMatcher(tracks) {
+  const byFile = new Map();
+  const byTitle = new Map();
+  const add = (map, key, t) => key && map.set(key, [...(map.get(key) || []), t]);
+  for (const t of tracks) {
+    add(byFile, norm(stemOf(t.fileName || '')), t);
+    add(byTitle, norm(t.title), t);
+  }
+  return (fileName) => {
+    const stem = stemOf(fileName);
+    const byName = byFile.get(norm(stem));
+    if (byName) return byName;
+    const dash = stem.indexOf(' - ');
+    if (dash > 0) {
+      const artists = artistWords(stem.slice(0, dash));
+      const same = (byTitle.get(norm(stem.slice(dash + 3))) || []).filter((t) => {
+        const theirs = artistWords(t.artist);
+        return !theirs.size || [...artists].some((w) => theirs.has(w));
+      });
+      if (same.length) return same;
+    }
+    const title = norm(stem);
+    return title.split(' ').length >= 3 ? byTitle.get(title) || null : null;
+  };
+}
 
 // qualityOf(path, track?) -> describeQuality result (optional); used to count low-quality files.
 // screen: { reject: Set<path>, keep: Set<path> } marks for files that are not in Serato.
@@ -68,6 +102,7 @@ export function buildReport(scan, eff, rules, qualityOf, screen) {
   };
 
   const matched = new Set();
+  let matchSong = null; // built on first use
   const dirNodes = scan.dirs.map((d) => (rootFor(d) || nodes.get(pathKey(d)) ? ensureNode(d) : null));
   for (const [d, name, size, mtime, group] of scan.files) {
     const node = dirNodes[d];
@@ -90,6 +125,10 @@ export function buildReport(scan, eff, rules, qualityOf, screen) {
     } else if (group != null && groupAssets.get(group)?.length) {
       file.status = 'copy';
       file.twins = groupAssets.get(group);
+    }
+    if (file.status === 'notImported') {
+      const same = (matchSong ||= songMatcher(tracks))(name);
+      if (same) file.inSerato = same.map((t) => t.id);
     }
     if ((file.status === 'notImported' || file.status === 'copy') && screen?.keep.has(path)) {
       file.kept = true;

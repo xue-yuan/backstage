@@ -1,5 +1,5 @@
 // One shared audio element + the bottom player bar.
-import { h } from './ui.js';
+import { clear, h } from './ui.js';
 import { _, _n } from './i18n.js';
 
 const audio = new Audio();
@@ -27,9 +27,13 @@ export const player = {
     listeners.add(fn);
     return () => listeners.delete(fn);
   },
-  /** track: a library track; or { key, src, title, artist } for arbitrary files */
+  /** Identity of a playable item. Not `track.key`: library tracks have `key` = musical key (e.g. "8A"). */
+  playId(track) {
+    return track.playKey ?? `t${track.id}`;
+  },
+  /** track: a library track; or { playKey, src, title, artist } for arbitrary files */
   play(track, { at } = {}) {
-    const key = track.key ?? `t${track.id}`;
+    const key = this.playId(track);
     if (current?.key !== key) {
       current = { key, title: track.title || track.fileName, artist: track.artist || '', error: null };
       audio.src = track.src ?? `/api/audio/${track.id}`;
@@ -43,7 +47,7 @@ export const player = {
     notify();
   },
   toggle(track) {
-    if (track && !this.isCurrent(track.key ?? `t${track.id}`)) return this.play(track);
+    if (track && !this.isCurrent(this.playId(track))) return this.play(track);
     if (!current) return;
     if (audio.paused) audio.play().catch(() => {});
     else audio.pause();
@@ -105,9 +109,11 @@ function renderBar() {
   els.btn.textContent = player.playing ? '❚❚' : '▶';
   els.btn.disabled = !current;
   if (!current) {
-    els.title.replaceChildren(h('span', { class: 'muted' }, _('Select a song and press Space to preview')));
+    clear(els.title, h('span', { class: 'muted' }, _('Select a song and press Space to preview')));
   } else {
-    els.title.replaceChildren(
+    // clear() skips null children; the native replaceChildren() would render them as "null".
+    clear(
+      els.title,
       h('strong', {}, current.title),
       current.artist ? h('span', { class: 'muted' }, ` · ${current.artist}`) : null,
       current.error ? h('span', { class: 'player-error' }, ` ${current.error}`) : null,
