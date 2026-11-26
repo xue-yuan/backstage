@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
+from .i18n import tr
 
 LIBRARY_SPACE = "Serato Library"
 CRATE_TYPE = 1
@@ -22,7 +23,7 @@ def load_library(snapshot: Path) -> dict:
     try:
         space = con.execute("SELECT id FROM space WHERE name = ?", (LIBRARY_SPACE,)).fetchone()
         if space is None:
-            raise RuntimeError("快照裡找不到 Serato Library")
+            raise RuntimeError(tr("The snapshot has no Serato Library"))
         space_id = space["id"]
         root = con.execute(
             "SELECT id FROM container WHERE space_id = ? AND type = 0", (space_id,)

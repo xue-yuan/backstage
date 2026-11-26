@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <title>Backstage</title>
@@ -25,10 +25,14 @@
   <body>
     <div class="mark">◐</div>
     <div><strong>Backstage</strong></div>
-    <div id="status" class="muted">正在啟動…</div>
+    <div id="status" class="muted">Starting…</div>
     <div id="error"></div>
     <script>
-      // Called by the app (src-tauri/src/main.rs) when the local server could not start.
+      // Called by the app (src-tauri/src/main.rs) with the status text in the chosen language.
+      function setStatus(text) {
+        document.getElementById('status').textContent = text;
+      }
+      // Called by the app when the local server could not start.
       function showError(message) {
         document.body.classList.add('failed');
         document.getElementById('error').textContent = message;

@@ -20,6 +20,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
+mod locale_zh;
+
 const PORT: u16 = 47615;
 // GUI apps get a minimal PATH, so look for uv where its installers put it.
 const UV_PATHS: [&str; 2] = ["/opt/homebrew/bin/uv", "/usr/local/bin/uv"];
@@ -53,6 +55,31 @@ fn app_log(message: &str) {
     }
 }
 
+/// The language chosen in the page; the server stores it in settings.json. English unless "zh".
+fn lang_is_zh() -> bool {
+    let Ok(text) = std::fs::read_to_string(data_dir().join("settings.json")) else {
+        return false;
+    };
+    let Some(i) = text.find("\"lang\"") else {
+        return false;
+    };
+    text[i + 6..].trim_start().trim_start_matches(':').trim_start().starts_with("\"zh\"")
+}
+
+/// The English message or its Chinese translation (locale_zh.rs), with {name} placeholders filled in.
+fn tr(en: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
+    let template = if lang_is_zh() {
+        locale_zh::ZH.iter().find(|(k, _)| *k == en).map(|(_, v)| *v).unwrap_or(en)
+    } else {
+        en
+    };
+    let mut out = template.to_string();
+    for (name, value) in args {
+        out = out.replace(&format!("{{{name}}}"), &value.to_string());
+    }
+    out
+}
+
 fn port_open() -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
@@ -69,17 +96,17 @@ fn find_uv() -> Option<PathBuf> {
 
 /// A uv-managed Python interpreter (never the system one).
 fn find_python() -> Result<PathBuf, String> {
-    let uv = find_uv().ok_or("找不到 uv。請先安裝 uv（例如 brew install uv）。")?;
+    let uv = find_uv().ok_or_else(|| tr("uv was not found. Install uv first (for example: brew install uv).", &[]))?;
     let out = Command::new(&uv)
         .args(["python", "find", "--no-project", "--managed-python", PYTHON_REQUEST])
         .stdin(Stdio::null())
         .output()
-        .map_err(|e| format!("無法執行 {}：{e}", uv.display()))?;
+        .map_err(|e| tr("Could not run {program}: {error}", &[("program", &uv.display()), ("error", &e)]))?;
     let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
     if !out.status.success() || !path.is_file() {
-        return Err(format!(
-            "uv 找不到符合 {PYTHON_REQUEST} 的 Python。\n請在終端機執行：uv python install 3.14\n\n{}",
-            String::from_utf8_lossy(&out.stderr).trim()
+        return Err(tr(
+            "uv found no Python matching {request}.\nRun this in Terminal: uv python install 3.14\n\n{details}",
+            &[("request", &PYTHON_REQUEST), ("details", &String::from_utf8_lossy(&out.stderr).trim())],
         ));
     }
     Ok(path)
@@ -87,18 +114,16 @@ fn find_python() -> Result<PathBuf, String> {
 
 fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
     if port_open() {
-        return Err(format!(
-            "127.0.0.1:{PORT} 已經被其他程式使用（可能是另一個 Backstage 還開著）。\n請關掉它之後再打開 Backstage。"
-        ));
+        return Err(tr("127.0.0.1:{port} is already in use (maybe another Backstage is still open).\nQuit it, then open Backstage again.", &[("port", &PORT)]));
     }
     let python = find_python()?;
     app_log(&format!("python: {}", python.display()));
-    std::fs::create_dir_all(data_dir).map_err(|e| format!("無法建立資料夾 {}：{e}", data_dir.display()))?;
+    std::fs::create_dir_all(data_dir).map_err(|e| tr("Could not create the folder {path}: {error}", &[("path", &data_dir.display()), ("error", &e)]))?;
     let log = OpenOptions::new()
         .create(true)
         .append(true)
         .open(data_dir.join("server.log"))
-        .map_err(|e| format!("無法寫入 server.log：{e}"))?;
+        .map_err(|e| tr("Could not write server.log: {error}", &[("error", &e)]))?;
     Command::new(&python)
         .arg("-B") // never write __pycache__ into the app bundle
         .arg(server_dir.join("app.py"))
@@ -109,7 +134,7 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log)
         .spawn()
-        .map_err(|e| format!("無法啟動 {}：{e}", python.display()))
+        .map_err(|e| tr("Could not start {program}: {error}", &[("program", &python.display()), ("error", &e)]))
 }
 
 fn show_error(window: &WebviewWindow, message: &str) {
@@ -150,10 +175,11 @@ fn main() {
                 // Let the page's own drag & drop work (moving crates in the Crates view); Tauri's native
                 // file-drop handler would otherwise swallow the drop events.
                 .disable_drag_drop_handler()
-                .on_page_load(move |_window, payload| {
+                .on_page_load(move |window, payload| {
                     if payload.event() == PageLoadEvent::Finished {
                         app_log(&format!("page loaded: {}", payload.url()));
                         if payload.url().scheme() != "http" {
+                            let _ = window.eval(format!("setStatus({})", serde_json_string(&tr("Starting…", &[]))));
                             loading_flag.store(true, Ordering::SeqCst);
                         }
                     }
@@ -162,7 +188,7 @@ fn main() {
                 .on_download(|webview, event| {
                     if let DownloadEvent::Finished { path: Some(path), success: true, .. } = event {
                         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                        let msg = serde_json_string(&format!("已存到「下載項目」：{name}"));
+                        let msg = serde_json_string(&tr("Saved to Downloads: {name}", &[("name", &name)]));
                         let _ = webview.eval(format!("window.__crateDesk?.toast?.({msg})"));
                     }
                     true
@@ -180,7 +206,7 @@ fn main() {
                             if started.elapsed() > Duration::from_secs(20) {
                                 app_log("timed out waiting for the server / loading page");
                                 let log = data_dir.join("server.log");
-                                show_error(&window, &format!("本機 server 沒有在 20 秒內啟動。\n詳細訊息在 {}", log.display()));
+                                show_error(&window, &tr("The local server did not start within 20 seconds.\nDetails are in {path}", &[("path", &log.display())]));
                                 return;
                             }
                             thread::sleep(Duration::from_millis(100));
@@ -189,7 +215,7 @@ fn main() {
                         app_log(&format!("server ready after {:?}, navigating", started.elapsed()));
                         if let Err(e) = window.navigate(url) {
                             app_log(&format!("navigate failed: {e}"));
-                            show_error(&window, &format!("無法打開頁面：{e}"));
+                            show_error(&window, &tr("Could not open the page: {error}", &[("error", &e)]));
                         }
                     });
                 }

@@ -1,3 +1,4 @@
+import { _, _n } from './i18n.js';
 // Small DOM helpers, virtual list, toasts and modal dialogs (no browser alert/confirm).
 
 export function h(tag, props = {}, ...children) {
@@ -136,7 +137,7 @@ export class VirtualList {
 
 // ---------- Toasts ----------
 let toastHost;
-export function toast(message, { action, actionLabel = '復原', tone = 'info', timeout = 4000 } = {}) {
+export function toast(message, { action, actionLabel = _('Undo'), tone = 'info', timeout = 4000 } = {}) {
   toastHost ||= document.body.appendChild(h('div', { class: 'toast-host' }));
   const el = h(
     'div',
@@ -186,12 +187,12 @@ export function modal({ title, body, actions, onKey, wide = false }) {
   });
 }
 
-export function confirmDialog({ title, message, okText = '確定', danger = false }) {
+export function confirmDialog({ title, message, okText = _('OK'), danger = false }) {
   return modal({
     title,
     body: h('p', {}, message),
     actions: (close) => [
-      h('button', { class: 'btn', onclick: () => close(false) }, '取消'),
+      h('button', { class: 'btn', onclick: () => close(false) }, _('Cancel')),
       h('button', { class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`, onclick: () => close(true) }, okText),
     ],
     onKey: (e, close) => {
@@ -203,12 +204,12 @@ export function confirmDialog({ title, message, okText = '確定', danger = fals
   }).then((v) => v === true);
 }
 
-export function promptDialog({ title, value = '', placeholder = '', okText = '確定', validate }) {
+export function promptDialog({ title, value = '', placeholder = '', okText = _('OK'), validate }) {
   const input = h('input', { class: 'input', value, placeholder });
   const err = h('div', { class: 'field-error' });
   const submit = (close) => {
     const v = input.value.trim();
-    const problem = !v ? '請輸入名稱' : validate?.(v);
+    const problem = !v ? _('Please enter a name') : validate?.(v);
     if (problem) {
       err.textContent = problem;
       return;
@@ -219,7 +220,7 @@ export function promptDialog({ title, value = '', placeholder = '', okText = '�
     title,
     body: [input, err],
     actions: (close) => [
-      h('button', { class: 'btn', onclick: () => close(null) }, '取消'),
+      h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel')),
       h('button', { class: 'btn btn-primary', onclick: () => submit(close) }, okText),
     ],
     onKey: (e, close) => {

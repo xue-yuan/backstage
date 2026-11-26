@@ -66,7 +66,7 @@ def main() -> None:
 
     httpd = serve(args.data_dir, args.port)
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Backstage running at {url}  (Serato is only written when you press 套用到 Serato)", flush=True)
+    print(f"Backstage running at {url}  (Serato is only written when you press Apply to Serato)", flush=True)
     if not args.no_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try:

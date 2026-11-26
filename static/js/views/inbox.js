@@ -5,6 +5,7 @@ import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
 import { store } from '../store.js';
 import { clear, fmt, h, prefs, VirtualList } from '../ui.js';
+import { _, _n } from '../i18n.js';
 
 export function createInboxView({ navigate } = {}) {
   let source = prefs.get('inbox.source', { kind: 'uncategorized' });
@@ -25,7 +26,7 @@ export function createInboxView({ navigate } = {}) {
   const progressText = h('span', { class: 'muted small' });
   const filterInput = h('input', {
     class: 'input input-sm',
-    placeholder: '篩選歌名、歌手、曲風…',
+    placeholder: _('Filter by title, artist, genre…'),
     oninput: (e) => {
       filter = e.target.value;
       renderList();
@@ -45,11 +46,11 @@ export function createInboxView({ navigate } = {}) {
         renderList();
       },
     },
-    h('option', { value: 'added' }, '新加入的在前'),
-    h('option', { value: 'order' }, 'crate 原本順序'),
+    h('option', { value: 'added' }, _('Newest first')),
+    h('option', { value: 'order' }, _('Crate order')),
     h('option', { value: 'bpm' }, 'BPM'),
-    h('option', { value: 'artist' }, '歌手'),
-    h('option', { value: 'title' }, '歌名'),
+    h('option', { value: 'artist' }, _('Artist')),
+    h('option', { value: 'title' }, _('Title')),
   );
   sortSelect.value = sort;
   const hideDoneBox = h('input', {
@@ -67,15 +68,15 @@ export function createInboxView({ navigate } = {}) {
     'section',
     { class: 'panel inbox-list' },
     h('div', { class: 'panel-head' }, listTitle, h('div', { class: 'progress-row' }, progress, progressText)),
-    h('div', { class: 'toolbar' }, filterInput, sortSelect, h('label', { class: 'check' }, hideDoneBox, '隱藏已分類')),
+    h('div', { class: 'toolbar' }, filterInput, sortSelect, h('label', { class: 'check' }, hideDoneBox, _('Hide sorted'))),
     h(
       'div',
       { class: 'trow trow-head' },
       h('span'),
-      h('span', {}, '歌名 / 歌手'),
+      h('span', {}, _('Title / artist')),
       h('span', { class: 'num' }, 'BPM'),
       h('span', {}, 'Key'),
-      h('span', {}, '曲風'),
+      h('span', {}, _('Genre')),
       h('span', { class: 'num' }, 'Crates'),
     ),
     vlist.el,
@@ -87,7 +88,7 @@ export function createInboxView({ navigate } = {}) {
   const suggestEl = h('div', { class: 'detail-section' });
   const picker = createCratePicker({
     allowCreate: true,
-    placeholder: '加入其他 crate…（按 / ）可輸入「上層 / 新名稱」建立',
+    placeholder: _('Add to another crate… (/). Type "Parent / New name" to create one'),
     activeIds: () => new Set(store.eff.cratesOf.get(selectedId) || []),
     onPick: (id) => toggleCrate(id, { forceAdd: true }),
   });
@@ -102,7 +103,7 @@ export function createInboxView({ navigate } = {}) {
         prefs.set('inbox.moveOut', moveOut);
       },
     }),
-    '加入時同時從來源 crate 移出',
+    _('Remove from the source crate when adding'),
   );
   const optionsEl = h(
     'div',
@@ -118,10 +119,10 @@ export function createInboxView({ navigate } = {}) {
           prefs.set('inbox.autoAdvance', autoAdvance);
         },
       }),
-      '加入後自動跳下一首（正在播放就接著播）',
+      _('Go to the next song after adding (keeps playing if a song is playing)'),
     ),
     moveOutRow,
-    h('div', { class: 'muted small' }, 'X：不要這首（排進變更計畫，套用到 Serato 時才會移除並把檔案丟到垃圾桶）'),
+    h('div', { class: 'muted small' }, _('X: reject this song (added to the plan; it is removed and its file moved to the Trash only when you apply to Serato)')),
   );
   const detailEl = h(
     'aside',
@@ -130,7 +131,7 @@ export function createInboxView({ navigate } = {}) {
     currentEl,
     pinnedEl,
     suggestEl,
-    h('div', { class: 'detail-section' }, h('div', { class: 'section-label' }, '加入其他 crate'), picker.el),
+    h('div', { class: 'detail-section' }, h('div', { class: 'section-label' }, _('Add to another crate')), picker.el),
     optionsEl,
   );
 
@@ -211,28 +212,28 @@ export function createInboxView({ navigate } = {}) {
     };
     clear(
       sourcesEl,
-      h('div', { class: 'section-label' }, '來源'),
-      item({ kind: 'uncategorized' }, '不在任何 crate', uncategorized.length, left !== uncategorized.length ? `剩 ${left}` : ''),
-      item({ kind: 'recent', days: 7 }, '最近 7 天加入', recent(7)),
-      item({ kind: 'recent', days: 30 }, '最近 30 天加入', recent(30)),
+      h('div', { class: 'section-label' }, _('Source')),
+      item({ kind: 'uncategorized' }, _('In no crate'), uncategorized.length, left !== uncategorized.length ? _('{n} left', { n: left }) : ''),
+      item({ kind: 'recent', days: 7 }, _('Added in the last {n} days', { n: 7 }), recent(7)),
+      item({ kind: 'recent', days: 30 }, _('Added in the last {n} days', { n: 30 }), recent(30)),
       source.kind === 'folder'
-        ? [h('div', { class: 'section-label' }, '從資料夾整理'), item(source, baseName(source.path), sourceList().length, fmt.shortPath(source.path).replace(/\/[^/]*$/, ''))]
+        ? [h('div', { class: 'section-label' }, _('Sort from a folder')), item(source, baseName(source.path), sourceList().length, fmt.shortPath(source.path).replace(/\/[^/]*$/, ''))]
         : null,
       navigate
-        ? h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('folders') }, source.kind === 'folder' ? '選擇其他資料夾…' : '從資料夾選…')
+        ? h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('folders') }, source.kind === 'folder' ? _('Pick another folder…') : _('Pick from folders…'))
         : null,
-      h('div', { class: 'section-label' }, '從 crate 整理'),
+      h('div', { class: 'section-label' }, _('Sort from a crate')),
       inboxCrates.map((id) => item({ kind: 'crate', id }, eff.pathOf(id), (eff.members.get(id) || []).length)),
       h(
         'button',
         {
           class: 'btn btn-ghost btn-block',
           onclick: async () => {
-            const id = await pickCrateDialog({ title: '要整理哪個 crate？', allowCreate: false });
+            const id = await pickCrateDialog({ title: _('Which crate do you want to sort?'), allowCreate: false });
             if (id != null) setSource({ kind: 'crate', id });
           },
         },
-        '選擇其他 crate…',
+        _('Pick another crate…'),
       ),
     );
   }
@@ -258,17 +259,17 @@ export function createInboxView({ navigate } = {}) {
 
     const title =
       source.kind === 'uncategorized'
-        ? '不在任何 crate 的歌'
+        ? _('Songs in no crate')
         : source.kind === 'recent'
-          ? `最近 ${source.days} 天加入`
+          ? _('Added in the last {n} days', { n: source.days })
           : source.kind === 'folder'
-            ? `資料夾：${baseName(source.path)}`
+            ? _('Folder: {name}', { name: baseName(source.path) })
             : eff.pathOf(source.id);
     clear(listTitle, h('h2', {}, title));
     progress.firstChild.style.width = all.length ? `${(doneCount / all.length) * 100}%` : '0%';
-    progressText.textContent = `已分類 ${doneCount} / ${all.length}`;
+    progressText.textContent = _('Sorted {done} / {total}', { done: doneCount, total: all.length });
     moveOutRow.hidden = source.kind !== 'crate';
-    vlist.setItems(items, h('div', { class: 'empty' }, filter ? '沒有符合篩選的歌' : '這裡沒有歌了 🎉'));
+    vlist.setItems(items, h('div', { class: 'empty' }, filter ? _('No songs match the filter') : _('No songs left here 🎉')));
   }
 
   function renderRow(t) {
@@ -285,7 +286,7 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'trow-main' },
-        h('div', { class: 'trow-title' }, t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, '找不到檔案') : null),
+        h('div', { class: 'trow-title' }, t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
         h('div', { class: 'trow-sub' }, t.artist || '—'),
       ),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
@@ -309,7 +310,7 @@ export function createInboxView({ navigate } = {}) {
     const eff = store.eff;
     detailEl.classList.toggle('is-empty', !t);
     if (!t) {
-      clear(infoEl, h('div', { class: 'empty' }, '選一首歌開始分類'));
+      clear(infoEl, h('div', { class: 'empty' }, _('Pick a song to start sorting')));
       clear(currentEl);
       clear(pinnedEl);
       clear(suggestEl);
@@ -320,30 +321,30 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'detail-head' },
-        (playBtn = h('button', { class: 'play-big', title: '播放 / 暫停（空白鍵）', onclick: () => player.toggle(t) }, player.isCurrent(`t${t.id}`) && player.playing ? '❚❚' : '▶')),
-        h('div', {}, h('h3', {}, t.title || t.fileName), h('div', { class: 'muted' }, [t.artist, t.remixer && `Remix: ${t.remixer}`].filter(Boolean).join(' · ') || '未知歌手')),
+        (playBtn = h('button', { class: 'play-big', title: _('Play / pause (Space)'), onclick: () => player.toggle(t) }, player.isCurrent(`t${t.id}`) && player.playing ? '❚❚' : '▶')),
+        h('div', {}, h('h3', {}, t.title || t.fileName), h('div', { class: 'muted' }, [t.artist, t.remixer && `Remix: ${t.remixer}`].filter(Boolean).join(' · ') || _('Unknown artist'))),
       ),
       h(
         'dl',
         { class: 'meta' },
         meta('BPM', fmt.bpm(t.bpm)),
         meta('Key', t.key || '–'),
-        meta('長度', fmt.duration(t.lengthMs)),
-        meta('格式', qualityBadge(store.trackQuality(t))),
-        meta('曲風', t.genre || '–'),
-        meta('加入', fmt.date(t.addedAt)),
-        meta('播放', t.plays ? `${t.plays} 次` : '沒放過'),
-        meta('專輯', t.album || '–'),
+        meta(_('Length'), fmt.duration(t.lengthMs)),
+        meta(_('Format'), qualityBadge(store.trackQuality(t))),
+        meta(_('Genre'), t.genre || '–'),
+        meta(_('Added'), fmt.date(t.addedAt)),
+        meta(_('Plays'), t.plays ? _n(t.plays, '{n} time', '{n} times') : _('Never played')),
+        meta(_('Album'), t.album || '–'),
       ),
       h('div', { class: 'path', title: t.path }, fmt.shortPath(t.path)),
-      !t.exists ? h('div', { class: 'notice notice-danger' }, '硬碟上找不到這個檔案，可到「清理」重新指定位置。') : null,
+      !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is not on disk. You can relocate it in Cleanup.')) : null,
     );
 
     const crates = eff.cratesOf.get(t.id) || [];
     const gained = new Set(addedInPlan(eff, t.id));
     clear(
       currentEl,
-      h('div', { class: 'section-label' }, `目前在 ${crates.length} 個 crate`),
+      h('div', { class: 'section-label' }, _n(crates.length, 'Currently in {n} crate', 'Currently in {n} crates')),
       crates.length
         ? h(
             'div',
@@ -351,13 +352,13 @@ export function createInboxView({ navigate } = {}) {
             crates.map((c) =>
               h(
                 'span',
-                { class: `chip ${gained.has(c) ? 'chip-new' : ''}`, title: gained.has(c) ? '這次新加入（尚未寫入 Serato）' : '' },
+                { class: `chip ${gained.has(c) ? 'chip-new' : ''}`, title: gained.has(c) ? _('Newly added (not in Serato yet)') : '' },
                 eff.pathOf(c),
-                h('button', { class: 'chip-x', title: '從這個 crate 移除', onclick: () => toggleCrate(c) }, '×'),
+                h('button', { class: 'chip-x', title: _('Remove from this crate'), onclick: () => toggleCrate(c) }, '×'),
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, '還沒有放進任何 crate'),
+        : h('div', { class: 'muted small' }, _('Not in any crate yet')),
     );
 
     pinned = pinned.filter((id) => eff.crates.has(id));
@@ -367,8 +368,8 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'section-label row-between' },
-        '快捷 crate（數字鍵 1–9）',
-        pinned.length < 9 ? h('button', { class: 'btn btn-ghost btn-xs', onclick: addPin }, '+ 釘選') : null,
+        _('Pinned crates (keys 1–9)'),
+        pinned.length < 9 ? h('button', { class: 'btn btn-ghost btn-xs', onclick: addPin }, _('+ Pin')) : null,
       ),
       pinned.length
         ? h(
@@ -382,7 +383,7 @@ export function createInboxView({ navigate } = {}) {
                 h('span', { class: 'target-name' }, eff.pathOf(id)),
                 h('button', {
                   class: 'target-unpin',
-                  title: '取消釘選',
+                  title: _('Unpin'),
                   onclick: (e) => {
                     e.stopPropagation();
                     pinned.splice(i, 1);
@@ -393,13 +394,13 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, '把常用的目標 crate 釘在這裡，按數字鍵就能加入。'),
+        : h('div', { class: 'muted small' }, _('Pin the crates you use most here, then add songs with the number keys.')),
     );
 
     suggestions = suggestCrates(eff, store.profiles, t, { exclude: new Set(inboxCrateIds()) });
     clear(
       suggestEl,
-      h('div', { class: 'section-label' }, '建議（Shift + 數字）'),
+      h('div', { class: 'section-label' }, _('Suggestions (Shift + number)')),
       suggestions.length
         ? h(
             'div',
@@ -409,11 +410,11 @@ export function createInboxView({ navigate } = {}) {
                 'div',
                 { class: 'target target-suggest', onclick: () => toggleCrate(s.id, { forceAdd: true }) },
                 h('kbd', {}, `⇧${i + 1}`),
-                h('span', { class: 'target-name' }, eff.pathOf(s.id), h('span', { class: 'target-why' }, s.reasons.join('・'))),
+                h('span', { class: 'target-name' }, eff.pathOf(s.id), h('span', { class: 'target-why' }, s.reasons.join(_(' · ')))),
                 !pinned.includes(s.id) && pinned.length < 9
                   ? h('button', {
                       class: 'target-unpin',
-                      title: '釘選',
+                      title: _('Pin'),
                       onclick: (e) => {
                         e.stopPropagation();
                         pinned.push(s.id);
@@ -425,7 +426,7 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, '沒有把握的建議（這首歌缺少曲風、BPM 等資訊）'),
+        : h('div', { class: 'muted small' }, _('No confident suggestions (this song lacks genre, BPM and similar info)')),
     );
   }
 
@@ -434,7 +435,7 @@ export function createInboxView({ navigate } = {}) {
   }
 
   async function addPin() {
-    const id = await pickCrateDialog({ title: '釘選 crate', exclude: new Set(pinned) });
+    const id = await pickCrateDialog({ title: _('Pin a crate'), exclude: new Set(pinned) });
     if (id == null) return;
     pinned.push(id);
     prefs.set('inbox.pinned', pinned);
@@ -449,7 +450,7 @@ export function createInboxView({ navigate } = {}) {
     const name = t.title || t.fileName;
     const inIt = (eff.members.get(crateId) || []).includes(t.id);
     if (inIt && !forceAdd) {
-      store.commit(`「${name}」移出 ${eff.pathOf(crateId)}`, [store.opRemove(crateId, t.id)]);
+      store.commit(_('"{name}" removed from {crate}', { name, crate: eff.pathOf(crateId) }), [store.opRemove(crateId, t.id)]);
       return;
     }
     if (inIt) return;
@@ -457,7 +458,7 @@ export function createInboxView({ navigate } = {}) {
     const leaveSource =
       moveOut && source.kind === 'crate' && source.id !== crateId && (eff.members.get(source.id) || []).includes(t.id);
     if (leaveSource) ops.push(store.opRemove(source.id, t.id));
-    const change = store.commit(`「${name}」→ ${eff.pathOf(crateId)}${leaveSource ? '（已移出來源）' : ''}`, ops);
+    const change = store.commit(`${_('"{name}" → {crate}', { name, crate: eff.pathOf(crateId) })}${leaveSource ? _(' (removed from the source)') : ''}`, ops);
     if (change && autoAdvance) advance();
   }
 
@@ -474,7 +475,7 @@ export function createInboxView({ navigate } = {}) {
     const idx = items.findIndex((x) => x.id === t.id);
     const next = items.slice(idx + 1).find((x) => !isDone(x)) || items[idx + 1] || items[idx - 1];
     const wasPlaying = player.playing && player.current?.key === `t${t.id}`;
-    if (!store.commit(`不要：${t.title || t.fileName}`, [store.opReject(t.id)])) return;
+    if (!store.commit(_('Reject: {track}', { track: t.title || t.fileName }), [store.opReject(t.id)])) return;
     if (next) {
       select(next.id);
       if (wasPlaying) player.play(next);
@@ -497,7 +498,7 @@ export function createInboxView({ navigate } = {}) {
 
   return {
     el,
-    title: '分類新歌',
+    title: _('Sort'),
     update: renderAll,
     onKey(e) {
       const t = selected();

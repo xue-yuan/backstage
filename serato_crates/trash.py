@@ -13,6 +13,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from .i18n import tr
 
 TRASH_DIR = Path.home() / ".Trash"
 
@@ -109,18 +110,18 @@ def restore_from_trash(paths: list[str], log_path: Path) -> list[dict]:
     for p in paths:
         entry = trashed.get(p)
         if not entry:
-            results.append({"path": p, "ok": False, "error": "沒有用 Backstage 丟掉這個檔案的紀錄"})
+            results.append({"path": p, "ok": False, "error": tr("No record of Backstage moving this file to the Trash")})
             continue
         if os.path.exists(p):
-            results.append({"path": p, "ok": False, "error": "原本的位置已經有同名檔案"})
+            results.append({"path": p, "ok": False, "error": tr("A file with the same name is already at the original location")})
             continue
         try:
             found = _find_in_trash(p, entry.get("size"))
         except PermissionError:
-            results.append({"path": p, "ok": False, "error": "沒有權限讀取垃圾桶，請在 Finder 把它拖回原本的資料夾"})
+            results.append({"path": p, "ok": False, "error": tr("No permission to read the Trash. Drag the file back to its folder in Finder")})
             continue
         if not found:
-            results.append({"path": p, "ok": False, "error": "垃圾桶裡找不到（可能已經清空）"})
+            results.append({"path": p, "ok": False, "error": tr("Not found in the Trash (it may have been emptied)")})
             continue
         try:
             os.makedirs(os.path.dirname(p), exist_ok=True)

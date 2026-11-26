@@ -21,6 +21,8 @@ from .folders import scan_folders
 from .library import load_library, scan_audio_files
 from .snapshot import DEFAULT_SOURCE, SnapshotError, load_meta, take_snapshot
 from .trash import move_to_trash, restore_from_trash
+from . import i18n
+from .i18n import tr
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 AUDIO_TYPES = {
@@ -40,7 +42,9 @@ AUDIO_TYPES = {
 SCAN_ROOTS = [Path.home() / "Music" / "DJ"]
 RELOCATE_ROOTS = [Path.home() / "Music"]
 SERATO_LIBRARY = DEFAULT_SOURCE.parent
+# Folder names below are existing names on disk (the restore button lists backups by them), so they stay as is.
 SERATO_BACKUPS = Path.home() / "Backstage Backups" / "Serato 資料庫"
+BEFORE_APPLY = "套用前"  # suffix of the backup folder made before each apply
 
 
 def path_key(p: str) -> str:
@@ -99,7 +103,7 @@ class AppState:
 
     def write_screen(self, screen: dict) -> None:
         if not all(isinstance(screen.get(k), list) for k in ("reject", "keep")):
-            raise ValueError("screen 格式錯誤")
+            raise ValueError(tr("invalid screen data"))
         tmp = self.screen_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps({"reject": screen["reject"], "keep": screen["keep"]}, ensure_ascii=False))
         os.replace(tmp, self.screen_path)
@@ -117,14 +121,14 @@ class AppState:
     def write_rules(self, rules: dict) -> None:
         overrides = rules.get("overrides")
         if not isinstance(overrides, dict) or any(v not in ("count", "skip") for v in overrides.values()):
-            raise ValueError("rules 格式錯誤")
+            raise ValueError(tr("invalid rules data"))
         tmp = self.rules_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps({"overrides": overrides, "saved": True}, ensure_ascii=False))
         os.replace(tmp, self.rules_path)
 
     # ---- apply the plan to Serato (Serato closed; rehearse on a copy, back up, write, verify) ----
     def apply_status(self) -> dict:
-        backups = sorted((p for p in SERATO_BACKUPS.glob("*套用前") if (p / "master.sqlite").exists()), reverse=True) if SERATO_BACKUPS.is_dir() else []
+        backups = sorted((p for p in SERATO_BACKUPS.glob(f"*{BEFORE_APPLY}") if (p / "master.sqlite").exists()), reverse=True) if SERATO_BACKUPS.is_dir() else []
         procs = serato_processes()
         return {
             "seratoRunning": bool(procs),
@@ -136,13 +140,13 @@ class AppState:
 
     def apply(self, changes: list, expected: dict) -> dict:
         if not self.apply_lock.acquire(blocking=False):
-            raise ApplyError("已經在套用中")
+            raise ApplyError(tr("Already applying"))
         try:
             if serato_running():
-                raise ApplyError("Serato DJ 還開著，請先關掉再套用")
+                raise ApplyError(tr("Serato DJ is still open. Quit it before applying"))
             busy = files_in_use(SERATO_LIBRARY)
             if busy:
-                raise ApplyError(f"有程式正在使用 Serato 的資料庫：{', '.join(busy)}")
+                raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
             # 1) Rehearse on a private copy: any problem stops here, before Serato is touched.
             rehearsal = self.data_dir / "apply-rehearsal"
             shutil.rmtree(rehearsal, ignore_errors=True)
@@ -153,7 +157,7 @@ class AppState:
             apply_changes(rehearsal, changes, expected)
             shutil.rmtree(rehearsal, ignore_errors=True)
             # 2) Back up the real databases, 3) write them (one transaction, verified before commit).
-            dest = backup_serato(SERATO_LIBRARY, SERATO_BACKUPS, "套用前")
+            dest = backup_serato(SERATO_LIBRARY, SERATO_BACKUPS, BEFORE_APPLY)
             result = apply_changes(SERATO_LIBRARY, changes, expected)
             result["backup"] = str(dest)
         finally:
@@ -173,10 +177,10 @@ class AppState:
     def restore_serato(self, backup_dir: str) -> dict:
         target = Path(backup_dir).resolve()
         if not target.is_relative_to(SERATO_BACKUPS.resolve()):
-            raise ApplyError("只能從 Backstage 的備份還原")
+            raise ApplyError(tr("Can only restore from a Backstage backup"))
         busy = files_in_use(SERATO_LIBRARY)
         if busy:
-            raise ApplyError(f"有程式正在使用 Serato 的資料庫：{', '.join(busy)}")
+            raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
         restore_serato(SERATO_LIBRARY, target)
         self.ensure_library(refresh=True)
         return {"ok": True, "restoredFrom": str(target)}
@@ -194,11 +198,11 @@ class AppState:
         refused: list[dict] = []
         for p in dict.fromkeys(str(x) for x in paths):
             if p not in scanned:
-                refused.append({"path": p, "ok": False, "error": "不是掃描到的音檔"})
+                refused.append({"path": p, "ok": False, "error": tr("Not a scanned audio file")})
             elif path_key(p) in serato:
-                refused.append({"path": p, "ok": False, "error": "這個檔案在 Serato 裡，要等「套用到 Serato」時一起處理"})
+                refused.append({"path": p, "ok": False, "error": tr("This file is in Serato; it is handled when you apply to Serato")})
             elif not os.path.isfile(p):
-                refused.append({"path": p, "ok": False, "error": "檔案已經不在了"})
+                refused.append({"path": p, "ok": False, "error": tr("The file is already gone")})
             else:
                 sizes[p] = os.path.getsize(p)
                 todo.append(p)
@@ -268,7 +272,7 @@ class AppState:
             is_dir = path in self.folder_dirs
             is_file = path in self.folder_files or path in self.track_paths.values()
         if not (is_dir or is_file) or not os.path.exists(path):
-            raise ValueError("只能開啟掃描到的資料夾或檔案")
+            raise ValueError(tr("Can only open scanned folders or files"))
         cmd = ["open", "-a", "Finder", path] if is_dir else ["open", "-R", path]
         subprocess.run(cmd, check=False, timeout=10)
 
@@ -311,7 +315,7 @@ def make_handler(state: AppState, port: int):
             try:
                 size = os.path.getsize(path)
             except OSError:
-                return self._error(HTTPStatus.NOT_FOUND, "檔案不存在")
+                return self._error(HTTPStatus.NOT_FOUND, tr("File not found"))
             start, end, status = 0, size - 1, HTTPStatus.OK
             rng = self.headers.get("Range")
             if rng:
@@ -351,7 +355,7 @@ def make_handler(state: AppState, port: int):
 
         def _send_audio(self, path: str | None):
             if not path:
-                return self._error(HTTPStatus.NOT_FOUND, "不在資料庫裡的檔案")
+                return self._error(HTTPStatus.NOT_FOUND, tr("Not a file in the library"))
             ext = os.path.splitext(path)[1].lower()
             self._send_file(path, AUDIO_TYPES.get(ext, "application/octet-stream"))
 
@@ -383,6 +387,8 @@ def make_handler(state: AppState, port: int):
                     return self._send_static(p[len("/static/"):])
                 if p == "/api/library":
                     return self._json(state.ensure_library())
+                if p == "/api/settings":
+                    return self._json({"lang": i18n.lang()})
                 if p == "/api/plan":
                     return self._json(state.read_plan())
                 if p == "/api/screen":
@@ -418,11 +424,14 @@ def make_handler(state: AppState, port: int):
                 body = self._read_json()
                 if self.path == "/api/snapshot":
                     return self._json(state.ensure_library(refresh=True))
+                if self.path == "/api/settings":
+                    i18n.save(state.data_dir, str(body.get("lang")))
+                    return self._json({"lang": i18n.lang()})
                 if self.path == "/api/audio-info":
                     return self._json(state.start_audio_info())
                 if self.path == "/api/apply":
                     if not isinstance(body.get("changes"), list) or not isinstance(body.get("expected"), dict):
-                        raise ValueError("apply 格式錯誤")
+                        raise ValueError(tr("invalid apply data"))
                     try:
                         return self._json(state.apply(body["changes"], body["expected"]))
                     except ApplyError as e:
@@ -434,11 +443,11 @@ def make_handler(state: AppState, port: int):
                         return self._json({"ok": False, "error": str(e)})
                 if self.path == "/api/trash":
                     if not isinstance(body.get("paths"), list):
-                        raise ValueError("paths 格式錯誤")
+                        raise ValueError(tr("invalid paths"))
                     return self._json(state.trash(body["paths"]))
                 if self.path == "/api/untrash":
                     if not isinstance(body.get("paths"), list):
-                        raise ValueError("paths 格式錯誤")
+                        raise ValueError(tr("invalid paths"))
                     return self._json(state.untrash(body["paths"]))
                 if self.path == "/api/reveal":
                     state.reveal(str(body.get("path", "")))
@@ -456,7 +465,7 @@ def make_handler(state: AppState, port: int):
                 body = self._read_json()
                 if self.path == "/api/plan":
                     if not isinstance(body, dict) or not isinstance(body.get("changes"), list):
-                        raise ValueError("plan 格式錯誤")
+                        raise ValueError(tr("invalid plan data"))
                     state.write_plan(body)
                     return self._json({"ok": True})
                 if self.path == "/api/screen":
@@ -473,6 +482,7 @@ def make_handler(state: AppState, port: int):
 
 
 def serve(data_dir: Path, port: int) -> ThreadingHTTPServer:
+    i18n.load(data_dir)  # language for server messages, as last chosen in the page
     state = AppState(data_dir)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(state, port))
     httpd.daemon_threads = True

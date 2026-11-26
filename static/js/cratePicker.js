@@ -2,6 +2,7 @@
 import { crateSearch, norm } from './model.js';
 import { store } from './store.js';
 import { h, modal } from './ui.js';
+import { _, _n } from './i18n.js';
 
 /**
  * @param {object} o
@@ -10,7 +11,7 @@ import { h, modal } from './ui.js';
  * @param {() => Set} [o.exclude]
  * @param {() => Set} [o.activeIds]  crates to mark as already containing the track
  */
-export function createCratePicker({ onPick, allowCreate = false, exclude, activeIds, placeholder = '搜尋 crate…（/）', autofocus = false, inline = false }) {
+export function createCratePicker({ onPick, allowCreate = false, exclude, activeIds, placeholder = _('Search crates… (/)'), autofocus = false, inline = false }) {
   let results = [];
   let index = 0;
   const input = h('input', { class: 'input', placeholder, autocomplete: 'off', spellcheck: false });
@@ -60,12 +61,12 @@ export function createCratePicker({ onPick, allowCreate = false, exclude, active
             },
           },
           r.create
-            ? [h('span', { class: 'picker-plus' }, '+'), `建立「${r.path}」`]
+            ? [h('span', { class: 'picker-plus' }, '+'), _('Create "{path}"', { path: r.path })]
             : [active.has(r.id) ? h('span', { class: 'picker-check' }, '✓') : null, highlight(r.path)],
         ),
       ),
     );
-    if (!results.length && q) list.append(h('div', { class: 'picker-empty' }, allowCreate ? '找不到；可用「上層 / 名稱」建立在某個 crate 底下' : '找不到符合的 crate'));
+    if (!results.length && q) list.append(h('div', { class: 'picker-empty' }, allowCreate ? _('No match. Type "Parent / Name" to create it under a crate') : _('No matching crate')));
     list.hidden = !show || (!results.length && !q);
     list.children[index]?.scrollIntoView({ block: 'nearest' });
   }
@@ -81,7 +82,7 @@ export function createCratePicker({ onPick, allowCreate = false, exclude, active
     if (!r) return;
     if (r.create) {
       const op = store.opCreate(r.name, r.parent);
-      const change = store.commit(`建立 crate「${r.path}」`, [op], { silent: true });
+      const change = store.commit(_('Create crate "{path}"', { path: r.path }), [op], { silent: true });
       if (!change) return;
       onPick(op.id, { created: true });
     } else {
@@ -136,7 +137,7 @@ export function pickCrateDialog({ title, exclude, allowCreate = true }) {
         autofocus: true,
         allowCreate,
         exclude: () => exclude || new Set(),
-        placeholder: '輸入 crate 名稱或路徑，Enter 選擇',
+        placeholder: _('Type a crate name or path, Enter to pick'),
         onPick: (id) => close(id),
       }).el,
   });

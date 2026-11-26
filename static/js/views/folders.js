@@ -9,6 +9,7 @@ import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
 import { api, store } from '../store.js';
 import { openUnsortedEditor, unsortedRoots } from '../unsorted.js';
 import { clear, confirmDialog, fmt, h, modal, prefs, toast, VirtualList } from '../ui.js';
+import { _, _n } from '../i18n.js';
 
 const stripExt = (n) => n.replace(/\.[^.]+$/, '');
 
@@ -34,7 +35,7 @@ export function createFoldersView({ navigate }) {
   const summaryEl = h('section', { class: 'panel folders-summary' });
   const treeEl = h('div', { class: 'ftree' });
   const treeToolbar = h('div', { class: 'toolbar' });
-  const treePanel = h('aside', { class: 'panel ftree-panel' }, h('div', { class: 'panel-head' }, h('h2', {}, '資料夾')), treeToolbar, treeEl);
+  const treePanel = h('aside', { class: 'panel ftree-panel' }, h('div', { class: 'panel-head' }, h('h2', {}, _('Folders'))), treeToolbar, treeEl);
   const detailHead = h('div', { class: 'fdetail-head' });
   const detailToolbar = h('div', { class: 'toolbar' });
   const fileHead = h(
@@ -42,10 +43,10 @@ export function createFoldersView({ navigate }) {
     { class: 'fileRow fileRow-head' },
     h('span'),
     h('span'),
-    h('span', {}, '歌曲'),
-    h('span', {}, '在哪些 crate'),
-    h('span', { class: 'num' }, '格式'),
-    h('span', { class: 'num', title: 'X 不要・V 留下' }, '篩選'),
+    h('span', {}, _('Songs')),
+    h('span', {}, _('In crates')),
+    h('span', { class: 'num' }, _('Format')),
+    h('span', { class: 'num', title: _('X reject · V keep') }, _('Screen')),
   );
   const vlist = new VirtualList({ rowHeight: 44, renderRow: renderFile, className: 'file-list' });
   const detailPanel = h('section', { class: 'panel fdetail' }, detailHead, detailToolbar, fileHead, vlist.el);
@@ -59,7 +60,7 @@ export function createFoldersView({ navigate }) {
     render();
     try {
       await store.loadFolders(refresh);
-      if (refresh) toast('已重新掃描資料夾');
+      if (refresh) toast(_('Folders rescanned'));
     } catch (e) {
       loadError = e.message;
     }
@@ -103,18 +104,18 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fsum-title' },
-          h('h2', {}, r ? `${r.roots.map((x) => x.name).join('、')} 共 ${r.sum.files.toLocaleString()} 個音檔` : '資料夾狀態'),
+          h('h2', {}, r ? _n(r.sum.files, '{roots}: {n} audio file', '{roots}: {n} audio files', { roots: r.roots.map((x) => x.name).join(_(', ')) }) : _('Folder status')),
           h(
             'span',
             { class: 'muted small' },
-            store.folderScan ? `掃描於 ${fmt.time(store.folderScan.scannedAt * 1000)}（${store.folderScan.seconds} 秒）・掃描只讀取；只有按「丟到垃圾桶」才會移動檔案` : '',
+            store.folderScan ? _('Scanned at {time} ({s} s) · Scanning only reads; files move only when you press "Move to Trash"', { time: fmt.time(store.folderScan.scannedAt * 1000), s: store.folderScan.seconds }) : '',
           ),
         ),
         h(
           'div',
           { class: 'toolbar' },
-          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: '設定哪些 crate 裡的歌算「待分類」' }, `未分類 crate・${unsortedCount} 個`),
-          h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? '掃描中…' : '↻ 重新掃描'),
+          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates make their songs "Unsorted"') }, _('Unsorted crates · {n}', { n: unsortedCount })),
+          h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? _('Scanning…') : _('↻ Rescan')),
         ),
       ),
       r ? stackedBar(r.sum, 'sbar-lg') : null,
@@ -128,12 +129,12 @@ export function createFoldersView({ navigate }) {
             ),
             h('span', { class: 'legend-sep' }),
             store.audioProgress?.running
-              ? h('span', { class: 'muted small' }, `正在讀取每個檔案的格式… ${store.audioProgress.done.toLocaleString()} / ${store.audioProgress.total.toLocaleString()}`)
+              ? h('span', { class: 'muted small' }, _('Reading each file\'s format… {done} / {total}', { done: store.audioProgress.done.toLocaleString(), total: store.audioProgress.total.toLocaleString() }))
               : store.audioProgress?.error
-                ? h('span', { class: 'muted small' }, `讀不到檔案格式：${store.audioProgress.error}`)
-                : h('span', { class: 'legend-item', title: `低音質：${LOW_QUALITY_TEXT}` }, h('span', { class: 'qbadge is-low' }, '低音質'), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
-            r.outsideCount ? h('span', { class: 'muted small', title: '例如 ~/Desktop 或 _Serato_ 資料夾裡的檔案' }, `另有 ${r.outsideCount} 首 Serato 的歌不在掃描範圍內`) : null,
-            r.outsideMissing ? h('span', { class: 'muted small' }, `、${r.outsideMissing} 首找不到的歌在掃描範圍外`) : null,
+                ? h('span', { class: 'muted small' }, _('Could not read file formats: {error}', { error: store.audioProgress.error }))
+                : h('span', { class: 'legend-item', title: _('Low quality: {reasons}', { reasons: LOW_QUALITY_TEXT }) }, h('span', { class: 'qbadge is-low' }, _('Low quality')), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
+            r.outsideCount ? h('span', { class: 'muted small', title: _('For example files on ~/Desktop or in the _Serato_ folder') }, _n(r.outsideCount, '{n} more Serato song is outside the scanned folders', '{n} more Serato songs are outside the scanned folders')) : null,
+            r.outsideMissing ? h('span', { class: 'muted small' }, _n(r.outsideMissing, '· {n} missing song is outside them', '· {n} missing songs are outside them')) : null,
           )
         : null,
     );
@@ -156,13 +157,13 @@ export function createFoldersView({ navigate }) {
       { class: 'trash-bar' },
       files.length
         ? [
-            h('span', {}, `已標記不要 ${files.length.toLocaleString()} 個檔案（${fmt.size(bytes)}），還沒丟掉。`),
-            h('button', { class: 'btn btn-sm btn-danger', onclick: () => openTrash(files) }, '檢查並丟到垃圾桶…'),
+            h('span', {}, _n(files.length, '{n} file marked reject ({size}), not moved to the Trash yet.', '{n} files marked reject ({size}), not moved to the Trash yet.', { size: fmt.size(bytes) })),
+            h('button', { class: 'btn btn-sm btn-danger', onclick: () => openTrash(files) }, _('Review and move to Trash…')),
           ]
         : null,
-      viaPlan ? h('span', { class: 'muted small', title: '這些歌在 Serato 裡，要先從 Serato 移除才能刪檔，所以排在「變更計畫」裡' }, `另有 ${viaPlan} 首 Serato 裡的歌標記不要，等「套用到 Serato」時一起處理`) : null,
+      viaPlan ? h('span', { class: 'muted small', title: _('These songs are in Serato. They must be removed from Serato before their files can go, so they wait in Plan') }, _n(viaPlan, '{n} more song in Serato is marked reject and is handled when you apply to Serato', '{n} more songs in Serato are marked reject and are handled when you apply to Serato')) : null,
       store.lastTrashed.length
-        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, `↩ 還原剛剛丟掉的 ${store.lastTrashed.length} 個`)
+        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, _n(store.lastTrashed.length, '↩ Restore the {n} file just trashed', '↩ Restore the {n} files just trashed'))
         : null,
     );
   }
@@ -185,8 +186,8 @@ export function createFoldersView({ navigate }) {
           renderTree();
         },
       },
-      h('option', { value: 'name' }, '依名稱'),
-      h('option', { value: 'todo' }, '待處理多的在前'),
+      h('option', { value: 'name' }, _('By name')),
+      h('option', { value: 'todo' }, _('Most to do first')),
     );
     sortSelect.value = sortBy;
     clear(
@@ -204,14 +205,14 @@ export function createFoldersView({ navigate }) {
             renderTree();
           },
         }),
-        '隱藏整理完的',
+        _('Hide finished'),
       ),
     );
   }
 
   function renderTree() {
     if (!report) {
-      clear(treeEl, h('div', { class: 'empty' }, loading ? '掃描中…' : loadError ? `掃描失敗：${loadError}` : ''));
+      clear(treeEl, h('div', { class: 'empty' }, loading ? _('Scanning…') : loadError ? _('Scan failed: {error}', { error: loadError }) : ''));
       return;
     }
     visibleRows = [];
@@ -256,8 +257,8 @@ export function createFoldersView({ navigate }) {
       h(
         'span',
         { class: 'frow-count' },
-        t.missing ? h('span', { class: 'tag tag-danger', title: `${t.missing} 首找不到` }, `✕${t.missing}`) : null,
-        node.todo ? h('span', { class: 'todo', title: `待分類 ${t.unsorted}、沒匯入 ${t.notImported}` }, node.todo.toLocaleString()) : node.done ? h('span', { class: 'done', title: '整理完了' }, '✓') : null,
+        t.missing ? h('span', { class: 'tag tag-danger', title: _n(t.missing, '{n} missing song', '{n} missing songs') }, `✕${t.missing}`) : null,
+        node.todo ? h('span', { class: 'todo', title: _('Unsorted {unsorted}, not imported {notImported}', { unsorted: t.unsorted, notImported: t.notImported }) }, node.todo.toLocaleString()) : node.done ? h('span', { class: 'done', title: _('Finished') }, '✓') : null,
       ),
     );
   }
@@ -307,7 +308,7 @@ export function createFoldersView({ navigate }) {
   function renderDetail() {
     const node = selected();
     if (!node) {
-      clear(detailHead, h('div', { class: 'empty' }, report ? '左邊選一個資料夾' : loading ? '掃描中…' : loadError ? `掃描失敗：${loadError}` : ''));
+      clear(detailHead, h('div', { class: 'empty' }, report ? _('Pick a folder on the left') : loading ? _('Scanning…') : loadError ? _('Scan failed: {error}', { error: loadError }) : ''));
       clear(detailToolbar);
       vlist.setItems([]);
       return;
@@ -333,16 +334,16 @@ export function createFoldersView({ navigate }) {
       );
 
     const notes = [];
-    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, '這個資料夾已經不存在了（可能搬走或改了名字），但 Serato 裡還有歌指向這裡。'));
+    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, _('This folder no longer exists (it may have been moved or renamed), but Serato still has songs pointing here.')));
     if (t.files && !todo && !t.missing)
-      notes.push(h('div', { class: 'fnote fnote-ok' }, '✓ 整理完了：這裡每首歌都已經在分類 crate 裡', t.copy ? `（另有 ${t.copy} 個副本，Serato 用的是別的地方那一份）` : '', '。'));
+      notes.push(h('div', { class: 'fnote fnote-ok' }, _('✓ Finished: every song here is in a sorting crate'), t.copy ? _n(t.copy, ' ({n} more copy; Serato uses the one elsewhere)', ' ({n} more copies; Serato uses the ones elsewhere)') : '', _('.')));
     if (t.unsorted)
       notes.push(
         h(
           'div',
           { class: 'fnote fnote-warn' },
-          h('span', {}, `${t.unsorted} 首已經在 Serato 裡，但還沒分類。`),
-          h('button', { class: 'btn btn-sm btn-primary', onclick: () => sortHere(node) }, '到「分類新歌」整理 →'),
+          h('span', {}, _n(t.unsorted, '{n} song is already in Serato but not sorted yet.', '{n} songs are already in Serato but not sorted yet.')),
+          h('button', { class: 'btn btn-sm btn-primary', onclick: () => sortHere(node) }, _('Go to Sort →')),
         ),
       );
     if (t.notImported || t.rejected) {
@@ -355,26 +356,26 @@ export function createFoldersView({ navigate }) {
           h(
             'div',
             { class: 'fnote-text' },
-            h('strong', {}, `先篩再匯入：已篩 ${screened.toLocaleString()} / ${pool.toLocaleString()}`),
-            `（留下 ${t.kept.toLocaleString()}、不要 ${t.rejected.toLocaleString()}）`,
+            h('strong', {}, _('Screen before importing: {done} / {total} screened', { done: screened.toLocaleString(), total: pool.toLocaleString() })),
+            _(' (keep {kept}, reject {rejected})', { kept: t.kept.toLocaleString(), rejected: t.rejected.toLocaleString() }),
             h('br'),
-            h('span', { class: 'muted' }, '點一首歌開始：↑↓ 換歌、空白鍵播放、Q W E R 跳到 0/25/50/75%、X 不要、V 留下。篩完把不要的丟到垃圾桶，再把這個資料夾拖進 Serato 的 TBD crate。'),
+            h('span', { class: 'muted' }, _('Click a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. When done, move the rejects to the Trash, then drag this folder into a crate under Inbox in Serato.')),
           ),
         ),
       );
     }
     if (crates.length)
       notes.push(
-        h('div', { class: 'fnote' }, `Serato 裡的「${crates.join('」、「')}」是把這個資料夾整個拖進去的 crate，所以它不算分類。整理完、確定裡面的歌都分好了，就可以刪掉這個 crate。`),
+        h('div', { class: 'fnote' }, _('{crates} in Serato came from dragging this whole folder in, so it does not count as sorting. Once its songs are all sorted, you can delete that crate.', { crates: crates.map((name) => _('"{name}"', { name })).join(_(', ')) })),
       );
     if (t.unreadable)
-      notes.push(h('div', { class: 'fnote fnote-danger' }, `${t.unreadable} 個檔案 macOS 打不開，可能已經損壞，或副檔名和實際格式不符。用「只看低音質」可以一起列出來，試聽確認一下。`));
+      notes.push(h('div', { class: 'fnote fnote-danger' }, _n(t.unreadable, 'macOS cannot open {n} file. It may be damaged, or its extension may not match its real format. "Low quality only" lists it too; preview it to check.', 'macOS cannot open {n} files. They may be damaged, or their extensions may not match their real format. "Low quality only" lists them too; preview them to check.')));
     if (t.low || t.unreadable)
       notes.push(
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', { title: LOW_QUALITY_TEXT }, t.low ? `${t.low} 首低音質（${LOW_QUALITY_TEXT}）。AAC 256 和 MP3 320 不算低音質。` : '音質都沒問題，只有上面打不開的檔案。'),
+          h('span', { title: LOW_QUALITY_TEXT }, t.low ? _n(t.low, '{n} low-quality song ({rule}). AAC 256 and MP3 320 are not low quality.', '{n} low-quality songs ({rule}). AAC 256 and MP3 320 are not low quality.', { rule: LOW_QUALITY_TEXT }) : _('Quality is fine apart from the unreadable files above.')),
           h(
             'button',
             {
@@ -384,7 +385,7 @@ export function createFoldersView({ navigate }) {
                 renderDetail();
               },
             },
-            lowOnly ? '顯示全部' : '只看低音質',
+            lowOnly ? _('Show all') : _('Low quality only'),
           ),
         ),
       );
@@ -393,8 +394,8 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', {}, `Serato 裡有 ${t.missing} 首歌指向這裡，但檔案不見了。`),
-          h('button', { class: 'btn btn-sm', onclick: () => navigate('cleanup') }, '到「清理」處理 →'),
+          h('span', {}, _n(t.missing, '{n} song in Serato points here, but its file is gone.', '{n} songs in Serato point here, but their files are gone.')),
+          h('button', { class: 'btn btn-sm', onclick: () => navigate('cleanup') }, _('Fix in Cleanup →')),
         ),
       );
 
@@ -404,7 +405,7 @@ export function createFoldersView({ navigate }) {
         'div',
         { class: 'fdetail-title' },
         h('div', { class: 'grow' }, h('h2', {}, node.name), h('div', { class: 'path', title: node.path }, fmt.shortPath(node.path))),
-        !node.ghost ? h('button', { class: 'btn btn-sm', onclick: () => reveal(node.path) }, '在 Finder 打開') : null,
+        !node.ghost ? h('button', { class: 'btn btn-sm', onclick: () => reveal(node.path) }, _('Show in Finder')) : null,
       ),
       h('div', { class: 'fstats' }, STATUSES.map(stat)),
       notes,
@@ -412,7 +413,7 @@ export function createFoldersView({ navigate }) {
 
     const filterInput = h('input', {
       class: 'input input-sm',
-      placeholder: '篩選檔名、歌名、歌手…',
+      placeholder: _('Filter by file name, title, artist…'),
       value: filter,
       oninput: (e) => {
         filter = e.target.value;
@@ -431,14 +432,14 @@ export function createFoldersView({ navigate }) {
             'button',
             {
               class: 'chip',
-              title: '取消狀態篩選',
+              title: _('Clear status filter'),
               onclick: () => {
                 statusFilter = 'all';
                 renderDetail();
               },
             },
             h('span', { class: `swatch st-${statusFilter}` }),
-            `只看${LABEL[statusFilter]}`,
+            _('Only {status}', { status: LABEL[statusFilter] }),
             h('span', { class: 'chip-x' }, '×'),
           )
         : null,
@@ -447,13 +448,13 @@ export function createFoldersView({ navigate }) {
             'button',
             {
               class: 'chip',
-              title: '取消低音質篩選',
+              title: _('Clear low-quality filter'),
               onclick: () => {
                 lowOnly = false;
                 renderDetail();
               },
             },
-            '只看低音質',
+            _('Low quality only'),
             h('span', { class: 'chip-x' }, '×'),
           )
         : null,
@@ -470,7 +471,7 @@ export function createFoldersView({ navigate }) {
                 renderDetail();
               },
             }),
-            '包含子資料夾',
+            _('Include subfolders'),
           )
         : null,
     );
@@ -485,7 +486,7 @@ export function createFoldersView({ navigate }) {
     // Work still to do first; within a status, keep the folder order from the tree.
     const order = new Map(files.map((f, i) => [f, i]));
     fileItems = files.slice().sort((a, b) => rank[a.status] - rank[b.status] || order.get(a) - order.get(b));
-    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || statusFilter !== 'all' ? '沒有符合的檔案' : '這個資料夾沒有音檔'));
+    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || statusFilter !== 'all' ? _('No matching files') : _('This folder has no audio files')));
   }
 
   // ---------- screening ----------
@@ -529,10 +530,10 @@ export function createFoldersView({ navigate }) {
       store.setScreenMark([f.path], null);
       return;
     }
-    if (f.status === 'missing') return toast('這首的檔案已經不在了，到「清理」處理');
+    if (f.status === 'missing') return toast(_('This song\'s file is gone. Fix it in Cleanup'));
     if (f.assetId != null) {
       // In Serato: remove it there and trash the file when the plan is applied.
-      store.commit(`不要：${store.trackLabel(f.assetId)}`, [store.opReject(f.assetId)], { silent: true });
+      store.commit(_('Reject: {track}', { track: store.trackLabel(f.assetId) }), [store.opReject(f.assetId)], { silent: true });
     } else {
       store.setScreenMark([f.path], 'reject');
     }
@@ -541,7 +542,7 @@ export function createFoldersView({ navigate }) {
 
   function markKeep(f) {
     if (!f) return;
-    if (f.assetId != null || f.status === 'missing') return toast('這首已經在 Serato 裡了，到「分類新歌」分類就好');
+    if (f.assetId != null || f.status === 'missing') return toast(_('This song is already in Serato. Sort it in Sort'));
     const next = fileItems[fileIndex(f.path) + 1]?.path;
     const wasPlaying = isPlaying(f);
     if (f.kept) {
@@ -556,15 +557,15 @@ export function createFoldersView({ navigate }) {
     const eff = store.eff;
     if (f.status === 'notImported') return h('span', { class: 'muted' }, '—');
     if (f.status === 'rejected')
-      return h('span', { class: 'muted' }, f.viaPlan ? '不要・等「套用到 Serato」時移除並丟到垃圾桶' : '不要・還沒丟到垃圾桶');
+      return h('span', { class: 'muted' }, f.viaPlan ? _('Reject · removed and trashed when you apply to Serato') : _('Reject · not moved to the Trash yet'));
     if (f.status === 'copy') {
       const twin = store.base.tracks.get(f.twins[0]);
       const twinPath = twin ? effectivePath(eff, twin) : '';
       const ok = f.twins.some((id) => isClassified(eff, store.rules, id));
-      return h('span', { class: 'muted', title: twinPath }, `副本・Serato 用的是 ${fmt.shortPath(dirOf(twinPath))}（${ok ? '已分類' : '待分類'}）`);
+      return h('span', { class: 'muted', title: twinPath }, _('Copy · Serato uses {dir} ({status})', { dir: fmt.shortPath(dirOf(twinPath)), status: ok ? _('Sorted') : _('Unsorted') }));
     }
     const ids = eff.cratesOf.get(f.assetId) || [];
-    if (!ids.length) return h('span', { class: 'muted' }, '不在任何 crate');
+    if (!ids.length) return h('span', { class: 'muted' }, _('In no crate'));
     const counted = ids.filter((c) => !store.rules.skip.has(c));
     const skipped = ids.filter((c) => store.rules.skip.has(c));
     const all = [...counted, ...skipped].map((c) => eff.pathOf(c));
@@ -579,7 +580,7 @@ export function createFoldersView({ navigate }) {
   function playable(f) {
     if (f.status === 'missing') return null;
     if (f.assetId != null) return store.base.tracks.get(f.assetId);
-    return { key: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: '沒匯入的檔案' };
+    return { key: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: _('File not in Serato') };
   }
 
   function renderFile(f) {
@@ -598,13 +599,13 @@ export function createFoldersView({ navigate }) {
         onclick: () => selectFile(f.path, { scroll: false }),
         ondblclick: () => play && player.play(play),
       },
-      h('span', { class: `swatch st-${f.status}`, title: `${LABEL[f.status]}：${HINT[f.status]}` }),
+      h('span', { class: `swatch st-${f.status}`, title: `${LABEL[f.status]}${_(': ')}${HINT[f.status]}` }),
       play
         ? h(
             'button',
             {
               class: 'icon-btn',
-              title: '試聽',
+              title: _('Preview'),
               onclick: (e) => {
                 e.stopPropagation();
                 selectFile(f.path, { scroll: false });
@@ -617,7 +618,7 @@ export function createFoldersView({ navigate }) {
       h(
         'div',
         { class: 'trow-main' },
-        h('div', { class: 'trow-title', title: f.path }, title, f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: '硬碟上有一模一樣的檔案' }, `重複 ×${f.sameCopies + 1}`) : null),
+        h('div', { class: 'trow-title', title: f.path }, title, f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null),
         h('div', { class: 'trow-sub' }, sub),
       ),
       cratesCell(f),
@@ -630,7 +631,7 @@ export function createFoldersView({ navigate }) {
               'button',
               {
                 class: `screen-btn screen-x ${f.status === 'rejected' ? 'is-on' : ''}`,
-                title: f.status === 'rejected' ? '取消「不要」' : '不要（X）',
+                title: f.status === 'rejected' ? _('Undo reject') : _('Reject (X)'),
                 onclick: (e) => {
                   e.stopPropagation();
                   selectFile(f.path, { scroll: false });
@@ -645,7 +646,7 @@ export function createFoldersView({ navigate }) {
               'button',
               {
                 class: `screen-btn screen-v ${f.kept ? 'is-on' : ''}`,
-                title: f.kept ? '取消「留下」' : '留下（V）',
+                title: f.kept ? _('Undo keep') : _('Keep (V)'),
                 onclick: (e) => {
                   e.stopPropagation();
                   selectFile(f.path, { scroll: false });
@@ -664,7 +665,7 @@ export function createFoldersView({ navigate }) {
     try {
       await api.reveal(path);
     } catch (e) {
-      toast(`無法打開：${e.message}`, { tone: 'danger' });
+      toast(_('Could not open: {error}', { error: e.message }), { tone: 'danger' });
     }
   }
 
@@ -677,7 +678,7 @@ export function createFoldersView({ navigate }) {
     }
     const bytes = files.reduce((n, f) => n + (f.size || 0), 0);
     const ok = await modal({
-      title: `把 ${files.length.toLocaleString()} 個檔案丟到垃圾桶？`,
+      title: _n(files.length, 'Move {n} file to the Trash?', 'Move {n} files to the Trash?'),
       wide: true,
       body: h(
         'div',
@@ -685,32 +686,32 @@ export function createFoldersView({ navigate }) {
         h(
           'p',
           {},
-          `共 ${fmt.size(bytes)}。檔案會移到 Mac 的垃圾桶，不會直接刪除。Backstage 會記下每個檔案原本的位置，清空垃圾桶之前都可以一鍵還原。這些檔案都不在 Serato 裡，丟掉不會影響 Serato。`,
+          _('{size} in total. The files go to the Mac Trash and are not deleted directly. Backstage remembers where each file was, so you can restore them with one click until you empty the Trash. None of these files are in Serato, so Serato is not affected.', { size: fmt.size(bytes) }),
         ),
         h(
           'div',
           { class: 'list trash-list' },
           [...groups].map(([dir, list]) => [
-            h('div', { class: 'trash-dir' }, fmt.shortPath(dir), h('span', { class: 'muted small' }, ` ${list.length} 個`)),
+            h('div', { class: 'trash-dir' }, fmt.shortPath(dir), h('span', { class: 'muted small' }, ` ${_n(list.length, '{n} file', '{n} files')}`)),
             list.map((f) => h('div', { class: 'trash-file', title: f.path }, f.name, h('span', { class: 'muted small' }, ` ${fmt.size(f.size)}`))),
           ]),
         ),
       ),
       actions: (close) => [
-        h('button', { class: 'btn', onclick: () => close(false) }, '取消'),
-        h('button', { class: 'btn btn-danger', onclick: () => close(true) }, `丟到垃圾桶（${files.length.toLocaleString()} 個）`),
+        h('button', { class: 'btn', onclick: () => close(false) }, _('Cancel')),
+        h('button', { class: 'btn btn-danger', onclick: () => close(true) }, _n(files.length, 'Move to Trash ({n} file)', 'Move to Trash ({n} files)')),
       ],
     });
     if (ok !== true) return;
     try {
-      toast('正在移到垃圾桶…');
+      toast(_('Moving to the Trash…'));
       const results = await store.trashFiles(files.map((f) => f.path));
       const done = results.filter((r) => r.ok);
       const failed = results.filter((r) => !r.ok);
-      toast(`已丟到垃圾桶 ${done.length} 個檔案`, { action: () => restore(done.map((r) => r.path)), actionLabel: '還原', timeout: 10000 });
-      if (failed.length) showFailures('有些檔案沒有丟掉', failed);
+      toast(_n(done.length, 'Moved {n} file to the Trash', 'Moved {n} files to the Trash'), { action: () => restore(done.map((r) => r.path)), actionLabel: _('Restore'), timeout: 10000 });
+      if (failed.length) showFailures(_('Some files were not moved'), failed);
     } catch (e) {
-      toast(`丟到垃圾桶失敗：${e.message}`, { tone: 'danger', timeout: 8000 });
+      toast(_('Could not move to the Trash: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
     }
   }
 
@@ -718,10 +719,10 @@ export function createFoldersView({ navigate }) {
     try {
       const results = await store.restoreFiles(paths);
       const failed = results.filter((r) => !r.ok);
-      toast(`已還原 ${results.length - failed.length} 個檔案到原本的位置`);
-      if (failed.length) showFailures('有些檔案沒有還原', failed);
+      toast(_n(results.length - failed.length, 'Restored {n} file to its original place', 'Restored {n} files to their original places'));
+      if (failed.length) showFailures(_('Some files were not restored'), failed);
     } catch (e) {
-      toast(`還原失敗：${e.message}`, { tone: 'danger', timeout: 8000 });
+      toast(_('Restore failed: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
     }
   }
 
@@ -730,7 +731,7 @@ export function createFoldersView({ navigate }) {
       title,
       wide: true,
       body: h('div', { class: 'list trash-list' }, failed.map((r) => h('div', { class: 'trash-file', title: r.path }, fmt.shortPath(r.path), h('div', { class: 'muted small' }, r.error)))),
-      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, '知道了')],
+      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('Got it'))],
     });
   }
 
@@ -814,7 +815,7 @@ export function createFoldersView({ navigate }) {
   requestAnimationFrame(() => treeEl.querySelector('.frow.is-selected')?.scrollIntoView({ block: 'nearest' }));
   return {
     el,
-    title: '資料夾',
+    title: _('Folders'),
     update() {
       const scrollTop = treeEl.scrollTop;
       render();

@@ -5,6 +5,7 @@ import { player } from '../player.js';
 import { parseId, store } from '../store.js';
 import { openUnsortedEditor, unsortedReason } from '../unsorted.js';
 import { clear, confirmDialog, fmt, h, modal, prefs, promptDialog, toast, VirtualList } from '../ui.js';
+import { _, _n } from '../i18n.js';
 
 let dragging = null; // { kind: 'crate', id } | { kind: 'tracks', ids, from }
 
@@ -21,7 +22,7 @@ export function createStructureView() {
   // ---------- layout ----------
   const treeFilterInput = h('input', {
     class: 'input input-sm',
-    placeholder: '篩選 crate…',
+    placeholder: _('Filter crates…'),
     oninput: (e) => {
       treeFilter = e.target.value;
       renderTree();
@@ -32,7 +33,7 @@ export function createStructureView() {
     },
   });
   const treeEl = h('div', { class: 'tree', onmousedown: () => (focusArea = 'tree') });
-  const rootDrop = h('div', { class: 'tree-rootdrop' }, '拖到這裡 → 移到最上層');
+  const rootDrop = h('div', { class: 'tree-rootdrop' }, _('Drop here → move to the top level'));
   wireDrop(rootDrop, () => store.eff.rootId);
   const treePanel = h(
     'aside',
@@ -41,12 +42,12 @@ export function createStructureView() {
       'div',
       { class: 'toolbar' },
       treeFilterInput,
-      h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, '+ 新 crate'),
-      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: '設定哪些 crate 算未分類、整理到 Inbox' }, '未分類…'),
+      h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, _('+ New crate')),
+      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted, and tidy up into Inbox') }, _('Unsorted…')),
     ),
     rootDrop,
     treeEl,
-    h('div', { class: 'tree-hint muted small' }, '拖曳 crate 調整階層；把右邊的歌拖到 crate 上可加入（按住 ⌥ 是移動）'),
+    h('div', { class: 'tree-hint muted small' }, _('Drag crates to rearrange them. Drag songs from the right onto a crate to add them (hold ⌥ to move)')),
   );
 
   const headEl = h('div', { class: 'panel-head crate-head' });
@@ -58,7 +59,7 @@ export function createStructureView() {
     { class: 'panel crate-detail' },
     headEl,
     selBar,
-    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, '歌名 / 歌手'), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, '曲風'), h('span', { class: 'num' }, '其他 crate')),
+    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, _('Title / artist')), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, _('Genre')), h('span', { class: 'num' }, _('Other crates'))),
     vlist.el,
   );
   const el = h('div', { class: 'view structure' }, treePanel, detail);
@@ -125,7 +126,7 @@ export function createStructureView() {
       }
     };
     walk(eff.rootId, 0);
-    clear(treeEl, visible.map(({ id, depth }) => treeRow(id, depth, !!show)), !visible.length ? h('div', { class: 'empty' }, '沒有符合的 crate') : null);
+    clear(treeEl, visible.map(({ id, depth }) => treeRow(id, depth, !!show)), !visible.length ? h('div', { class: 'empty' }, _('No crates match')) : null);
     if (reveal) treeEl.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     else treeEl.scrollTop = keep;
   }
@@ -144,7 +145,9 @@ export function createStructureView() {
         style: { paddingLeft: `${8 + depth * 16}px` },
         draggable: true,
         onclick: () => selectCrate(id),
-        ondblclick: () => renameCrate(id),
+        ondblclick: (e) => {
+          if (!e.target.closest('.caret')) renameCrate(id); // double-clicking the arrow only toggles it twice
+        },
         ondragstart: (e) => {
           dragging = { kind: 'crate', id };
           e.dataTransfer.effectAllowed = 'move';
@@ -165,12 +168,12 @@ export function createStructureView() {
         kids.length ? h('span', { class: `chev ${open ? 'is-open' : ''}` }) : '',
       ),
       h('span', { class: 'tree-name' }, c.name),
-      st.created ? h('span', { class: 'tag tag-new' }, '新') : null,
-      st.originalName != null ? h('span', { class: 'tag tag-edit', title: `原名：${st.originalName}` }, '改名') : null,
-      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, '移動') : null,
-      st.merged ? h('span', { class: 'tag tag-edit' }, '合併') : null,
+      st.created ? h('span', { class: 'tag tag-new' }, _('New')) : null,
+      st.originalName != null ? h('span', { class: 'tag tag-edit', title: _('Original name: {name}', { name: st.originalName }) }, _('Renamed')) : null,
+      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, _('Moved')) : null,
+      st.merged ? h('span', { class: 'tag tag-edit' }, _('Merged')) : null,
       // Mark only the top-most unsorted crate; its sub-crates inherit it.
-      store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: '這個 crate（和底下的子 crate）裡的歌算待分類' }, '未分類') : null,
+      store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: _('Songs in this crate (and its child crates) count as unsorted') }, _('Unsorted crate')) : null,
       h('span', { class: 'tree-count' }, count || ''),
     );
     wireDrop(row, () => id);
@@ -242,14 +245,14 @@ export function createStructureView() {
   async function createCrate(parent) {
     const eff = store.eff;
     const name = await promptDialog({
-      title: parent === eff.rootId ? '新增 crate' : `在「${eff.pathOf(parent)}」底下新增 crate`,
-      placeholder: 'crate 名稱',
-      okText: '建立',
-      validate: (v) => (siblingNameTaken(parent, v) ? '同一層已經有這個名稱' : null),
+      title: parent === eff.rootId ? _('New crate') : _('New crate under "{parent}"', { parent: eff.pathOf(parent) }),
+      placeholder: _('Crate name'),
+      okText: _('Add crate'),
+      validate: (v) => (siblingNameTaken(parent, v) ? _('This level already has that name') : null),
     });
     if (!name) return;
     const op = store.opCreate(name, parent);
-    if (store.commit(`建立 crate「${name}」`, [op])) {
+    if (store.commit(_('Create crate "{path}"', { path: name }), [op])) {
       if (parent !== eff.rootId) expanded.add(parent);
       selectCrate(op.id);
     }
@@ -260,22 +263,22 @@ export function createStructureView() {
     const c = eff.crates.get(id);
     if (!c) return;
     const name = await promptDialog({
-      title: '重新命名',
+      title: _('Rename'),
       value: c.name,
-      okText: '改名',
-      validate: (v) => (v === c.name ? '名稱沒有改變' : siblingNameTaken(c.parent, v, id) ? '同一層已經有這個名稱' : null),
+      okText: _('Save name'),
+      validate: (v) => (v === c.name ? _('The name did not change') : siblingNameTaken(c.parent, v, id) ? _('This level already has that name') : null),
     });
-    if (name) store.commit(`「${c.name}」改名為「${name}」`, [store.opRename(id, name)]);
+    if (name) store.commit(_('Rename "{from}" to "{to}"', { from: c.name, to: name }), [store.opRename(id, name)]);
   }
 
   function moveCrateTo(id, parent) {
     const eff = store.eff;
     const c = eff.crates.get(id);
     if (siblingNameTaken(parent, c.name, id)) {
-      toast(`目標裡已經有「${c.name}」，要合併的話請用「合併到…」`, { tone: 'danger' });
+      toast(_('"{name}" already exists in the target. To merge, use "Merge into…"', { name: c.name }), { tone: 'danger' });
       return;
     }
-    if (store.commit(`移動「${c.name}」到 ${parent === eff.rootId ? '最上層' : eff.pathOf(parent)}`, [store.opMove(id, parent)])) {
+    if (store.commit(parent === eff.rootId ? _('Move "{name}" to the top level', { name: c.name }) : _('Move "{name}" to {parent}', { name: c.name, parent: eff.pathOf(parent) }), [store.opMove(id, parent)])) {
       if (parent !== eff.rootId) expanded.add(parent);
       saveExpanded();
       selectCrate(id);
@@ -286,11 +289,11 @@ export function createStructureView() {
     const eff = store.eff;
     const exclude = new Set(subtreeIds(eff, id));
     const target = await modal({
-      title: `把「${eff.pathOf(id)}」移到…`,
+      title: _('Move "{crate}" to…', { crate: eff.pathOf(id) }),
       wide: true,
       body: (close) => [
-        h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, '移到最上層'),
-        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: '或選擇要放進哪個 crate 底下', onPick: (t) => close(t) }).el,
+        h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, _('Move to the top level')),
+        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: _('Or pick the crate to put it under'), onPick: (t) => close(t) }).el,
       ],
     });
     if (target != null) moveCrateTo(id, target);
@@ -298,9 +301,9 @@ export function createStructureView() {
 
   async function mergeDialog(id) {
     const eff = store.eff;
-    const target = await pickCrateDialog({ title: `把「${eff.pathOf(id)}」合併進…（歌與子 crate 會搬過去）`, exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
+    const target = await pickCrateDialog({ title: _('Merge "{crate}" into… (its songs and child crates move over)', { crate: eff.pathOf(id) }), exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
     if (target == null) return;
-    if (store.commit(`「${eff.pathOf(id)}」合併進「${eff.pathOf(target)}」`, [store.opMerge(id, target)])) selectCrate(target);
+    if (store.commit(_('Merged "{from}" into "{into}"', { from: eff.pathOf(id), into: eff.pathOf(target) }), [store.opMerge(id, target)])) selectCrate(target);
   }
 
   async function deleteCrate(id) {
@@ -308,14 +311,14 @@ export function createStructureView() {
     const ids = subtreeIds(eff, id);
     const nTracks = new Set(ids.flatMap((c) => eff.members.get(c) || [])).size;
     const ok = await confirmDialog({
-      title: `刪除「${eff.pathOf(id)}」？`,
-      message: `${ids.length > 1 ? `包含 ${ids.length - 1} 個子 crate，` : ''}共 ${nTracks} 首歌的分類會一起移除（歌本身留在資料庫）。這只會排入變更計畫，可以復原。`,
-      okText: '排入計畫',
+      title: _('Delete "{crate}"?', { crate: eff.pathOf(id) }),
+      message: `${ids.length > 1 ? _n(ids.length - 1, 'Includes {n} child crate. ', 'Includes {n} child crates. ') : ''}${_n(nTracks, '{n} song loses this sorting (the song stays in the library). This only goes into the plan and can be undone.', '{n} songs lose this sorting (the songs stay in the library). This only goes into the plan and can be undone.')}`,
+      okText: _('Stage in plan'),
       danger: true,
     });
     if (!ok) return;
     const parent = eff.crates.get(id).parent;
-    if (store.commit(`刪除 crate「${eff.pathOf(id)}」`, [store.opDelete(id)])) {
+    if (store.commit(_('Delete crate "{crate}"', { crate: eff.pathOf(id) }), [store.opDelete(id)])) {
       selected = store.eff.crates.has(parent) ? parent : null;
       renderAll();
     }
@@ -326,7 +329,7 @@ export function createStructureView() {
     const eff = store.eff;
     if (selected != null && !eff.crates.has(selected)) selected = null;
     if (selected == null) {
-      clear(headEl, h('div', { class: 'empty' }, '從左邊選一個 crate'));
+      clear(headEl, h('div', { class: 'empty' }, _('Pick a crate on the left')));
       clear(selBar);
       tracks = [];
       vlist.setItems([]);
@@ -339,30 +342,30 @@ export function createStructureView() {
     for (const id of selTracks) if (!tracks.some((t) => t.id === id)) selTracks.delete(id);
 
     const notes = [];
-    if (st.created) notes.push('新建立');
-    if (st.originalName != null) notes.push(`原名「${st.originalName}」`);
-    if (st.originalParent !== undefined) notes.push(`原本在「${st.originalParent === eff.rootId ? '最上層' : eff.pathOf(st.originalParent)}」`);
+    if (st.created) notes.push(_('newly created'));
+    if (st.originalName != null) notes.push(_('originally "{name}"', { name: st.originalName }));
+    if (st.originalParent !== undefined) notes.push(_('originally in "{parent}"', { parent: st.originalParent === eff.rootId ? _('top level') : eff.pathOf(st.originalParent) }));
     clear(
       headEl,
       h(
         'div',
         { class: 'crate-title' },
         h('h2', {}, eff.pathOf(selected)),
-        h('div', { class: 'muted small' }, `${tracks.length} 首 · ${kids.length} 個子 crate`, notes.length ? ` · ${notes.join('，')}（尚未寫入 Serato）` : ''),
+        h('div', { class: 'muted small' }, `${_n(tracks.length, '{n} song', '{n} songs')} · ${_n(kids.length, '{n} child crate', '{n} child crates')}`, notes.length ? ` · ${_('{notes} (not in Serato yet)', { notes: notes.join(_(', ')) })}` : ''),
       ),
       h(
         'div',
         { class: 'toolbar' },
-        h('button', { class: 'btn btn-sm', onclick: () => renameCrate(selected), title: 'F2' }, '重新命名'),
-        h('button', { class: 'btn btn-sm', onclick: () => createCrate(selected), title: 'N' }, '新增子 crate'),
-        h('button', { class: 'btn btn-sm', onclick: () => moveDialog(selected) }, '移動到…'),
-        h('button', { class: 'btn btn-sm', onclick: () => mergeDialog(selected) }, '合併到…'),
-        h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => deleteCrate(selected), title: 'Delete' }, '刪除'),
+        h('button', { class: 'btn btn-sm', onclick: () => renameCrate(selected), title: 'F2' }, _('Rename')),
+        h('button', { class: 'btn btn-sm', onclick: () => createCrate(selected), title: 'N' }, _('New child crate')),
+        h('button', { class: 'btn btn-sm', onclick: () => moveDialog(selected) }, _('Move…')),
+        h('button', { class: 'btn btn-sm', onclick: () => mergeDialog(selected) }, _('Merge into…')),
+        h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => deleteCrate(selected), title: 'Delete' }, _('Delete')),
         unsortedToggle(selected),
       ),
     );
     renderSelBar();
-    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? '這個 crate 只放子 crate，沒有直接放歌' : '空的 crate'));
+    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? _('This crate only holds child crates, no songs directly') : _('Empty crate')));
   }
 
   function unsortedToggle(id) {
@@ -370,12 +373,12 @@ export function createStructureView() {
     if (reason === 'inherited') {
       let top = id;
       while (store.rules.skip.has(store.eff.crates.get(top)?.parent)) top = store.eff.crates.get(top).parent;
-      return h('span', { class: 'tag tag-unsorted', title: `因為在「${store.eff.pathOf(top)}」底下` }, '未分類（繼承）');
+      return h('span', { class: 'tag tag-unsorted', title: _('Because it is under "{crate}"', { crate: store.eff.pathOf(top) }) }, _('Unsorted (inherited)'));
     }
     const on = reason != null;
     return h(
       'label',
-      { class: 'check', title: '這個 crate（和底下的子 crate）裡的歌算待分類' },
+      { class: 'check', title: _('Songs in this crate (and its child crates) count as unsorted') },
       h('input', {
         type: 'checkbox',
         checked: on,
@@ -384,7 +387,7 @@ export function createStructureView() {
           store.setClassifyOverride(id, e.target.checked ? (auto ? null : 'skip') : auto ? 'count' : null);
         },
       }),
-      '算未分類',
+      _('Counts as unsorted'),
     );
   }
 
@@ -394,13 +397,13 @@ export function createStructureView() {
       selBar,
       n
         ? [
-            h('span', { class: 'muted' }, `已選 ${n} 首`),
-            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('copy') }, '加到…'),
-            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('move') }, '移到…'),
-            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, '從這個 crate 移除'),
-            h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, '取消選取'),
+            h('span', { class: 'muted' }, _n(n, '{n} song selected', '{n} songs selected')),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('copy') }, _('Add to…')),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('move') }, _('Move to…')),
+            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, _('Remove from this crate')),
+            h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, _('Deselect')),
           ]
-        : h('span', { class: 'muted small' }, '點選歌曲（⇧ 範圍、⌘ 多選、⌘A 全選），可拖到左邊的 crate'),
+        : h('span', { class: 'muted small' }, _('Click songs (⇧ range, ⌘ multiple, ⌘A all) and drag them onto a crate on the left')),
     );
   }
 
@@ -424,11 +427,11 @@ export function createStructureView() {
           }
           dragging = { kind: 'tracks', ids: [...selTracks], from: selected };
           e.dataTransfer.effectAllowed = 'copyMove';
-          e.dataTransfer.setData('text/plain', `${selTracks.size} 首歌`);
+          e.dataTransfer.setData('text/plain', _n(selTracks.size, '{n} track', '{n} tracks'));
         },
         ondragend: () => (dragging = null),
       },
-      h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : isNew ? h('span', { class: 'dot dot-new', title: '這次新加入' }) : ''),
+      h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : isNew ? h('span', { class: 'dot dot-new', title: _('Newly added') }) : ''),
       h('div', { class: 'trow-main' }, h('div', { class: 'trow-title' }, t.title || t.fileName), h('div', { class: 'trow-sub' }, t.artist || '—')),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
       h('span', {}, t.key || '–'),
@@ -462,15 +465,15 @@ export function createStructureView() {
     const ops = ids.filter((a) => !have.has(a)).map((a) => store.opAdd(target, a));
     if (moveFrom != null) ops.push(...ids.map((a) => store.opRemove(moveFrom, a)));
     if (!ops.length) {
-      toast(`這些歌已經在「${eff.pathOf(target)}」裡了`);
+      toast(_('These songs are already in "{crate}"', { crate: eff.pathOf(target) }));
       return;
     }
-    store.commit(`${ids.length} 首歌${moveFrom != null ? '移' : '加'}到「${eff.pathOf(target)}」`, ops);
+    store.commit(moveFrom != null ? _n(ids.length, 'Move {n} song to "{crate}"', 'Move {n} songs to "{crate}"', { crate: eff.pathOf(target) }) : _n(ids.length, 'Add {n} song to "{crate}"', 'Add {n} songs to "{crate}"', { crate: eff.pathOf(target) }), ops);
   }
 
   async function tracksTo(mode) {
     const ids = [...selTracks];
-    const target = await pickCrateDialog({ title: `把 ${ids.length} 首歌${mode === 'move' ? '移' : '加'}到…`, exclude: new Set([selected]) });
+    const target = await pickCrateDialog({ title: mode === 'move' ? _n(ids.length, 'Move {n} song to…', 'Move {n} songs to…') : _n(ids.length, 'Add {n} song to…', 'Add {n} songs to…'), exclude: new Set([selected]) });
     if (target == null) return;
     addTracksTo(ids, parseId(target), mode === 'move' ? selected : null);
     if (mode === 'move') selTracks.clear();
@@ -479,7 +482,7 @@ export function createStructureView() {
   function removeSelected() {
     const ids = [...selTracks];
     selTracks.clear();
-    store.commit(`從「${store.eff.pathOf(selected)}」移除 ${ids.length} 首`, ids.map((a) => store.opRemove(selected, a)));
+    store.commit(_n(ids.length, 'Remove {n} song from "{crate}"', 'Remove {n} songs from "{crate}"', { crate: store.eff.pathOf(selected) }), ids.map((a) => store.opRemove(selected, a)));
   }
 
   function renderAll() {
@@ -493,7 +496,7 @@ export function createStructureView() {
 
   return {
     el,
-    title: 'Crate 結構',
+    title: _('Crates'),
     update: renderAll,
     onKey(e) {
       if (focusArea === 'tracks') {

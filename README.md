@@ -34,6 +34,12 @@ uv run --no-project app.py --port 9000 --no-browser
 
 The server uses only the Python standard library and the front end is plain JavaScript; there are no packages to install. Do not run the browser version and the Mac app at the same time: both write the same plan.
 
+## Language
+
+The interface is in English by default; the button at the top right switches to Traditional Chinese and back. The choice is saved in the page and in `settings.json` in the data folder, so server messages and the Mac app's startup messages follow it.
+
+Strings are written in English in the code and wrapped in `_()` / `_n()` (front end, `static/js/i18n.js`) or `tr()` / `trn()` (server, `serato_crates/i18n.py`). Chinese translations live in `static/js/locales/zh-Hant.js`, `serato_crates/locale_zh.py` and `src-tauri/src/locale_zh.rs`, keyed by the English text.
+
 ## Views
 
 | View | What it does |

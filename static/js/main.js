@@ -6,13 +6,14 @@ import { createFoldersView } from './views/folders.js';
 import { createInboxView } from './views/inbox.js';
 import { createPlanView } from './views/plan.js';
 import { createStructureView } from './views/structure.js';
+import { _, _n, lang, setLang, switchTo, syncServerLang } from './i18n.js';
 
 const VIEWS = {
-  folders: { label: '資料夾', create: createFoldersView },
-  inbox: { label: '分類新歌', create: createInboxView },
-  cleanup: { label: '清理', create: createCleanupView },
-  structure: { label: 'Crate 結構', create: createStructureView },
-  plan: { label: '變更計畫', create: createPlanView },
+  folders: { label: _('Folders'), create: createFoldersView },
+  inbox: { label: _('Sort'), create: createInboxView },
+  cleanup: { label: _('Cleanup'), create: createCleanupView },
+  structure: { label: _('Crates'), create: createStructureView },
+  plan: { label: _('Plan'), create: createPlanView },
 };
 
 const app = document.getElementById('app');
@@ -50,34 +51,35 @@ function renderHeader() {
   const snap = store.base?.snapshot;
   clear(
     snapEl,
-    h('span', { class: 'readonly-pill', title: '平常只讀取 Serato 資料庫的複本；只有在「變更計畫」按「套用到 Serato」（Serato 關閉時）才會寫入，寫入前自動備份' }, '● 只有按「套用」才會寫入 Serato'),
-    snap ? h('span', { class: 'muted small', title: `來源：${snap.source}` }, `快照 ${fmt.time(new Date(snap.takenAt).getTime())}`) : null,
-    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: '重新複製 Serato 資料庫（Serato 開著也沒關係）' }, '↻ 重新讀取'),
-    h('button', { class: 'btn btn-ghost btn-sm', onclick: showHelp, title: '快捷鍵（?）' }, '?'),
+    h('span', { class: 'readonly-pill', title: _('Normally only a copy of the Serato database is read. Serato is written only when you press "Apply to Serato" in Plan (with Serato closed), after an automatic backup') }, _('● Serato is written only when you press Apply')),
+    snap ? h('span', { class: 'muted small', title: _('Source: {path}', { path: snap.source }) }, _('Snapshot {time}', { time: fmt.time(new Date(snap.takenAt).getTime()) })) : null,
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: _('Copy the Serato database again (fine while Serato is open)') }, _('↻ Reload')),
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: showHelp, title: _('Keyboard shortcuts (?)') }, '?'),
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: () => setLang(switchTo.lang), title: switchTo.title }, switchTo.label),
   );
 }
 
 async function refreshSnapshot() {
   try {
-    toast('正在讀取 Serato 資料庫的新快照…');
+    toast(_('Reading a new snapshot of the Serato database…'));
     await store.refreshSnapshot();
-    toast(store.eff.issues.length ? `已更新快照；有 ${store.eff.issues.length} 個計畫動作套用不上，請看「變更計畫」` : '已更新快照', {
+    toast(store.eff.issues.length ? _n(store.eff.issues.length, 'Snapshot updated. {n} plan action no longer applies, see Plan', 'Snapshot updated. {n} plan actions no longer apply, see Plan') : _('Snapshot updated'), {
       tone: store.eff.issues.length ? 'danger' : 'info',
     });
   } catch (e) {
-    toast(`讀取失敗：${e.message}`, { tone: 'danger', timeout: 8000 });
+    toast(_('Could not read: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
   }
 }
 
 function showHelp() {
   const rows = [
-    ['分類新歌', [['↑ ↓ / J K', '上一首 / 下一首'], ['空白鍵', '播放 / 暫停'], ['← →', '倒退 / 快轉 10 秒（⇧ 30 秒）'], ['Q W E R', '從 0% / 25% / 50% / 75% 開始播'], ['1–9', '加入 / 移出快捷 crate'], ['⇧ 1–5', '加入建議的 crate'], ['/', '搜尋其他 crate（可直接建立新的）'], ['X', '不要這首']]],
-    ['資料夾', [['↑ ↓', '選擇資料夾（點歌曲後改為換歌）'], ['← →', '收合 / 展開'], ['空白鍵', '播放 / 暫停'], ['Q W E R', '從 0% / 25% / 50% / 75% 開始播'], ['X', '不要'], ['V', '留下'], ['Esc', '回到資料夾樹']]],
-    ['Crate 結構', [['↑ ↓', '選擇 crate'], ['← →', '收合 / 展開'], ['Enter / F2', '重新命名'], ['N', '新增子 crate'], ['Delete', '刪除 crate（排入計畫）'], ['⌘A', '全選歌曲（點過歌曲列表後）']]],
-    ['全域', [['⌘Z', '復原上一個變更'], ['?', '顯示這個說明']]],
+    [_('Sort'), [['↑ ↓ / J K', _('Previous / next song')], [_('Space'), _('Play / pause')], ['← →', _('Back / forward 10 s (⇧ 30 s)')], ['Q W E R', _('Play from 0% / 25% / 50% / 75%')], ['1–9', _('Add to / remove from a pinned crate')], ['⇧ 1–5', _('Add to a suggested crate')], ['/', _('Search other crates (or create a new one)')], ['X', _('Reject this song')]]],
+    [_('Folders'), [['↑ ↓', _('Select a folder (after clicking a song: change song)')], ['← →', _('Collapse / expand')], [_('Space'), _('Play / pause')], ['Q W E R', _('Play from 0% / 25% / 50% / 75%')], ['X', _('Reject')], ['V', _('Keep')], ['Esc', _('Back to the folder tree')]]],
+    [_('Crates'), [['↑ ↓', _('Select a crate')], ['← →', _('Collapse / expand')], ['Enter / F2', _('Rename')], ['N', _('New child crate')], ['Delete', _('Delete crate (added to the plan)')], ['⌘A', _('Select all songs (after clicking the song list)')]]],
+    [_('Everywhere'), [['⌘Z', _('Undo the last change')], ['?', _('Show this help')]]],
   ];
   modal({
-    title: '快捷鍵',
+    title: _('Keyboard shortcuts'),
     wide: true,
     body: h(
       'div',
@@ -91,7 +93,7 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('.modal-backdrop') || isTyping(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
     const undone = store.undo();
-    toast(undone ? `已復原：${undone.label}` : '沒有可以復原的變更');
+    toast(undone ? _('Undone: {label}', { label: undone.label }) : _('Nothing to undo'));
     e.preventDefault();
     return;
   }
@@ -109,17 +111,20 @@ window.addEventListener('hashchange', () => {
 });
 
 async function boot() {
+  document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
+  document.documentElement.style.setProperty('--kept-label', JSON.stringify(_('Keep'))); // badge text in app.css
+  syncServerLang(); // server messages and the Mac app's startup dialogs follow the page's language
   app.append(
     h('header', { class: 'header' }, h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, '◐'), 'Backstage'), tabsEl, snapEl),
     mainEl,
     playerEl,
   );
   mountPlayerBar(playerEl);
-  clear(mainEl, h('div', { class: 'loading' }, '正在讀取 Serato 資料庫快照…'));
+  clear(mainEl, h('div', { class: 'loading' }, _('Reading the Serato database snapshot…')));
   try {
     await store.load();
   } catch (e) {
-    clear(mainEl, h('div', { class: 'loading' }, h('p', {}, '讀取失敗'), h('p', { class: 'muted' }, e.message), h('button', { class: 'btn', onclick: () => location.reload() }, '重試')));
+    clear(mainEl, h('div', { class: 'loading' }, h('p', {}, _('Could not read')), h('p', { class: 'muted' }, e.message), h('button', { class: 'btn', onclick: () => location.reload() }, _('Retry'))));
     return;
   }
   store.subscribe(() => {

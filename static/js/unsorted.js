@@ -4,6 +4,7 @@ import { pickCrateDialog } from './cratePicker.js';
 import { effectivePath, liveTracks, norm, pathKey } from './model.js';
 import { store } from './store.js';
 import { clear, confirmDialog, h, modal, promptDialog, toast } from './ui.js';
+import { _, _n } from './i18n.js';
 
 export const INBOX = 'Inbox';
 export const LOOSE = '未分類單曲';
@@ -63,7 +64,7 @@ export function consolidateOps() {
     const key = norm(eff.crates.get(id).name);
     if (taken.has(key)) ops.push(store.opMerge(id, taken.get(key)));
     else {
-      ops.push({ ...store.opMove(id, inbox), text: `把「${eff.pathOf(id)}」移到「${INBOX}」底下` });
+      ops.push({ ...store.opMove(id, inbox), text: _('Move "{crate}" under "{parent}"', { crate: eff.pathOf(id), parent: INBOX }) });
       taken.set(key, id);
     }
   };
@@ -93,11 +94,11 @@ export function consolidateOps() {
   if (loose.length) {
     let target = taken.get(norm(LOOSE));
     if (target == null) {
-      const op = { ...store.opCreate(LOOSE, inbox), text: `在「${INBOX}」底下建立 crate「${LOOSE}」` };
+      const op = { ...store.opCreate(LOOSE, inbox), text: _('Create crate "{name}" under "{parent}"', { name: LOOSE, parent: INBOX }) };
       ops.push(op);
       target = op.id;
     }
-    for (const t of loose) ops.push({ type: 'add', crate: target, asset: t.id, text: `加入「${INBOX} / ${LOOSE}」：${store.trackLabel(t.id)}` });
+    for (const t of loose) ops.push({ type: 'add', crate: target, asset: t.id, text: _('Add to "{crate}": {track}', { crate: `${INBOX} / ${LOOSE}`, track: store.trackLabel(t.id) }) });
   }
   return { ops, moved, removed: emptied.map((id) => eff.pathOf(id)), loose: loose.length };
 }
@@ -105,22 +106,22 @@ export function consolidateOps() {
 export async function consolidate() {
   const { ops, moved, removed, loose } = consolidateOps();
   if (!moved && !loose) {
-    toast('未分類的 crate 都已經在 Inbox 底下了');
+    toast(_('All unsorted crates are already under Inbox'));
     return false;
   }
   const ok = await confirmDialog({
-    title: '把未分類的都整理到 Inbox？',
+    title: _('Tidy up everything unsorted into Inbox?'),
     message: [
-      moved ? `${moved} 個未分類 crate 會移到「${INBOX}」底下` : null,
-      removed.length ? `清空後刪掉「${removed.join('」、「')}」` : null,
-      loose ? `${loose} 首沒有任何 crate 的歌放進「${INBOX} / ${LOOSE}」` : null,
+      moved ? _n(moved, '{n} unsorted crate will move under "{inbox}"', '{n} unsorted crates will move under "{inbox}"', { inbox: INBOX }) : null,
+      removed.length ? _('Delete {names} once empty', { names: removed.map((name) => _('"{name}"', { name })).join(_(', ')) }) : null,
+      loose ? _n(loose, '{n} song in no crate goes into "{crate}"', '{n} songs in no crate go into "{crate}"', { crate: `${INBOX} / ${LOOSE}` }) : null,
     ]
       .filter(Boolean)
-      .join('；') + '。只會排進變更計畫，套用到 Serato 之前都可以在「變更計畫」或「Crate 結構」調整、復原。',
-    okText: '排進變更計畫',
+      .join(_('; ')) + _('. This only adds to the plan; until you apply it to Serato you can adjust or undo it in Plan or Crates.'),
+    okText: _('Add to plan'),
   });
   if (!ok) return false;
-  return !!store.commit(`把未分類的 crate 和歌整理到 ${INBOX}`, ops);
+  return !!store.commit(_('Tidy up unsorted crates and songs into {inbox}', { inbox: INBOX }), ops);
 }
 
 async function createUnder() {
@@ -128,10 +129,10 @@ async function createUnder() {
   const inbox = inboxCrateId(eff);
   const siblings = inbox == null ? [] : (eff.children.get(inbox) || []).map((id) => norm(eff.crates.get(id).name));
   const name = await promptDialog({
-    title: `在「${INBOX}」底下新增未分類 crate`,
-    placeholder: '例如：2026-12 Beatport',
-    okText: '新增',
-    validate: (v) => (siblings.includes(norm(v)) ? `「${INBOX}」底下已經有這個名稱` : null),
+    title: _('New unsorted crate under "{inbox}"', { inbox: INBOX }),
+    placeholder: _('e.g. 2026-12 Beatport'),
+    okText: _('Create'),
+    validate: (v) => (siblings.includes(norm(v)) ? _('"{inbox}" already has a crate with this name', { inbox: INBOX }) : null),
   });
   if (!name) return;
   const ops = [];
@@ -141,11 +142,11 @@ async function createUnder() {
     ops.push(op);
     parent = op.id;
   }
-  ops.push({ ...store.opCreate(name, parent), text: `在「${INBOX}」底下建立 crate「${name}」` });
-  store.commit(`新增未分類 crate「${INBOX} / ${name}」`, ops);
+  ops.push({ ...store.opCreate(name, parent), text: _('Create crate "{name}" under "{parent}"', { name, parent: INBOX }) });
+  store.commit(_('New unsorted crate "{crate}"', { crate: `${INBOX} / ${name}` }), ops);
 }
 
-const REASON = { inbox: '收件匣', folder: '整個資料夾拖進來的', manual: '你設定的' };
+const REASON = { inbox: _('Inbox'), folder: _('Whole folder dragged in'), manual: _('Set by you') };
 
 /** The editor: list / add / remove unsorted crates, create new ones under Inbox, tidy into Inbox. */
 export function openUnsortedEditor() {
@@ -167,37 +168,37 @@ export function openUnsortedEditor() {
           'span',
           { class: 'grow' },
           eff.pathOf(id),
-          h('span', { class: 'tag tag-unsorted' }, REASON[reason] || '未分類'),
+          h('span', { class: 'tag tag-unsorted' }, REASON[reason] || _('Unsorted crate')),
           h(
             'div',
             { class: 'muted small' },
-            `${subtreeSongs(eff, id).toLocaleString()} 首`,
-            kids ? `・${kids} 個子 crate` : '',
-            auto?.kind === 'folder' ? `・${auto.n} / ${auto.total} 首來自 ${auto.dir.replace(/^\/Users\/[^/]+/, '~')}` : '',
+            _n(subtreeSongs(eff, id), '{n} song', '{n} songs'),
+            kids ? `${_(' · ')}${_n(kids, '{n} child crate', '{n} child crates')}` : '',
+            auto?.kind === 'folder' ? `${_(' · ')}${_('{n} / {total} songs from {dir}', { n: auto.n, total: auto.total, dir: auto.dir.replace(/^\/Users\/[^/]+/, '~') })}` : '',
           ),
         ),
         h(
           'button',
           {
             class: 'btn btn-sm btn-ghost',
-            title: '這個 crate 裡的歌改算「已分類」',
+            title: _('Count the songs in this crate as "Sorted"'),
             onclick: () => {
               store.setClassifyOverride(id, auto ? 'count' : null);
               render();
             },
           },
-          '移除',
+          _('Remove'),
         ),
       );
     };
     clear(
       bodyEl,
-      h('p', { class: 'muted' }, `放在這些 crate（包含底下所有子 crate）裡的歌算「待分類」。只要同一首歌也在其他 crate 裡，就算「已分類」。之後新的未分類 crate 放在「${INBOX}」底下就會自動算進來。`),
+      h('p', { class: 'muted' }, _('Songs in these crates (including all child crates) count as "Unsorted". A song that is also in any other crate counts as "Sorted". New unsorted crates placed under "{inbox}" are included automatically.', { inbox: INBOX })),
       moved || loose
         ? h(
             'div',
             { class: 'fnote fnote-warn' },
-            h('span', {}, [moved ? `有 ${moved} 個未分類 crate 不在「${INBOX}」底下` : null, loose ? `${loose} 首歌沒有任何 crate` : null].filter(Boolean).join('，') + '。'),
+            h('span', {}, [moved ? _n(moved, '{n} unsorted crate is not under "{inbox}"', '{n} unsorted crates are not under "{inbox}"', { inbox: INBOX }) : null, loose ? _n(loose, '{n} song is in no crate', '{n} songs are in no crate') : null].filter(Boolean).join(_(', ')) + _('.')),
             h(
               'button',
               {
@@ -206,12 +207,12 @@ export function openUnsortedEditor() {
                   if (await consolidate()) render();
                 },
               },
-              `整理到 ${INBOX}…`,
+              _('Tidy up into {inbox}…', { inbox: INBOX }),
             ),
           )
         : null,
-      h('div', { class: 'section-label' }, `未分類 crate（${roots.length}）`),
-      h('div', { class: 'list rules-scroll' }, roots.length ? roots.map(row) : h('div', { class: 'empty' }, '沒有未分類 crate')),
+      h('div', { class: 'section-label' }, _('Unsorted crates ({n})', { n: roots.length })),
+      h('div', { class: 'list rules-scroll' }, roots.length ? roots.map(row) : h('div', { class: 'empty' }, _('No unsorted crates'))),
       h(
         'div',
         { class: 'toolbar rules-actions' },
@@ -224,19 +225,19 @@ export function openUnsortedEditor() {
               render();
             },
           },
-          `＋ 在 ${INBOX} 底下新增 crate`,
+          _('+ New crate under {inbox}', { inbox: INBOX }),
         ),
         h(
           'button',
           {
             class: 'btn btn-sm',
             onclick: async () => {
-              const id = await pickCrateDialog({ title: '哪個 crate 算未分類？', allowCreate: false, exclude: store.rules.skip });
+              const id = await pickCrateDialog({ title: _('Which crate counts as unsorted?'), allowCreate: false, exclude: store.rules.skip });
               if (id != null) store.setClassifyOverride(id, rules.auto.has(id) ? null : 'skip');
               render();
             },
           },
-          '＋ 把現有 crate 設為未分類',
+          _('+ Mark an existing crate as unsorted'),
         ),
         Object.keys(rules.overrides).length
           ? h(
@@ -248,18 +249,18 @@ export function openUnsortedEditor() {
                   render();
                 },
               },
-              '還原預設',
+              _('Restore defaults'),
             )
           : null,
       ),
-      inbox == null ? h('p', { class: 'muted small' }, `目前沒有「${INBOX}」crate，新增或整理時會自動建立。`) : null,
+      inbox == null ? h('p', { class: 'muted small' }, _('There is no "{inbox}" crate yet. It is created automatically when you add one or tidy up.', { inbox: INBOX })) : null,
     );
   };
   render();
   return modal({
-    title: '未分類 crate',
+    title: _('Unsorted crates'),
     wide: true,
     body: bodyEl,
-    actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, '完成')],
+    actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('Done'))],
   });
 }

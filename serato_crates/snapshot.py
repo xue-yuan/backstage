@@ -18,6 +18,7 @@ import sqlite3
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from .i18n import tr
 
 DEFAULT_SOURCE = Path.home() / "Library/Application Support/Serato/Library/master.sqlite"
 
@@ -39,7 +40,7 @@ def _signature(paths: list[Path]) -> tuple:
 
 def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int = 6) -> dict:
     if not source.exists():
-        raise SnapshotError(f"找不到 Serato 資料庫：{source}")
+        raise SnapshotError(tr("Serato database not found: {path}", path=source))
 
     src_wal = source.with_name(source.name + "-wal")
     work = data_dir / "snapshot.tmp"
@@ -59,7 +60,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         after = _signature([source, src_wal])
 
         if before != after:
-            last_problem = "Serato 在複製期間寫入了資料庫"
+            last_problem = tr("Serato wrote to the database while it was being copied")
             time.sleep(0.4 * (attempt + 1))
             continue
 
@@ -72,7 +73,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         finally:
             con.close()
         if check != "ok":
-            last_problem = f"完整性檢查失敗：{check}"
+            last_problem = tr("integrity check failed: {result}", result=check)
             time.sleep(0.4 * (attempt + 1))
             continue
 
@@ -89,7 +90,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         return meta
 
     shutil.rmtree(work, ignore_errors=True)
-    raise SnapshotError(f"無法取得一致的快照（{last_problem}），請稍後再試")
+    raise SnapshotError(tr("Could not get a consistent snapshot ({problem}). Please try again in a moment", problem=last_problem))
 
 
 def load_meta(data_dir: Path) -> dict | None:

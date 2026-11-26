@@ -2,6 +2,7 @@
 import { APPLY_SUPPORTED, applyPlan, buildBase, buildProfiles, classificationRules, effectivePath, pathKey } from './model.js';
 import { describeQuality } from './quality.js';
 import { prefs, toast } from './ui.js';
+import { _, _n } from './i18n.js';
 
 async function request(method, url, body) {
   const res = await fetch(url, {
@@ -113,7 +114,7 @@ class Store {
     this.ruleOverrides = overrides;
     this._rules = null;
     this.notify();
-    api.saveRules({ overrides }).catch((e) => toast(`未分類設定儲存失敗：${e.message}`, { tone: 'danger', timeout: 8000 }));
+    api.saveRules({ overrides }).catch((e) => toast(_('Could not save the unsorted settings: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 }));
   }
 
   // ---- real codec / bit rate per file (read with afinfo on the server, cached there) ----
@@ -177,7 +178,7 @@ class Store {
       try {
         await api.saveScreen({ reject: [...this.screen.reject], keep: [...this.screen.keep] });
       } catch (e) {
-        toast(`篩選標記儲存失敗：${e.message}`, { tone: 'danger', timeout: 8000 });
+        toast(_('Could not save the screening marks: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
       }
     }, 250);
   }
@@ -228,7 +229,7 @@ class Store {
       // Reject edits that cannot be applied cleanly (e.g. name clash).
       this.plan.changes.pop();
       this.recompute();
-      toast(`無法套用：${newIssues[0].message}`, { tone: 'danger' });
+      toast(_('Cannot apply: {error}', { error: newIssues[0].message }), { tone: 'danger' });
       return null;
     }
     this.persist();
@@ -277,7 +278,7 @@ class Store {
       try {
         await api.savePlan({ ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt });
       } catch (e) {
-        toast(`變更計畫儲存失敗：${e.message}`, { tone: 'danger', timeout: 8000 });
+        toast(_('Could not save the plan: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
       }
     }, 250);
   }
@@ -294,37 +295,43 @@ class Store {
 
   // ---- op builders ----
   opAdd(crate, asset) {
-    return { type: 'add', crate, asset, text: `加入「${this.crateLabel(crate)}」：${this.trackLabel(asset)}` };
+    return { type: 'add', crate, asset, text: _('Add to "{crate}": {track}', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
   }
   opRemove(crate, asset) {
-    return { type: 'remove', crate, asset, text: `從「${this.crateLabel(crate)}」移除：${this.trackLabel(asset)}` };
+    return { type: 'remove', crate, asset, text: _('Remove from "{crate}": {track}', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
   }
   opCreate(name, parent) {
     const id = newCrateId();
-    const where = parent === this.eff.rootId ? '最上層' : `「${this.crateLabel(parent)}」底下`;
-    return { type: 'createCrate', id, name, parent, text: `在${where}建立 crate「${name}」` };
+    const text =
+      parent === this.eff.rootId
+        ? _('Create crate "{name}" at the top level', { name })
+        : _('Create crate "{name}" under "{parent}"', { name, parent: this.crateLabel(parent) });
+    return { type: 'createCrate', id, name, parent, text };
   }
   opRename(crate, name) {
-    return { type: 'renameCrate', crate, name, text: `重新命名「${this.crateLabel(crate)}」→「${name}」` };
+    return { type: 'renameCrate', crate, name, text: _('Rename "{crate}" → "{name}"', { crate: this.crateLabel(crate), name }) };
   }
   opMove(crate, parent) {
-    const where = parent === this.eff.rootId ? '最上層' : `「${this.crateLabel(parent)}」底下`;
-    return { type: 'moveCrate', crate, parent, text: `把「${this.crateLabel(crate)}」移到${where}` };
+    const text =
+      parent === this.eff.rootId
+        ? _('Move "{crate}" to the top level', { crate: this.crateLabel(crate) })
+        : _('Move "{crate}" under "{parent}"', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
+    return { type: 'moveCrate', crate, parent, text };
   }
   opDelete(crate) {
-    return { type: 'deleteCrate', crate, text: `刪除 crate「${this.crateLabel(crate)}」` };
+    return { type: 'deleteCrate', crate, text: _('Delete crate "{crate}"', { crate: this.crateLabel(crate) }) };
   }
   opMerge(from, into) {
-    return { type: 'mergeCrate', from, into, text: `把「${this.crateLabel(from)}」合併進「${this.crateLabel(into)}」` };
+    return { type: 'mergeCrate', from, into, text: _('Merge "{from}" into "{into}"', { from: this.crateLabel(from), into: this.crateLabel(into) }) };
   }
   opRemoveTrack(asset, reason) {
-    return { type: 'removeTrack', asset, reason, text: `從 Serato 資料庫移除（不刪檔案）：${this.trackLabel(asset)}${reason ? `（${reason}）` : ''}` };
+    return { type: 'removeTrack', asset, reason, text: `${_('Remove from the Serato library (file kept): {track}', { track: this.trackLabel(asset) })}${reason ? _(' ({reason})', { reason }) : ''}` };
   }
   opReject(asset) {
-    return { type: 'removeTrack', asset, reason: '不要', deleteFile: true, text: `不要：從 Serato 移除，檔案丟到垃圾桶：${this.trackLabel(asset)}` };
+    return { type: 'removeTrack', asset, reason: _('Reject'), deleteFile: true, text: _('Reject: remove from Serato and move the file to the Trash: {track}', { track: this.trackLabel(asset) }) };
   }
   opRelocate(asset, path) {
-    return { type: 'relocate', asset, path, text: `重新指定檔案位置：${this.trackLabel(asset)} → ${path}` };
+    return { type: 'relocate', asset, path, text: _('Relocate file: {track} → {path}', { track: this.trackLabel(asset), path }) };
   }
 }
 

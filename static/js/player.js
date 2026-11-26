@@ -1,5 +1,6 @@
 // One shared audio element + the bottom player bar.
 import { h } from './ui.js';
+import { _, _n } from './i18n.js';
 
 const audio = new Audio();
 audio.preload = 'auto';
@@ -63,14 +64,14 @@ audio.addEventListener('pause', notify);
 audio.addEventListener('ended', notify);
 audio.addEventListener('timeupdate', () => updateProgress());
 audio.addEventListener('error', () => {
-  if (current) current.error = '無法播放：瀏覽器不支援這個格式，或檔案不存在';
+  if (current) current.error = _('Cannot play: the format is not supported or the file is missing');
   notify();
 });
 
 let els = {};
 export function mountPlayerBar(host) {
   bar = host;
-  els.btn = h('button', { class: 'player-btn', title: '播放 / 暫停（空白鍵）', onclick: () => player.toggle() });
+  els.btn = h('button', { class: 'player-btn', title: _('Play / pause (Space)'), onclick: () => player.toggle() });
   els.title = h('div', { class: 'player-title' });
   els.time = h('div', { class: 'player-time' });
   els.fill = h('div', { class: 'player-fill' });
@@ -91,7 +92,7 @@ export function mountPlayerBar(host) {
     max: 1,
     step: 0.01,
     class: 'player-volume',
-    title: '音量',
+    title: _('Volume'),
     oninput: (e) => (audio.volume = Number(e.target.value)),
   });
   vol.value = String(audio.volume);
@@ -104,7 +105,7 @@ function renderBar() {
   els.btn.textContent = player.playing ? '❚❚' : '▶';
   els.btn.disabled = !current;
   if (!current) {
-    els.title.replaceChildren(h('span', { class: 'muted' }, '選一首歌按空白鍵試聽'));
+    els.title.replaceChildren(h('span', { class: 'muted' }, _('Select a song and press Space to preview')));
   } else {
     els.title.replaceChildren(
       h('strong', {}, current.title),

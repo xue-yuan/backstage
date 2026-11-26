@@ -2,16 +2,17 @@
 // Pure data (no DOM), used by the Folders view.
 import { baseName, dirOf, effectivePath, isClassified, liveTracks, pathKey } from './model.js';
 import { fmt } from './ui.js';
+import { _, _n } from './i18n.js';
 
 export const STATUSES = ['classified', 'unsorted', 'notImported', 'copy', 'rejected', 'missing'];
-export const LABEL = { classified: '已分類', unsorted: '待分類', notImported: '沒匯入', copy: '副本', rejected: '不要', missing: '找不到' };
+export const LABEL = { classified: _('Sorted'), unsorted: _('Unsorted'), notImported: _('Not imported'), copy: _('Copy'), rejected: _('Rejected'), missing: _('Missing') };
 export const HINT = {
-  classified: '在 Serato 裡，而且至少在一個分類 crate 裡',
-  unsorted: '在 Serato 裡，但只在收件匣或資料夾 crate 裡，或不在任何 crate',
-  notImported: '硬碟上有這個檔案，但 Serato 裡沒有',
-  copy: '沒匯入，但和 Serato 用的另一個檔案一模一樣（重複的複本）',
-  rejected: '你標記不要的歌，還沒丟到垃圾桶',
-  missing: 'Serato 記錄的檔案位置在這裡，但檔案不見了',
+  classified: _('In Serato and in at least one sorting crate'),
+  unsorted: _('In Serato, but only in Inbox or folder crates, or in no crate'),
+  notImported: _('On disk but not in Serato'),
+  copy: _('Not imported, but identical to another file Serato uses (a duplicate copy)'),
+  rejected: _('Marked as reject, not moved to the Trash yet'),
+  missing: _('Serato expects the file here, but it is gone'),
 };
 export const BAR = ['classified', 'unsorted', 'notImported', 'copy', 'rejected'];
 const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, kept: 0 });

@@ -1,3 +1,4 @@
+import { _, _n } from './i18n.js';
 // Pure data logic: snapshot + staged plan -> effective library, plus analysis helpers.
 
 export function buildBase(lib) {
@@ -71,31 +72,31 @@ export function applyPlan(base, changes) {
   const apply = (op) => {
     switch (op.type) {
       case 'add': {
-        if (!members.has(op.crate)) return 'crate 已不存在';
-        if (!base.tracks.has(op.asset) || removedTracks.has(op.asset)) return '曲目已不存在';
+        if (!members.has(op.crate)) return _('The crate no longer exists');
+        if (!base.tracks.has(op.asset) || removedTracks.has(op.asset)) return _('The song no longer exists');
         const list = members.get(op.crate);
         if (!list.includes(op.asset)) list.push(op.asset);
         return null;
       }
       case 'remove': {
         const list = members.get(op.crate);
-        if (!list) return 'crate 已不存在';
+        if (!list) return _('The crate no longer exists');
         const i = list.indexOf(op.asset);
         if (i >= 0) list.splice(i, 1);
         return null;
       }
       case 'createCrate': {
-        if (crates.has(op.id)) return 'crate 已存在';
-        if (!validParent(op.parent)) return '上層 crate 已不存在';
-        if (nameTaken(op.parent, op.name)) return `同一層已經有「${op.name}」`;
+        if (crates.has(op.id)) return _('The crate already exists');
+        if (!validParent(op.parent)) return _('The parent crate no longer exists');
+        if (nameTaken(op.parent, op.name)) return _('"{name}" already exists at this level', { name: op.name });
         crates.set(op.id, { id: op.id, parent: op.parent, name: op.name, order: ++maxOrder, status: { created: true } });
         members.set(op.id, []);
         return null;
       }
       case 'renameCrate': {
         const c = crates.get(op.crate);
-        if (!c) return 'crate 已不存在';
-        if (nameTaken(c.parent, op.name, c.id)) return `同一層已經有「${op.name}」`;
+        if (!c) return _('The crate no longer exists');
+        if (nameTaken(c.parent, op.name, c.id)) return _('"{name}" already exists at this level', { name: op.name });
         if (!c.status.created && c.status.originalName == null) c.status.originalName = c.name;
         c.name = op.name;
         if (c.status.originalName === c.name) delete c.status.originalName;
@@ -103,10 +104,10 @@ export function applyPlan(base, changes) {
       }
       case 'moveCrate': {
         const c = crates.get(op.crate);
-        if (!c) return 'crate 已不存在';
-        if (!validParent(op.parent)) return '目標 crate 已不存在';
-        if (op.parent === c.id || isDescendant(op.parent, c.id)) return '不能移到自己底下';
-        if (nameTaken(op.parent, c.name, c.id)) return `目標裡已經有「${c.name}」`;
+        if (!c) return _('The crate no longer exists');
+        if (!validParent(op.parent)) return _('The target crate no longer exists');
+        if (op.parent === c.id || isDescendant(op.parent, c.id)) return _('Cannot move a crate into itself');
+        if (nameTaken(op.parent, c.name, c.id)) return _('"{name}" already exists in the target', { name: c.name });
         if (!c.status.created && c.status.originalParent === undefined) c.status.originalParent = c.parent;
         c.parent = op.parent;
         c.order = ++maxOrder;
@@ -114,18 +115,18 @@ export function applyPlan(base, changes) {
         return null;
       }
       case 'deleteCrate': {
-        if (!crates.has(op.crate)) return 'crate 已不存在';
+        if (!crates.has(op.crate)) return _('The crate no longer exists');
         deleteCrate(op.crate);
         return null;
       }
       case 'mergeCrate': {
-        if (!crates.has(op.from) || !crates.has(op.into)) return 'crate 已不存在';
-        if (op.from === op.into || isDescendant(op.into, op.from)) return '不能合併到自己底下';
+        if (!crates.has(op.from) || !crates.has(op.into)) return _('The crate no longer exists');
+        if (op.from === op.into || isDescendant(op.into, op.from)) return _('Cannot merge a crate into itself');
         mergeInto(op.from, op.into);
         return null;
       }
       case 'removeTrack': {
-        if (!base.tracks.has(op.asset)) return '曲目已不存在';
+        if (!base.tracks.has(op.asset)) return _('The song no longer exists');
         removedTracks.set(op.asset, op.reason || '');
         if (op.deleteFile) rejectedTracks.add(op.asset);
         for (const list of members.values()) {
@@ -135,12 +136,12 @@ export function applyPlan(base, changes) {
         return null;
       }
       case 'relocate': {
-        if (!base.tracks.has(op.asset)) return '曲目已不存在';
+        if (!base.tracks.has(op.asset)) return _('The song no longer exists');
         relocated.set(op.asset, op.path);
         return null;
       }
       default:
-        return `未知的動作 ${op.type}`;
+        return _('Unknown action {type}', { type: op.type });
     }
   };
 
@@ -162,7 +163,7 @@ export function applyPlan(base, changes) {
   const pathOf = (id) => {
     if (pathCache.has(id)) return pathCache.get(id);
     const c = crates.get(id);
-    if (!c) return '(已刪除)';
+    if (!c) return _('(deleted)');
     const p = c.parent === base.rootId || !crates.has(c.parent) ? c.name : `${pathOf(c.parent)} / ${c.name}`;
     pathCache.set(id, p);
     return p;
@@ -302,20 +303,20 @@ export function suggestCrates(eff, model, track, { limit = 5, exclude } = {}) {
       if (!m) continue;
       const s = m * Math.log(1 + model.n / (model.df.get(w) || 1));
       score += s;
-      if (!best || s > best.s) best = { s, text: inName ? `名稱符合「${w}」` : `曲風／資料夾「${w}」` };
+      if (!best || s > best.s) best = { s, text: inName ? _('Name matches "{word}"', { word: w }) : _('Genre/folder "{word}"', { word: w }) };
     }
     const reasons = best ? [best.text] : [];
     const artistHits = artists.reduce((n, a) => n + (p.artists.get(a) || 0), 0);
     if (artistHits) {
       score += Math.min(3, artistHits) * 0.6;
-      reasons.push(`同歌手 ${artistHits} 首`);
+      reasons.push(_n(artistHits, '{n} song by the same artist', '{n} songs by the same artist'));
     }
     // Crates named by a BPM range ("Open Format / 120-129 / All"): the song's BPM decides.
     const range = bpmRangeOf(eff, id);
     if (range) {
       if (!track.bpm || track.bpm < range.lo || track.bpm >= range.hi + 1) continue; // never suggest the wrong range
       score += norm(eff.crates.get(id).name) === 'all' ? 1.6 : 0.9;
-      reasons.unshift(`BPM ${Math.round(track.bpm * 10) / 10} 在 ${range.lo}–${range.hi}`);
+      reasons.unshift(_('BPM {bpm} in {lo}–{hi}', { bpm: Math.round(track.bpm * 10) / 10, lo: range.lo, hi: range.hi }));
     }
     if (!score) continue;
     if (track.bpm && p.bpmLo && p.bpmHi - p.bpmLo <= 35) {

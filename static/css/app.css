@@ -475,7 +475,7 @@ select.input-sm { flex: none; min-width: 0; }
 .fileRow { cursor: default; }
 .fileRow.is-selected { background: var(--sel); }
 .fileRow.is-rejected .trow-title { text-decoration: line-through; text-decoration-color: var(--muted); color: var(--muted); }
-.fileRow.is-kept .trow-title::after { content: '留下'; font-size: 11px; font-weight: 500; margin-left: 8px; padding: 0 6px; border-radius: 4px; background: var(--ok-soft); color: var(--ok); text-decoration: none; display: inline-block; line-height: 17px; }
+.fileRow.is-kept .trow-title::after { content: var(--kept-label, 'Keep'); font-size: 11px; font-weight: 500; margin-left: 8px; padding: 0 6px; border-radius: 4px; background: var(--ok-soft); color: var(--ok); text-decoration: none; display: inline-block; line-height: 17px; }
 .screen-btns { display: flex; justify-content: flex-end; gap: 4px; }
 .screen-btn {
   width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted);
