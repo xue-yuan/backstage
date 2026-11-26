@@ -1,0 +1,576 @@
+// Crates view: tree editing (rename / move / merge / delete / create) + per-crate track management.
+import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
+import { norm, subtreeIds } from '../model.js';
+import { player } from '../player.js';
+import { parseId, store } from '../store.js';
+import { openUnsortedEditor, unsortedReason } from '../unsorted.js';
+import { clear, confirmDialog, fmt, h, modal, prefs, promptDialog, toast, VirtualList } from '../ui.js';
+
+let dragging = null; // { kind: 'crate', id } | { kind: 'tracks', ids, from }
+
+export function createStructureView() {
+  let selected = prefs.get('tree.selected', null);
+  let expanded = new Set(prefs.get('tree.expanded', []));
+  let treeFilter = '';
+  let visible = []; // flattened visible tree rows: { id, depth }
+  let focusArea = 'tree';
+  let tracks = [];
+  const selTracks = new Set();
+  let anchor = -1;
+
+  // ---------- layout ----------
+  const treeFilterInput = h('input', {
+    class: 'input input-sm',
+    placeholder: '篩選 crate…',
+    oninput: (e) => {
+      treeFilter = e.target.value;
+      renderTree();
+    },
+    onkeydown: (e) => {
+      if (e.key === 'Escape') e.target.blur();
+      e.stopPropagation();
+    },
+  });
+  const treeEl = h('div', { class: 'tree', onmousedown: () => (focusArea = 'tree') });
+  const rootDrop = h('div', { class: 'tree-rootdrop' }, '拖到這裡 → 移到最上層');
+  wireDrop(rootDrop, () => store.eff.rootId);
+  const treePanel = h(
+    'aside',
+    { class: 'panel tree-panel' },
+    h(
+      'div',
+      { class: 'toolbar' },
+      treeFilterInput,
+      h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, '+ 新 crate'),
+      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: '設定哪些 crate 算未分類、整理到 Inbox' }, '未分類…'),
+    ),
+    rootDrop,
+    treeEl,
+    h('div', { class: 'tree-hint muted small' }, '拖曳 crate 調整階層；把右邊的歌拖到 crate 上可加入（按住 ⌥ 是移動）'),
+  );
+
+  const headEl = h('div', { class: 'panel-head crate-head' });
+  const selBar = h('div', { class: 'toolbar selbar' });
+  const vlist = new VirtualList({ rowHeight: 40, renderRow: renderTrackRow, className: 'track-list' });
+  vlist.el.addEventListener('mousedown', () => (focusArea = 'tracks'));
+  const detail = h(
+    'section',
+    { class: 'panel crate-detail' },
+    headEl,
+    selBar,
+    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, '歌名 / 歌手'), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, '曲風'), h('span', { class: 'num' }, '其他 crate')),
+    vlist.el,
+  );
+  const el = h('div', { class: 'view structure' }, treePanel, detail);
+  const offPlayer = player.onChange(() => vlist.render());
+
+  // ---------- auto-scroll the crate tree while dragging near its top / bottom edge ----------
+  // The closer to the edge (or past it), the faster it scrolls. Works for crates and for songs
+  // dragged from the list on the right.
+  const EDGE = 60; // px from the tree's top / bottom where scrolling starts
+  const MAX_SPEED = 20; // px per frame
+  let scrollStep = 0;
+  let scrollFrame = 0;
+  function scrollTick() {
+    if (!dragging || !scrollStep) {
+      scrollFrame = 0;
+      return;
+    }
+    treeEl.scrollTop += scrollStep;
+    scrollFrame = requestAnimationFrame(scrollTick);
+  }
+  function autoScroll(e) {
+    if (!dragging) return;
+    const r = treeEl.getBoundingClientRect();
+    const near = (d) => Math.ceil(MAX_SPEED * Math.min(1, d / EDGE));
+    if (e.clientX < r.left - 40 || e.clientX > r.right + 40) scrollStep = 0;
+    else if (e.clientY < r.top + EDGE) scrollStep = -near(r.top + EDGE - e.clientY);
+    else if (e.clientY > r.bottom - EDGE) scrollStep = near(e.clientY - (r.bottom - EDGE));
+    else scrollStep = 0;
+    if (scrollStep && !scrollFrame) scrollFrame = requestAnimationFrame(scrollTick);
+  }
+  const stopScroll = (e) => {
+    if (e.type !== 'dragleave' || !e.relatedTarget) scrollStep = 0; // dragleave without relatedTarget = left the window
+  };
+  document.addEventListener('dragover', autoScroll);
+  for (const t of ['drop', 'dragend', 'dragleave']) document.addEventListener(t, stopScroll);
+
+  // ---------- tree ----------
+  function saveExpanded() {
+    prefs.set('tree.expanded', [...expanded]);
+  }
+
+  // Only scroll the selected crate into view when the selection itself changes (click / keys),
+  // not on every re-render: a re-render after a drop must not yank the tree away.
+  function renderTree({ reveal = false } = {}) {
+    const keep = treeEl.scrollTop;
+    const eff = store.eff;
+    let show = null;
+    if (treeFilter.trim()) {
+      const words = norm(treeFilter).split(' ');
+      show = new Set();
+      for (const id of eff.crates.keys()) {
+        const p = norm(eff.pathOf(id));
+        if (words.every((w) => p.includes(w))) {
+          for (let cur = id; cur != null && eff.crates.has(cur); cur = eff.crates.get(cur).parent) show.add(cur);
+        }
+      }
+    }
+    visible = [];
+    const walk = (parent, depth) => {
+      for (const id of eff.children.get(parent) || []) {
+        if (show && !show.has(id)) continue;
+        visible.push({ id, depth });
+        if (show || expanded.has(id)) walk(id, depth + 1);
+      }
+    };
+    walk(eff.rootId, 0);
+    clear(treeEl, visible.map(({ id, depth }) => treeRow(id, depth, !!show)), !visible.length ? h('div', { class: 'empty' }, '沒有符合的 crate') : null);
+    if (reveal) treeEl.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
+    else treeEl.scrollTop = keep;
+  }
+
+  function treeRow(id, depth, forceOpen) {
+    const eff = store.eff;
+    const c = eff.crates.get(id);
+    const kids = eff.children.get(id) || [];
+    const open = forceOpen || expanded.has(id);
+    const st = c.status || {};
+    const count = (eff.members.get(id) || []).length;
+    const row = h(
+      'div',
+      {
+        class: `tree-row ${id === selected ? 'is-selected' : ''}`,
+        style: { paddingLeft: `${8 + depth * 16}px` },
+        draggable: true,
+        onclick: () => selectCrate(id),
+        ondblclick: () => renameCrate(id),
+        ondragstart: (e) => {
+          dragging = { kind: 'crate', id };
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', eff.pathOf(id));
+        },
+        ondragend: () => (dragging = null),
+      },
+      h(
+        'button',
+        {
+          class: `caret ${kids.length ? '' : 'is-leaf'}`,
+          tabindex: -1,
+          onclick: (e) => {
+            e.stopPropagation();
+            toggle(id);
+          },
+        },
+        kids.length ? h('span', { class: `chev ${open ? 'is-open' : ''}` }) : '',
+      ),
+      h('span', { class: 'tree-name' }, c.name),
+      st.created ? h('span', { class: 'tag tag-new' }, '新') : null,
+      st.originalName != null ? h('span', { class: 'tag tag-edit', title: `原名：${st.originalName}` }, '改名') : null,
+      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, '移動') : null,
+      st.merged ? h('span', { class: 'tag tag-edit' }, '合併') : null,
+      // Mark only the top-most unsorted crate; its sub-crates inherit it.
+      store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: '這個 crate（和底下的子 crate）裡的歌算待分類' }, '未分類') : null,
+      h('span', { class: 'tree-count' }, count || ''),
+    );
+    wireDrop(row, () => id);
+    return row;
+  }
+
+  function wireDrop(node, targetId) {
+    // WebKit (the Mac app) only accepts a drop if both dragenter and dragover are cancelled.
+    const accept = (e) => {
+      const target = targetId();
+      if (!dragging || !canDrop(dragging, target)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = dragging.kind === 'tracks' && !e.altKey ? 'copy' : 'move';
+      node.classList.add('is-drop');
+    };
+    node.addEventListener('dragenter', accept);
+    node.addEventListener('dragover', accept);
+    node.addEventListener('dragleave', () => node.classList.remove('is-drop'));
+    node.addEventListener('drop', (e) => {
+      e.preventDefault();
+      node.classList.remove('is-drop');
+      const d = dragging;
+      dragging = null;
+      if (!d) return;
+      const target = targetId();
+      if (d.kind === 'crate') moveCrateTo(d.id, target);
+      else addTracksTo(d.ids, target, e.altKey ? d.from : null);
+    });
+  }
+
+  function canDrop(d, target) {
+    const eff = store.eff;
+    if (d.kind === 'crate') {
+      if (target === d.id || eff.crates.get(d.id)?.parent === target) return false;
+      return target === eff.rootId || !subtreeIds(eff, d.id).includes(target);
+    }
+    return target !== eff.rootId && target !== d.from;
+  }
+
+  function toggle(id, force) {
+    const open = force ?? !expanded.has(id);
+    if (open) expanded.add(id);
+    else expanded.delete(id);
+    saveExpanded();
+    renderTree();
+  }
+
+  function selectCrate(id) {
+    if (selected !== id) {
+      selTracks.clear();
+      anchor = -1;
+    }
+    selected = id;
+    prefs.set('tree.selected', id);
+    const eff = store.eff;
+    for (let cur = eff.crates.get(id)?.parent; cur != null && eff.crates.has(cur); cur = eff.crates.get(cur).parent) expanded.add(cur);
+    saveExpanded();
+    renderTree({ reveal: true });
+    renderDetail();
+    vlist.el.scrollTop = 0;
+  }
+
+  // ---------- crate actions ----------
+  const siblingNameTaken = (parent, name, except) => {
+    const eff = store.eff;
+    return (eff.children.get(parent) || []).some((id) => id !== except && norm(eff.crates.get(id).name) === norm(name));
+  };
+
+  async function createCrate(parent) {
+    const eff = store.eff;
+    const name = await promptDialog({
+      title: parent === eff.rootId ? '新增 crate' : `在「${eff.pathOf(parent)}」底下新增 crate`,
+      placeholder: 'crate 名稱',
+      okText: '建立',
+      validate: (v) => (siblingNameTaken(parent, v) ? '同一層已經有這個名稱' : null),
+    });
+    if (!name) return;
+    const op = store.opCreate(name, parent);
+    if (store.commit(`建立 crate「${name}」`, [op])) {
+      if (parent !== eff.rootId) expanded.add(parent);
+      selectCrate(op.id);
+    }
+  }
+
+  async function renameCrate(id) {
+    const eff = store.eff;
+    const c = eff.crates.get(id);
+    if (!c) return;
+    const name = await promptDialog({
+      title: '重新命名',
+      value: c.name,
+      okText: '改名',
+      validate: (v) => (v === c.name ? '名稱沒有改變' : siblingNameTaken(c.parent, v, id) ? '同一層已經有這個名稱' : null),
+    });
+    if (name) store.commit(`「${c.name}」改名為「${name}」`, [store.opRename(id, name)]);
+  }
+
+  function moveCrateTo(id, parent) {
+    const eff = store.eff;
+    const c = eff.crates.get(id);
+    if (siblingNameTaken(parent, c.name, id)) {
+      toast(`目標裡已經有「${c.name}」，要合併的話請用「合併到…」`, { tone: 'danger' });
+      return;
+    }
+    if (store.commit(`移動「${c.name}」到 ${parent === eff.rootId ? '最上層' : eff.pathOf(parent)}`, [store.opMove(id, parent)])) {
+      if (parent !== eff.rootId) expanded.add(parent);
+      saveExpanded();
+      selectCrate(id);
+    }
+  }
+
+  async function moveDialog(id) {
+    const eff = store.eff;
+    const exclude = new Set(subtreeIds(eff, id));
+    const target = await modal({
+      title: `把「${eff.pathOf(id)}」移到…`,
+      wide: true,
+      body: (close) => [
+        h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, '移到最上層'),
+        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: '或選擇要放進哪個 crate 底下', onPick: (t) => close(t) }).el,
+      ],
+    });
+    if (target != null) moveCrateTo(id, target);
+  }
+
+  async function mergeDialog(id) {
+    const eff = store.eff;
+    const target = await pickCrateDialog({ title: `把「${eff.pathOf(id)}」合併進…（歌與子 crate 會搬過去）`, exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
+    if (target == null) return;
+    if (store.commit(`「${eff.pathOf(id)}」合併進「${eff.pathOf(target)}」`, [store.opMerge(id, target)])) selectCrate(target);
+  }
+
+  async function deleteCrate(id) {
+    const eff = store.eff;
+    const ids = subtreeIds(eff, id);
+    const nTracks = new Set(ids.flatMap((c) => eff.members.get(c) || [])).size;
+    const ok = await confirmDialog({
+      title: `刪除「${eff.pathOf(id)}」？`,
+      message: `${ids.length > 1 ? `包含 ${ids.length - 1} 個子 crate，` : ''}共 ${nTracks} 首歌的分類會一起移除（歌本身留在資料庫）。這只會排入變更計畫，可以復原。`,
+      okText: '排入計畫',
+      danger: true,
+    });
+    if (!ok) return;
+    const parent = eff.crates.get(id).parent;
+    if (store.commit(`刪除 crate「${eff.pathOf(id)}」`, [store.opDelete(id)])) {
+      selected = store.eff.crates.has(parent) ? parent : null;
+      renderAll();
+    }
+  }
+
+  // ---------- tracks ----------
+  function renderDetail() {
+    const eff = store.eff;
+    if (selected != null && !eff.crates.has(selected)) selected = null;
+    if (selected == null) {
+      clear(headEl, h('div', { class: 'empty' }, '從左邊選一個 crate'));
+      clear(selBar);
+      tracks = [];
+      vlist.setItems([]);
+      return;
+    }
+    const c = eff.crates.get(selected);
+    const st = c.status || {};
+    const kids = eff.children.get(selected) || [];
+    tracks = (eff.members.get(selected) || []).map((a) => store.base.tracks.get(a)).filter(Boolean);
+    for (const id of selTracks) if (!tracks.some((t) => t.id === id)) selTracks.delete(id);
+
+    const notes = [];
+    if (st.created) notes.push('新建立');
+    if (st.originalName != null) notes.push(`原名「${st.originalName}」`);
+    if (st.originalParent !== undefined) notes.push(`原本在「${st.originalParent === eff.rootId ? '最上層' : eff.pathOf(st.originalParent)}」`);
+    clear(
+      headEl,
+      h(
+        'div',
+        { class: 'crate-title' },
+        h('h2', {}, eff.pathOf(selected)),
+        h('div', { class: 'muted small' }, `${tracks.length} 首 · ${kids.length} 個子 crate`, notes.length ? ` · ${notes.join('，')}（尚未寫入 Serato）` : ''),
+      ),
+      h(
+        'div',
+        { class: 'toolbar' },
+        h('button', { class: 'btn btn-sm', onclick: () => renameCrate(selected), title: 'F2' }, '重新命名'),
+        h('button', { class: 'btn btn-sm', onclick: () => createCrate(selected), title: 'N' }, '新增子 crate'),
+        h('button', { class: 'btn btn-sm', onclick: () => moveDialog(selected) }, '移動到…'),
+        h('button', { class: 'btn btn-sm', onclick: () => mergeDialog(selected) }, '合併到…'),
+        h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => deleteCrate(selected), title: 'Delete' }, '刪除'),
+        unsortedToggle(selected),
+      ),
+    );
+    renderSelBar();
+    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? '這個 crate 只放子 crate，沒有直接放歌' : '空的 crate'));
+  }
+
+  function unsortedToggle(id) {
+    const reason = unsortedReason(id);
+    if (reason === 'inherited') {
+      let top = id;
+      while (store.rules.skip.has(store.eff.crates.get(top)?.parent)) top = store.eff.crates.get(top).parent;
+      return h('span', { class: 'tag tag-unsorted', title: `因為在「${store.eff.pathOf(top)}」底下` }, '未分類（繼承）');
+    }
+    const on = reason != null;
+    return h(
+      'label',
+      { class: 'check', title: '這個 crate（和底下的子 crate）裡的歌算待分類' },
+      h('input', {
+        type: 'checkbox',
+        checked: on,
+        onchange: (e) => {
+          const auto = store.rules.auto.has(id);
+          store.setClassifyOverride(id, e.target.checked ? (auto ? null : 'skip') : auto ? 'count' : null);
+        },
+      }),
+      '算未分類',
+    );
+  }
+
+  function renderSelBar() {
+    const n = selTracks.size;
+    clear(
+      selBar,
+      n
+        ? [
+            h('span', { class: 'muted' }, `已選 ${n} 首`),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('copy') }, '加到…'),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('move') }, '移到…'),
+            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, '從這個 crate 移除'),
+            h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, '取消選取'),
+          ]
+        : h('span', { class: 'muted small' }, '點選歌曲（⇧ 範圍、⌘ 多選、⌘A 全選），可拖到左邊的 crate'),
+    );
+  }
+
+  function renderTrackRow(t, i) {
+    const eff = store.eff;
+    const isNew = !(store.base.members.get(selected) || []).includes(t.id);
+    const others = (eff.cratesOf.get(t.id) || []).length - 1;
+    return h(
+      'div',
+      {
+        class: `trow trow-crate ${selTracks.has(t.id) ? 'is-selected' : ''}`,
+        draggable: true,
+        onclick: (e) => clickTrack(e, t, i),
+        ondblclick: () => player.play(t),
+        ondragstart: (e) => {
+          if (!selTracks.has(t.id)) {
+            selTracks.clear();
+            selTracks.add(t.id);
+            renderSelBar();
+            vlist.render();
+          }
+          dragging = { kind: 'tracks', ids: [...selTracks], from: selected };
+          e.dataTransfer.effectAllowed = 'copyMove';
+          e.dataTransfer.setData('text/plain', `${selTracks.size} 首歌`);
+        },
+        ondragend: () => (dragging = null),
+      },
+      h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : isNew ? h('span', { class: 'dot dot-new', title: '這次新加入' }) : ''),
+      h('div', { class: 'trow-main' }, h('div', { class: 'trow-title' }, t.title || t.fileName), h('div', { class: 'trow-sub' }, t.artist || '—')),
+      h('span', { class: 'num' }, fmt.bpm(t.bpm)),
+      h('span', {}, t.key || '–'),
+      h('span', { class: 'ellipsis muted' }, t.genre || ''),
+      h('span', { class: 'num muted', title: (eff.cratesOf.get(t.id) || []).filter((c) => c !== selected).map((c) => eff.pathOf(c)).join('\n') }, others || ''),
+    );
+  }
+
+  function clickTrack(e, t, i) {
+    focusArea = 'tracks';
+    if (e.shiftKey && anchor >= 0) {
+      const [a, b] = [Math.min(anchor, i), Math.max(anchor, i)];
+      if (!e.metaKey) selTracks.clear();
+      for (let k = a; k <= b; k++) selTracks.add(tracks[k].id);
+    } else if (e.metaKey || e.ctrlKey) {
+      if (selTracks.has(t.id)) selTracks.delete(t.id);
+      else selTracks.add(t.id);
+      anchor = i;
+    } else {
+      selTracks.clear();
+      selTracks.add(t.id);
+      anchor = i;
+    }
+    renderSelBar();
+    vlist.render();
+  }
+
+  function addTracksTo(ids, target, moveFrom) {
+    const eff = store.eff;
+    const have = new Set(eff.members.get(target) || []);
+    const ops = ids.filter((a) => !have.has(a)).map((a) => store.opAdd(target, a));
+    if (moveFrom != null) ops.push(...ids.map((a) => store.opRemove(moveFrom, a)));
+    if (!ops.length) {
+      toast(`這些歌已經在「${eff.pathOf(target)}」裡了`);
+      return;
+    }
+    store.commit(`${ids.length} 首歌${moveFrom != null ? '移' : '加'}到「${eff.pathOf(target)}」`, ops);
+  }
+
+  async function tracksTo(mode) {
+    const ids = [...selTracks];
+    const target = await pickCrateDialog({ title: `把 ${ids.length} 首歌${mode === 'move' ? '移' : '加'}到…`, exclude: new Set([selected]) });
+    if (target == null) return;
+    addTracksTo(ids, parseId(target), mode === 'move' ? selected : null);
+    if (mode === 'move') selTracks.clear();
+  }
+
+  function removeSelected() {
+    const ids = [...selTracks];
+    selTracks.clear();
+    store.commit(`從「${store.eff.pathOf(selected)}」移除 ${ids.length} 首`, ids.map((a) => store.opRemove(selected, a)));
+  }
+
+  function renderAll() {
+    renderTree();
+    renderDetail();
+  }
+
+  if (selected == null || !store.eff.crates.has(selected)) selected = (store.eff.children.get(store.eff.rootId) || [])[0] ?? null;
+  renderAll();
+  requestAnimationFrame(() => treeEl.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' })); // once, when the view opens
+
+  return {
+    el,
+    title: 'Crate 結構',
+    update: renderAll,
+    onKey(e) {
+      if (focusArea === 'tracks') {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+          tracks.forEach((t) => selTracks.add(t.id));
+          renderSelBar();
+          vlist.render();
+          return true;
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const i = Math.min(tracks.length - 1, Math.max(0, anchor + (e.key === 'ArrowDown' ? 1 : -1)));
+          if (tracks[i]) {
+            clickTrack({ shiftKey: e.shiftKey, metaKey: false }, tracks[i], i);
+            if (!e.shiftKey) anchor = i;
+            vlist.scrollToIndex(i);
+          }
+          return true;
+        }
+        if (e.key === ' ') {
+          const t = tracks.find((x) => selTracks.has(x.id)) || tracks[0];
+          if (t) player.toggle(t);
+          return true;
+        }
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          if (selTracks.size) removeSelected();
+          return true;
+        }
+        if (e.key === 'Escape') {
+          focusArea = 'tree';
+          return true;
+        }
+      }
+      // tree
+      const idx = visible.findIndex((r) => r.id === selected);
+      switch (e.key) {
+        case 'ArrowDown':
+          if (visible[idx + 1]) selectCrate(visible[idx + 1].id);
+          return true;
+        case 'ArrowUp':
+          if (idx > 0) selectCrate(visible[idx - 1].id);
+          return true;
+        case 'ArrowRight':
+          if (selected != null && (store.eff.children.get(selected) || []).length) toggle(selected, true);
+          return true;
+        case 'ArrowLeft': {
+          if (selected == null) return true;
+          if (expanded.has(selected)) toggle(selected, false);
+          else {
+            const parent = store.eff.crates.get(selected)?.parent;
+            if (store.eff.crates.has(parent)) selectCrate(parent);
+          }
+          return true;
+        }
+        case 'F2':
+        case 'Enter':
+          if (selected != null) renameCrate(selected);
+          return true;
+        case 'n':
+          createCrate(selected ?? store.eff.rootId);
+          return true;
+        case 'Backspace':
+        case 'Delete':
+          if (selected != null) deleteCrate(selected);
+          return true;
+        case ' ':
+          player.toggle();
+          return true;
+        default:
+          return false;
+      }
+    },
+    destroy() {
+      offPlayer();
+      vlist.destroy();
+      document.removeEventListener('dragover', autoScroll);
+      for (const t of ['drop', 'dragend', 'dragleave']) document.removeEventListener(t, stopScroll);
+      cancelAnimationFrame(scrollFrame);
+    },
+  };
+}

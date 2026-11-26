@@ -1,0 +1,20 @@
+[package]
+name = "backstage"
+version = "0.1.0"
+description = "Backstage: organise your Serato DJ library"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+lto = true
+strip = "debuginfo"
+
+# Build scripts and proc-macros are dylibs loaded by rustc; stripping their symbols on macOS
+# breaks them ("can't find crate for `phf_macros`").
+[profile.release.build-override]
+strip = false

@@ -1,0 +1,14 @@
+# dependencies / build output
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+__pycache__/
+*.pyc
+.DS_Store
+
+# local data: the first version kept Serato snapshot copies and caches here
+data/
+
+# local-only
+.claude/settings.local.json
+PLAN.md

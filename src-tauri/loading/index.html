@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Backstage</title>
+    <style>
+      :root { --bg: #0e1014; --text: #e7eaf0; --muted: #8a93a3; --accent: #4da3ff; --danger: #ff6b6b; color-scheme: dark; }
+      @media (prefers-color-scheme: light) {
+        :root { --bg: #f3f4f7; --text: #1a1d23; --muted: #6a7282; --accent: #1f7ae0; --danger: #d64545; color-scheme: light; }
+      }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: var(--bg); color: var(--text); display: grid; place-content: center; text-align: center; gap: 10px;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang TC", system-ui, sans-serif; -webkit-user-select: none; cursor: default;
+      }
+      .mark { font-size: 40px; color: var(--accent); animation: spin 2.4s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .muted { color: var(--muted); font-size: 13px; }
+      #error { display: none; max-width: 560px; color: var(--danger); white-space: pre-wrap; -webkit-user-select: text; }
+      body.failed .mark { animation: none; color: var(--danger); }
+      body.failed #error { display: block; }
+      body.failed #status { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="mark">◐</div>
+    <div><strong>Backstage</strong></div>
+    <div id="status" class="muted">正在啟動…</div>
+    <div id="error"></div>
+    <script>
+      // Called by the app (src-tauri/src/main.rs) when the local server could not start.
+      function showError(message) {
+        document.body.classList.add('failed');
+        document.getElementById('error').textContent = message;
+      }
+    </script>
+  </body>
+</html>
