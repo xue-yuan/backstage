@@ -8,7 +8,7 @@ import { player } from '../player.js';
 import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
 import { api, store } from '../store.js';
 import { openUnsortedEditor, unsortedRoots } from '../unsorted.js';
-import { clear, confirmDialog, fmt, h, modal, prefs, toast, VirtualList } from '../ui.js';
+import { clear, confirmDialog, contextMenu, fmt, h, modal, prefs, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
 
 const stripExt = (n) => n.replace(/\.[^.]+$/, '');
@@ -248,6 +248,7 @@ export function createFoldersView({ navigate }) {
           focusFiles = false;
           select(node.key);
         },
+        oncontextmenu: (e) => folderMenu(e, node),
         ondblclick: () => hasKids && toggle(node.key),
       },
       h(
@@ -632,6 +633,7 @@ export function createFoldersView({ navigate }) {
       {
         class: `fileRow is-${f.status} ${f.path === selectedFile ? 'is-selected' : ''} ${f.kept ? 'is-kept' : ''}`,
         onclick: () => selectFile(f.path, { scroll: false }),
+        oncontextmenu: (e) => fileMenu(e, f),
         ondblclick: () => play && player.play(play),
       },
       h('span', { class: `swatch st-${f.status}`, title: `${LABEL[f.status]}${_(': ')}${HINT[f.status]}` }),
@@ -779,6 +781,33 @@ export function createFoldersView({ navigate }) {
   function sortHere(node) {
     prefs.set('inbox.source', { kind: 'folder', path: node.path });
     navigate('inbox');
+  }
+
+  // ---------- right-click menus ----------
+  function folderMenu(e, node) {
+    focusFiles = false;
+    select(node.key);
+    contextMenu(e, [
+      navigate ? { label: _('Go to Sort →'), action: () => sortHere(node) } : null,
+      node.children.length ? { label: expanded.has(node.key) ? _('Collapse') : _('Expand'), action: () => toggle(node.key) } : null,
+      'sep',
+      !node.ghost ? { label: _('Show in Finder'), action: () => reveal(node.path) } : null,
+    ]);
+  }
+
+  function fileMenu(e, f) {
+    selectFile(f.path, { scroll: false });
+    const p = playable(f);
+    const canKeep = f.assetId == null && f.status !== 'missing';
+    contextMenu(e, [
+      p ? { label: isPlaying(f) ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(p) } : null,
+      p ? { label: _('Play from the start'), hint: 'Q', action: () => player.play(p, { at: 0 }) } : null,
+      'sep',
+      f.status !== 'missing' ? { label: f.status === 'rejected' ? _('Undo reject') : _('Reject'), hint: 'X', danger: f.status !== 'rejected', action: () => markReject(f) } : null,
+      canKeep ? { label: f.kept ? _('Undo keep') : _('Keep'), hint: 'V', action: () => markKeep(f) } : null,
+      'sep',
+      f.status !== 'missing' ? { label: _('Show in Finder'), action: () => reveal(f.path) } : null,
+    ]);
   }
 
   // ---------- keyboard ----------

@@ -1,15 +1,16 @@
 // Crates view: tree editing (rename / move / merge / delete / create) + per-crate track management.
 import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
-import { norm, subtreeIds } from '../model.js';
+import { effectivePath, norm, subtreeIds } from '../model.js';
 import { player } from '../player.js';
+import { qualityBadge } from '../quality.js';
 import { parseId, store } from '../store.js';
 import { openUnsortedEditor, unsortedReason } from '../unsorted.js';
-import { clear, confirmDialog, fmt, h, modal, prefs, promptDialog, toast, VirtualList } from '../ui.js';
+import { clear, confirmDialog, contextMenu, fmt, h, modal, prefs, promptDialog, revealInFinder, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
 
 let dragging = null; // { kind: 'crate', id } | { kind: 'tracks', ids, from }
 
-export function createStructureView() {
+export function createStructureView({ navigate } = {}) {
   let selected = prefs.get('tree.selected', null);
   let expanded = new Set(prefs.get('tree.expanded', []));
   let treeFilter = '';
@@ -59,7 +60,7 @@ export function createStructureView() {
     { class: 'panel crate-detail' },
     headEl,
     selBar,
-    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, _('Title / artist')), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, _('Genre')), h('span', { class: 'num' }, _('Other crates'))),
+    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, _('Title / artist')), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, _('Format')), h('span', {}, _('Genre')), h('span', { class: 'num' }, _('Other crates'))),
     vlist.el,
   );
   const el = h('div', { class: 'view structure' }, treePanel, detail);
@@ -145,6 +146,7 @@ export function createStructureView() {
         style: { paddingLeft: `${8 + depth * 16}px` },
         draggable: true,
         onclick: () => selectCrate(id),
+        oncontextmenu: (e) => crateMenu(e, id),
         ondblclick: (e) => {
           if (!e.target.closest('.caret')) renameCrate(id); // double-clicking the arrow only toggles it twice
         },
@@ -324,6 +326,75 @@ export function createStructureView() {
     }
   }
 
+  // ---------- right-click menus ----------
+  function expandAll(id, open) {
+    for (const c of subtreeIds(store.eff, id)) {
+      if (!(store.eff.children.get(c) || []).length) continue;
+      if (open) expanded.add(c);
+      else expanded.delete(c);
+    }
+    saveExpanded();
+    renderTree();
+  }
+
+  function crateMenu(e, id) {
+    if (selected !== id) selectCrate(id);
+    const eff = store.eff;
+    const kids = (eff.children.get(id) || []).length;
+    const songs = (eff.members.get(id) || []).length;
+    const reason = unsortedReason(id);
+    const auto = store.rules.auto.has(id);
+    contextMenu(e, [
+      navigate && songs
+        ? {
+            label: _('Sort the songs in this crate'),
+            action: () => {
+              prefs.set('inbox.source', { kind: 'crate', id });
+              navigate('inbox');
+            },
+          }
+        : null,
+      'sep',
+      { label: _('Rename'), hint: 'F2', action: () => renameCrate(id) },
+      { label: _('New child crate'), hint: 'N', action: () => createCrate(id) },
+      { label: _('Move…'), action: () => moveDialog(id) },
+      { label: _('Merge into…'), action: () => mergeDialog(id) },
+      'sep',
+      reason === 'inherited'
+        ? null
+        : {
+            label: reason != null ? _('Stop counting as unsorted') : _('Count as unsorted'),
+            action: () => store.setClassifyOverride(id, reason != null ? (auto ? 'count' : null) : auto ? null : 'skip'),
+          },
+      kids ? { label: _('Expand all below'), action: () => expandAll(id, true) } : null,
+      kids ? { label: _('Collapse all below'), action: () => expandAll(id, false) } : null,
+      'sep',
+      { label: _('Delete…'), hint: 'Delete', danger: true, action: () => deleteCrate(id) },
+    ]);
+  }
+
+  function trackMenu(e, t, i) {
+    focusArea = 'tracks';
+    if (!selTracks.has(t.id)) {
+      selTracks.clear();
+      selTracks.add(t.id);
+      anchor = i;
+      renderSelBar();
+      vlist.render();
+    }
+    const n = selTracks.size;
+    const crate = store.eff.pathOf(selected);
+    contextMenu(e, [
+      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(t) },
+      { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(store.eff, t)) },
+      'sep',
+      { label: n > 1 ? _n(n, 'Add {n} song to…', 'Add {n} songs to…') : _('Add to…'), action: () => tracksTo('copy') },
+      { label: n > 1 ? _n(n, 'Move {n} song to…', 'Move {n} songs to…') : _('Move to…'), action: () => tracksTo('move') },
+      'sep',
+      { label: _n(n, 'Remove {n} song from "{crate}"', 'Remove {n} songs from "{crate}"', { crate }), hint: 'Delete', danger: true, action: removeSelected },
+    ]);
+  }
+
   // ---------- tracks ----------
   function renderDetail() {
     const eff = store.eff;
@@ -417,6 +488,7 @@ export function createStructureView() {
         class: `trow trow-crate ${selTracks.has(t.id) ? 'is-selected' : ''}`,
         draggable: true,
         onclick: (e) => clickTrack(e, t, i),
+        oncontextmenu: (e) => trackMenu(e, t, i),
         ondblclick: () => player.play(t),
         ondragstart: (e) => {
           if (!selTracks.has(t.id)) {
@@ -435,6 +507,7 @@ export function createStructureView() {
       h('div', { class: 'trow-main' }, h('div', { class: 'trow-title' }, t.title || t.fileName), h('div', { class: 'trow-sub' }, t.artist || '—')),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
       h('span', {}, t.key || '–'),
+      h('span', { class: 'ellipsis' }, qualityBadge(store.trackQuality(t), { compact: true })),
       h('span', { class: 'ellipsis muted' }, t.genre || ''),
       h('span', { class: 'num muted', title: (eff.cratesOf.get(t.id) || []).filter((c) => c !== selected).map((c) => eff.pathOf(c)).join('\n') }, others || ''),
     );
@@ -491,6 +564,8 @@ export function createStructureView() {
   }
 
   if (selected == null || !store.eff.crates.has(selected)) selected = (store.eff.children.get(store.eff.rootId) || [])[0] ?? null;
+  // Another view may have picked the crate to show (prefs 'tree.selected'): open the crates around it.
+  for (let cur = store.eff.crates.get(selected)?.parent; store.eff.crates.has(cur); cur = store.eff.crates.get(cur).parent) expanded.add(cur);
   renderAll();
   requestAnimationFrame(() => treeEl.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' })); // once, when the view opens
 

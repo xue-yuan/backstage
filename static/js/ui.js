@@ -153,6 +153,8 @@ export function toast(message, { action, actionLabel = _('Undo'), tone = 'info',
       }, actionLabel),
   );
   toastHost.append(el);
+  // Fast sorting makes a toast per song: keep only the latest few on screen.
+  while (toastHost.children.length > 3) toastHost.firstChild.remove();
   setTimeout(() => el.remove(), timeout);
 }
 
@@ -241,4 +243,88 @@ export function download(filename, text, type = 'application/json') {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- Context menu (right click) ----------
+// items: { label, action, hint?, danger?, disabled? } | 'sep' | null (skipped). Keyboard: ↑ ↓, Enter, Esc.
+let openMenu = null;
+
+export function closeContextMenu() {
+  openMenu?.close();
+}
+
+export function contextMenu(e, items) {
+  e.preventDefault();
+  e.stopPropagation();
+  closeContextMenu();
+  const list = items.filter(Boolean).filter((it, i, all) => it !== 'sep' || (i > 0 && i < all.length - 1 && all[i - 1] !== 'sep'));
+  if (!list.length) return;
+  const menu = h(
+    'div',
+    { class: 'ctx-menu', role: 'menu' },
+    list.map((it) =>
+      it === 'sep'
+        ? h('div', { class: 'ctx-sep' })
+        : h(
+            'button',
+            {
+              class: `ctx-item ${it.danger ? 'is-danger' : ''}`,
+              role: 'menuitem',
+              disabled: !!it.disabled,
+              onclick: () => {
+                close();
+                it.action();
+              },
+            },
+            h('span', {}, it.label),
+            it.hint ? h('kbd', {}, it.hint) : null,
+          ),
+    ),
+  );
+  document.body.append(menu);
+  const r = menu.getBoundingClientRect();
+  const x = Math.max(4, Math.min(e.clientX, window.innerWidth - r.width - 4));
+  const y = e.clientY + r.height > window.innerHeight - 4 ? Math.max(4, e.clientY - r.height) : e.clientY;
+  Object.assign(menu.style, { left: `${x}px`, top: `${y}px` });
+
+  const buttons = () => [...menu.querySelectorAll('.ctx-item:not(:disabled)')];
+  const onDown = (ev) => {
+    if (!menu.contains(ev.target)) close();
+  };
+  const onKey = (ev) => {
+    const all = buttons();
+    const i = all.indexOf(document.activeElement);
+    if (ev.key === 'Escape') close();
+    else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') all[(i + (ev.key === 'ArrowDown' ? 1 : all.length - 1)) % all.length]?.focus();
+    else if (ev.key === 'Enter' && i >= 0) all[i].click();
+    else return close(); // any other key goes on to the page (shortcuts keep working)
+    ev.preventDefault();
+    ev.stopPropagation();
+  };
+  function close() {
+    if (openMenu?.menu !== menu) return;
+    openMenu = null;
+    menu.remove();
+    document.removeEventListener('mousedown', onDown, true);
+    document.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('scroll', close, true);
+    window.removeEventListener('blur', close);
+    window.removeEventListener('resize', close);
+  }
+  openMenu = { menu, close };
+  document.addEventListener('mousedown', onDown, true);
+  document.addEventListener('keydown', onKey, true);
+  document.addEventListener('scroll', close, true);
+  window.addEventListener('blur', close);
+  window.addEventListener('resize', close);
+}
+
+/** Show a file in Finder (only scanned folders and library songs are allowed by the server). */
+export async function revealInFinder(path) {
+  try {
+    const res = await fetch('/api/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+  } catch (err) {
+    toast(_('Could not open: {error}', { error: err.message }), { tone: 'danger' });
+  }
 }
