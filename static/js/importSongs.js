@@ -62,7 +62,10 @@ export async function addToSerato(files, { folderName } = {}) {
   if (choice === undefined || choice === null) return; // cancelled (Esc gives null; "no crate" gives { crate: null })
 
   const add = skipLookalikes ? todo.filter((f) => !f.inSerato) : todo;
-  if (!add.length) return;
+  if (!add.length) {
+    toast(_('Nothing added: all of them look like songs Serato already has (untick "Skip" to add them anyway)'));
+    return;
+  }
   const ops = [];
   let crate = choice.crate;
   let where = crate != null ? store.crateLabel(crate) : null;

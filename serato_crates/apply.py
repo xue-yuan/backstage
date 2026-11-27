@@ -78,6 +78,14 @@ def serato_str_norm(value):
     return "".join(c for c in unicodedata.normalize("NFD", str(value)) if unicodedata.category(c) not in ("Mn", "Sk", "Lm")).lower()
 
 
+_FORMATS = {"aif": "aiff"}  # what Serato stores in asset.format when it differs from the extension
+
+
+def _path_key(pid: str) -> str:
+    """A path the way two spellings of the same file compare equal (Unicode form and case)."""
+    return unicodedata.normalize("NFC", pid).casefold()
+
+
 _CAMELOT_MINOR = ["G#", "D#", "A#", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"]  # 1A..12A
 _CAMELOT_MAJOR = ["B", "F#", "C#", "G#", "D#", "A#", "F", "C", "G", "D", "A", "E"]  # 1B..12B
 _SHARP = {"Ab": "G#", "Eb": "D#", "Bb": "A#", "Gb": "F#", "Db": "C#"}
@@ -209,6 +217,7 @@ class _Writer:
         self.new_ids: dict[str, int] = {}  # plan's "new-…" ids -> master container ids
         self.removed: list[dict] = []  # songs removed by removeTrack: {asset, path, deleteFile}
         self.imported: dict[str, int] = {}  # importTrack: plan id (or path) -> new master asset id
+        self.known_paths: set[str] | None = None  # normalised paths of every local song, read on the first importTrack
         # Serato's cached asset lists ("All...", search results): anonymous_table_N with an asset_id column.
         self.list_caches = [
             t
@@ -332,7 +341,10 @@ class _Writer:
             self.con.execute("UPDATE db1.container SET parent_id = ?, revision = ? WHERE id = ?", (rparent, self.rev, rid))
             self.con.execute("UPDATE main.container SET parent_id = ? WHERE id = ?", (mparent, mid))
         self._place("main", mid, mparent, mbefore)
-        self._place("db1", rid, rparent, self._root_of(mbefore) if mbefore is not None else None)
+        rbefore = None
+        if mbefore is not None:  # a crate with no root counterpart (only songs from other drives): place last in root
+            rbefore = self._one("SELECT external_container_id FROM main.location_container WHERE container_id = ? AND location_id = ?", (mbefore, LOCAL))
+        self._place("db1", rid, rparent, rbefore)
 
     def _place(self, schema: str, cid: int, parent: int, before: int | None) -> None:
         """Renumber the children of `parent` 1..N with `cid` just before `before` (None: last)."""
@@ -403,10 +415,12 @@ class _Writer:
         if st.st_size != int(op["fileSize"]) or int(st.st_mtime) != int(op["mtime"]):
             raise ApplyError(tr("The file changed after it was read: {path}", path=path))
         pid = path[1:]
-        if (
-            self._one("SELECT id FROM db1.asset WHERE portable_id = ? COLLATE NOCASE", (pid,)) is not None
-            or self._one("SELECT id FROM main.asset WHERE location_id = ? AND portable_id = ? COLLATE NOCASE", (LOCAL, pid)) is not None
-        ):
+        # The unique indexes compare bytes (ignoring case only); "é" can be stored precomposed or as e + accent,
+        # and a few of Serato's own paths use the other form than the disk. Compare normalised as well.
+        if self.known_paths is None:
+            self.known_paths = {_path_key(r[0]) for r in self.con.execute("SELECT portable_id FROM db1.asset")}
+            self.known_paths |= {_path_key(r[0]) for r in self.con.execute("SELECT portable_id FROM main.asset WHERE location_id = ?", (LOCAL,))}
+        if _path_key(pid) in self.known_paths:
             raise ApplyError(tr("Already in Serato: {path}", path=path))
         base = os.path.basename(path)
         values = {
@@ -416,7 +430,7 @@ class _Writer:
             "file_bit_rate": float(op["bitRate"]) if op.get("bitRate") else None,
             "file_sample_rate": float(op["sampleRate"]) if op.get("sampleRate") else None,
             "type": "audio",
-            "format": os.path.splitext(base)[1].lower().lstrip("."),
+            "format": _FORMATS.get(ext := os.path.splitext(base)[1].lower().lstrip("."), ext),
             "name": str(op.get("name") or os.path.splitext(base)[0]),
             "length_ms": int(op["lengthMs"]) if op.get("lengthMs") else None,
             "time_added": self.now,
@@ -429,6 +443,7 @@ class _Writer:
         mid = self.con.execute(f"INSERT INTO main.asset (external_id, location_id, {cols}) VALUES (?, ?, {marks})", (rasset, LOCAL, *args)).lastrowid
         self.con.execute("INSERT INTO main.space_asset (asset_id, space_id) VALUES (?, ?)", (mid, self.mspace))
         self.imported[str(op.get("id") or path)] = mid
+        self.known_paths.add(_path_key(pid))
         if op.get("crate") is not None:
             self._add(self.crate(op["crate"]), mid)
 

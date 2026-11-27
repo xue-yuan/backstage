@@ -761,6 +761,7 @@ export const zh = {
   "Do not add the {n} planned songs": "取消加入計畫中的 {n} 首歌",
   "+ {n} songs from disk are added when the plan is applied (see Folders)": "+ 套用時會從硬碟加入 {n} 首歌（見「資料夾」）",
   "Already in the plan": "已經在計畫裡了",
+  "Nothing added: all of them look like songs Serato already has (untick \"Skip\" to add them anyway)": "沒有加入：這些歌看起來 Serato 都已經有了（取消勾選「略過」就會照樣加入）",
   "Add to Serato: {file} → {crate}": "加入 Serato：{file} → {crate}",
   "Add to Serato: {file}": "加入 Serato：{file}",
   "Add to Serato": "加入 Serato",
