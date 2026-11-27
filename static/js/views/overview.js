@@ -3,7 +3,7 @@
 import { openApplyDialog } from '../applyDialog.js';
 import { buildReport } from '../folderReport.js';
 import { _, _n } from '../i18n.js';
-import { findDuplicates, findEmptyCrates, findUncategorized, liveTracks } from '../model.js';
+import { findDuplicates, findEmptyCrates, findUncategorized, isClassified, liveTracks } from '../model.js';
 import { qualityScore } from '../quality.js';
 import { store } from '../store.js';
 import { clear, fmt, h, prefs } from '../ui.js';
@@ -80,7 +80,8 @@ export function createOverviewView({ navigate }) {
     const snap = store.base?.snapshot;
 
     // ---- to do ----
-    const unsorted = r ? r.sum.unsorted : waiting;
+    // Counted from Serato like the Sort view (the folder report only sees files under ~/Music/DJ).
+    const unsorted = liveTracks(eff).filter((t) => !isClassified(eff, store.rules, t.id)).length;
     const loose = findUncategorized(eff).length;
     const folders = r ? r.roots.flatMap((root) => (root.children.length ? root.children : [root])) : [];
     const toScreen = folders.map((node) => ({ node, ...screening(node) })).filter((x) => x.left > 0);

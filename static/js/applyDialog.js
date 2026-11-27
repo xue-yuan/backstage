@@ -113,7 +113,7 @@ export async function openApplyDialog() {
       later.length
         ? h('p', { class: 'muted small' }, _('Not supported yet, stays in the plan: {list}', { list: Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join(_(', ')) }))
         : null,
-      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, '{n} of them (a reject, or a duplicate merged with "…and Trash") also has its file moved to the Trash after the write succeeds (restore it from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.', '{n} of them (rejects, or duplicates merged with "…and Trash") also have their files moved to the Trash after the write succeeds (restore them from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.')) : null,
+      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, '{n} of them (a reject, or a duplicate merged with "Merge and Trash") also has its file moved to the Trash after the write succeeds (restore it from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.', '{n} of them (rejects, or duplicates merged with "Merge and Trash") also have their files moved to the Trash after the write succeeds (restore them from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.')) : null,
       h(
         'div',
         { class: `fnote ${!status ? '' : blocked ? 'fnote-danger' : 'fnote-ok'}` },

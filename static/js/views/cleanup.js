@@ -21,6 +21,7 @@ export function createCleanupView({ navigate }) {
   const keepers = new Map(); // dup group key -> asset id
   let dismissed = new Set(prefs.get('dupes.dismissed', []));
   let closeLengthOnly = prefs.get('dupes.closeLengthOnly', false);
+  let qualityDiffOnly = prefs.get('dupes.qualityDiffOnly', false);
   const emptySelected = new Set();
 
   const tabsEl = h('div', { class: 'segmented' });
@@ -265,6 +266,13 @@ export function createCleanupView({ navigate }) {
     }
     let groups = findDuplicates(eff, scoreOf).filter((g) => !dismissed.has(g.key) && !staged.has(g.key));
     if (closeLengthOnly) groups = groups.filter((g) => g.spreadMs <= 2000);
+    if (qualityDiffOnly) groups = groups.filter((g) => bestQuality(g) != null);
+    const keepOf = (g) => {
+      // A remembered pick that has left the group (e.g. removed under Missing files) falls back to the suggestion.
+      const picked = keepers.get(g.key);
+      return g.tracks.some((t) => t.id === picked) ? picked : g.keeper;
+    };
+    const sameVersion = groups.filter((g) => g.spreadMs <= 2000);
 
     const head = h(
       'div',
@@ -274,7 +282,7 @@ export function createCleanupView({ navigate }) {
         {},
         _('Finds duplicates by "artist + title". Pick the one to keep: the crates of the others are merged into it, then the others are removed from the library (files are not deleted).'),
         ' ',
-        _('"…and Trash the other files" also moves their files to the Trash after Apply to Serato, so they cannot be imported again by mistake.'),
+        _('"Merge and Trash the other files" also moves their files to the Trash after Apply to Serato, so they cannot be imported again by mistake.'),
       ),
       h(
         'div',
@@ -293,6 +301,20 @@ export function createCleanupView({ navigate }) {
           }),
           _('Only show songs within 2 s of each other in length (skips different versions such as Extended / Radio)'),
         ),
+        h(
+          'label',
+          { class: 'check' },
+          h('input', {
+            type: 'checkbox',
+            checked: qualityDiffOnly,
+            onchange: (e) => {
+              qualityDiffOnly = e.target.checked;
+              prefs.set('dupes.qualityDiffOnly', qualityDiffOnly);
+              render();
+            },
+          }),
+          _('Only show groups whose copies differ in quality'),
+        ),
         dismissed.size
           ? h('button', {
               class: 'btn btn-ghost btn-sm',
@@ -304,6 +326,17 @@ export function createCleanupView({ navigate }) {
             }, _n(dismissed.size, 'Show {n} dismissed group', 'Show {n} dismissed groups'))
           : null,
       ),
+      sameVersion.length > 1
+        ? h(
+            'div',
+            { class: 'toolbar' },
+            h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length) }, _n(sameVersion.length, 'Merge all {n} group (keep the selected copy)', 'Merge all {n} groups (keep the selected copies)')),
+            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length, { trash: true }) }, _('Merge all and Trash the other files')),
+            groups.length > sameVersion.length
+              ? h('span', { class: 'muted small' }, _n(groups.length - sameVersion.length, '{n} group differs in length by more than 2 s and is left for you', '{n} groups differ in length by more than 2 s and are left for you'))
+              : null,
+          )
+        : null,
     );
 
     const stagedCards = [...staged].map(([key, ops]) => {
@@ -326,9 +359,8 @@ export function createCleanupView({ navigate }) {
 
     const owners = pathOwners();
     const cards = groups.map((g) => {
-      // A remembered pick that has left the group (e.g. removed under Missing files) falls back to the suggestion.
-      const picked = keepers.get(g.key);
-      const keep = g.tracks.some((t) => t.id === picked) ? picked : g.keeper;
+      const keep = keepOf(g);
+      const best = bestQuality(g);
       const first = g.tracks[0];
       const trashable = trashableOthers(g, keep, owners);
       return h(
@@ -358,7 +390,7 @@ export function createCleanupView({ navigate }) {
                 },
               }),
               playBtn(`t${t.id}`, t),
-              h('span', { class: 'dupe-fmt' }, qualityBadge(store.trackQuality(t), { compact: true })),
+              h('span', { class: 'dupe-fmt' }, qualityBadge(store.trackQuality(t), { compact: true }), best != null && scoreOf(t) === best ? h('span', { class: 'tag tag-ok' }, _('Best quality')) : null),
               h('span', { class: 'num' }, fmt.duration(t.lengthMs)),
               h('span', { class: 'num' }, fmt.bpm(t.bpm)),
               h('span', {}, t.key || '–'),
@@ -379,7 +411,7 @@ export function createCleanupView({ navigate }) {
                   title: `${_('After Apply to Serato succeeds, these files go to the macOS Trash (restorable):')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
                   onclick: () => mergeDupes(g, keep, { trash: true }),
                 },
-                _n(trashable.length, '…and Trash the other file', '…and Trash the other {n} files'),
+                _n(trashable.length, 'Merge and Trash the other file', 'Merge and Trash the other {n} files'),
               )
             : null,
           h('button', {
@@ -428,11 +460,20 @@ export function createCleanupView({ navigate }) {
     });
   }
 
-  function mergeDupes(g, keepId, { trash = false } = {}) {
-    if (!g.tracks.some((t) => t.id === keepId)) return; // never remove every copy
+  /** The best quality score in a group, or null when every copy has the same quality (or it is unknown). */
+  function bestQuality(g) {
+    const scores = g.tracks.map(scoreOf);
+    if (scores.some((s) => s == null)) return null;
+    const best = Math.max(...scores);
+    return scores.some((s) => s !== best) ? best : null;
+  }
+
+  /** Ops merging a group into keepId: its crates move to the keeper, the others leave the library. */
+  function dupeOps(g, keepId, { trash = false, owners } = {}) {
+    if (!g.tracks.some((t) => t.id === keepId)) return { ops: [], trashed: 0 }; // never remove every copy
     const eff = store.eff;
     const keepCrates = new Set(eff.cratesOf.get(keepId) || []);
-    const toTrash = new Set(trash ? trashableOthers(g, keepId).map((t) => t.id) : []);
+    const toTrash = new Set(trash ? trashableOthers(g, keepId, owners).map((t) => t.id) : []);
     const ops = [];
     for (const t of g.tracks) {
       if (t.id === keepId) continue;
@@ -444,9 +485,39 @@ export function createCleanupView({ navigate }) {
       }
       ops.push({ ...store.opRemoveTrack(t.id, _('Duplicate'), { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
     }
+    return { ops, trashed: toTrash.size };
+  }
+
+  const withTrash = (label, n) => (n ? `${label}${_n(n, ', {n} file to the Trash', ', {n} files to the Trash')}` : label);
+
+  function mergeDupes(g, keepId, { trash = false } = {}) {
+    const { ops, trashed } = dupeOps(g, keepId, { trash });
+    if (!ops.length) return;
     const keeper = store.base.tracks.get(keepId);
-    const label = _('Merge duplicates: {title} (keep {quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label });
-    store.commit(toTrash.size ? `${label}${_n(toTrash.size, ', {n} file to the Trash', ', {n} files to the Trash')}` : label, ops);
+    store.commit(withTrash(_('Merge duplicates: {title} (keep {quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }), trashed), ops);
+  }
+
+  // Merge every listed group at once, each keeping its selected copy. One change in the plan; each
+  // group can still be undone on its own from the plan summary.
+  async function mergeAll(list, keepOf, skipped, { trash = false } = {}) {
+    const owners = pathOwners();
+    const parts = list.map((g) => dupeOps(g, keepOf(g), { trash, owners }));
+    const ops = parts.flatMap((p) => p.ops);
+    const removed = ops.filter((o) => o.type === 'removeTrack').length;
+    const trashed = parts.reduce((n, p) => n + p.trashed, 0);
+    if (!ops.length) return;
+    const ok = await confirmDialog({
+      title: _n(list.length, 'Merge {n} duplicate group?', 'Merge {n} duplicate groups?'),
+      message: [
+        _n(removed, '{n} copy leaves the library; its crates move to the copy you keep.', '{n} copies leave the library; their crates move to the copies you keep.'),
+        trashed ? _n(trashed, '{n} file goes to the Trash after Apply to Serato (restorable).', '{n} files go to the Trash after Apply to Serato (restorable).') : null,
+        skipped ? _n(skipped, '{n} group whose lengths differ by more than 2 s is left for you to check.', '{n} groups whose lengths differ by more than 2 s are left for you to check.') : null,
+        _('Everything goes into the plan and can be undone there.'),
+      ].filter(Boolean).join(' '),
+      okText: trash ? _('Merge and Trash') : _('Merge all'),
+      danger: trash,
+    });
+    if (ok) store.commit(withTrash(_n(list.length, 'Merge {n} duplicate group', 'Merge {n} duplicate groups'), trashed), ops);
   }
 
   // ---------- empty crates ----------
