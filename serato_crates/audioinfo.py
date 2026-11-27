@@ -51,6 +51,12 @@ def probe(path: str) -> list | None:
 
 
 class AudioInfoProber:
+    """Background prober with a size/mtime-checked JSON cache. Subclasses swap probe, version and workers."""
+
+    version = CACHE_VERSION
+    workers = WORKERS
+    probe = staticmethod(probe)
+
     def __init__(self, cache_path: Path):
         self.cache_path = cache_path
         self.lock = threading.Lock()
@@ -60,43 +66,71 @@ class AudioInfoProber:
         self.done = 0
         self.total = 0
         self.error: str | None = None
+        self.stopping = False  # stop() asks a run to finish early; unfinished files stay uncached
         try:
             stored = json.loads(cache_path.read_text())
-            if stored.get("version") == CACHE_VERSION:
+            if stored.get("version") == self.version:
                 self.cache = stored["files"]
         except (OSError, ValueError, AttributeError, KeyError):
             self.cache = {}
+
+    def _todo(self, paths: list[str]) -> list[tuple[str, int, int]]:
+        """Files not in the cache yet, or changed since (size / mtime). Call with the lock held."""
+        todo = []
+        for p in paths:
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            hit = self.cache.get(p)
+            if not hit or hit[0] != st.st_size or hit[1] != int(st.st_mtime):
+                todo.append((p, st.st_size, int(st.st_mtime)))
+        return todo
+
+    def use_paths(self, paths: list[str]) -> None:
+        """Set the files items() reports on, without probing anything."""
+        with self.lock:
+            if not self.running:
+                self.paths = paths
+
+    def coverage(self, paths: list[str]) -> dict:
+        """How many of these files are already probed, and how many still need it."""
+        on_disk = [p for p in paths if os.path.exists(p)]
+        with self.lock:
+            pending = len(self._todo(on_disk))
+        return {"checked": len(on_disk) - pending, "pending": pending}
 
     def start(self, paths: list[str]) -> None:
         with self.lock:
             if self.running:
                 return
             self.paths = paths
-            todo = []
-            for p in paths:
-                try:
-                    st = os.stat(p)
-                except OSError:
-                    continue
-                hit = self.cache.get(p)
-                if not hit or hit[0] != st.st_size or hit[1] != int(st.st_mtime):
-                    todo.append((p, st.st_size, int(st.st_mtime)))
+            todo = self._todo(paths)
             self.total = len(todo)
             self.done = 0
             self.error = None
+            self.stopping = False
             if not todo:
                 return
             self.running = True
         threading.Thread(target=self._run, args=(todo,), daemon=True).start()
 
+    def stop(self) -> None:
+        with self.lock:
+            if self.running:
+                self.stopping = True
+
     def _run(self, todo: list[tuple[str, int, int]]) -> None:
         try:
-            with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-                for (path, size, mtime), info in zip(todo, pool.map(lambda t: probe(t[0]), todo)):
+            with ThreadPoolExecutor(max_workers=self.workers) as pool:
+                results = pool.map(lambda t: None if self.stopping else self.probe(t[0]), todo)
+                for n, ((path, size, mtime), info) in enumerate(zip(todo, results), 1):
                     with self.lock:
-                        if info is not None:  # afinfo failed to run: leave uncached, retry next time
+                        if info is not None:  # failed to run (or stopped): leave uncached, retry next time
                             self.cache[path] = [size, mtime, *info]
-                        self.done += 1
+                            self.done += 1
+                    if n % 100 == 0:
+                        self._save()  # long runs keep their progress if the app quits
             self._save()
         except Exception as e:  # keep the app usable; the UI falls back to Serato's data
             self.error = str(e)
@@ -106,14 +140,14 @@ class AudioInfoProber:
 
     def _save(self) -> None:
         with self.lock:
-            data = json.dumps({"version": CACHE_VERSION, "files": self.cache}, ensure_ascii=False)
+            data = json.dumps({"version": self.version, "files": self.cache}, ensure_ascii=False)
         tmp = self.cache_path.with_suffix(".json.tmp")
         tmp.write_text(data)
         os.replace(tmp, self.cache_path)
 
     def status(self) -> dict:
         with self.lock:
-            return {"running": self.running, "done": self.done, "total": self.total, "error": self.error}
+            return {"running": self.running, "stopping": self.stopping, "done": self.done, "total": self.total, "error": self.error}
 
     def items(self) -> dict[str, list]:
         """path -> [codec, bitsPerSecond, sampleRate, bitDepth] for the current set of files."""

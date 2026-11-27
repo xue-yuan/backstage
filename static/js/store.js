@@ -1,6 +1,6 @@
 // App state: snapshot (base) + staged plan. Every edit is a "change" holding ops.
-import { APPLY_SUPPORTED, applyPlan, buildBase, buildProfiles, classificationRules, effectivePath, pathKey } from './model.js';
-import { describeQuality } from './quality.js';
+import { APPLY_SUPPORTED, applyPlan, buildBase, buildProfiles, classificationRules, dirOf, effectivePath, pathKey } from './model.js';
+import { describeQuality, suspicionOf } from './quality.js';
 import { prefs, toast } from './ui.js';
 import { _, _n } from './i18n.js';
 
@@ -25,6 +25,8 @@ export const api = {
   reveal: (path) => request('POST', '/api/reveal', { path }),
   audioInfo: (items = false) => request('GET', `/api/audio-info${items ? '?items=1' : ''}`),
   startAudioInfo: () => request('POST', '/api/audio-info', {}),
+  spectrum: (items = false) => request('GET', `/api/spectrum${items ? '?items=1' : ''}`),
+  spectrumAction: (body) => request('POST', '/api/spectrum', body),
   screen: () => request('GET', '/api/screen'),
   saveScreen: (screen) => request('PUT', '/api/screen', screen),
   rules: () => request('GET', '/api/rules'),
@@ -50,6 +52,8 @@ class Store {
     this.folderScan = null;
     this.audioInfo = new Map(); // pathKey -> [codec, bps, sampleRate, bitDepth]
     this.audioProgress = null; // { running, done, total } while files are being read
+    this.spectrum = new Map(); // pathKey -> [cutoff kHz, kind] (spotting transcodes; needs ffmpeg)
+    this.spectrumProgress = null; // { available, running, done, total }
     this.screen = { reject: new Set(), keep: new Set() }; // marks for files not in Serato (saved on the server)
     this.lastTrashed = []; // paths moved to the Trash in the last batch (for one-click restore)
     this.ruleOverrides = {}; // crateId -> 'count' | 'skip' (saved on the server in rules.json)
@@ -134,12 +138,104 @@ class Store {
       this.audioProgress = { error: e.message };
     }
     this.notify();
+    this.refreshSpectrum(); // results of earlier checks only: the check itself runs when asked (Quality tab)
+  }
+
+  // ---- transcode check (server: spectrum.py). Never starts on its own, to save power. ----
+  /** Read the saved results and how many files are still unchecked; follow a run that is going on. */
+  async refreshSpectrum() {
+    try {
+      const status = await api.spectrum(true);
+      this.setSpectrum(status);
+      if (status.running) this.followSpectrum();
+    } catch (e) {
+      this.spectrumProgress = { error: e.message };
+    }
+    this.notify();
+  }
+  /** speed: 'saver' (1 file at a time) | 'normal' (3) | 'fast' (6). Only new or changed files are analysed. */
+  async runSpectrum(speed) {
+    const status = await api.spectrumAction({ action: 'start', speed });
+    this.spectrumProgress = { ...status, startedAt: Date.now() };
+    this.notify();
+    this.followSpectrum();
+  }
+  async stopSpectrum() {
+    this.spectrumProgress = { ...this.spectrumProgress, stopping: true };
+    this.notify();
+    await api.spectrumAction({ action: 'stop' });
+  }
+  async followSpectrum() {
+    if (this._following) return;
+    this._following = true;
+    try {
+      let lastItems = Date.now();
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const fresh = Date.now() - lastItems > 20000; // show results as they come in
+        const status = await api.spectrum(fresh || undefined);
+        if (fresh) lastItems = Date.now();
+        if (!status.running) {
+          this.setSpectrum(await api.spectrum(true));
+          break;
+        }
+        this.setSpectrum(status);
+        this.notify();
+      }
+    } catch (e) {
+      this.spectrumProgress = { error: e.message };
+    }
+    this._following = false;
+    this.notify();
+  }
+  setSpectrum(status) {
+    const { items, ...rest } = status;
+    this.spectrumProgress = { ...rest, startedAt: rest.running ? (this.spectrumProgress?.startedAt ?? Date.now()) : null };
+    if (items) this.spectrum = new Map(Object.entries(items).map(([path, v]) => [pathKey(path), [...v, path]])); // [cutoff, kind, path]
+  }
+
+  /**
+   * Every file the transcode check flagged, including the ones marked fine:
+   * [{ key, path, dir, track, q (with suspect), s, genuine }]. Recomputed when anything changes.
+   */
+  suspects() {
+    if (this._suspectsFor === this.version) return this._suspects;
+    const eff = this.eff;
+    // All songs, also those removed in the plan, so a rejected song still shows as a Serato song.
+    const byPath = new Map([...eff.base.tracks.values()].map((t) => [pathKey(effectivePath(eff, t)), t]));
+    const out = [];
+    for (const [key, [cutoff, kind, path]] of this.spectrum) {
+      const track = byPath.get(key);
+      const q = this.qualityOf(path, track);
+      const genuine = this.genuine.has(key);
+      const s = q.suspect || (genuine ? suspicionOf(q, [cutoff, kind]) : null);
+      if (s) out.push({ key, path, dir: dirOf(path), track, q: { ...q, suspect: s }, s, genuine });
+    }
+    this._suspects = out;
+    this._suspectsFor = this.version;
+    return out;
+  }
+
+  // ---- files the user checked and found fine: no "Suspect" mark (saved in this browser / the app) ----
+  get genuine() {
+    this._genuine ||= new Set(prefs.get('quality.genuine', []));
+    return this._genuine;
+  }
+  setGenuine(path, on) {
+    const k = pathKey(path);
+    if (on) this.genuine.add(k);
+    else this.genuine.delete(k);
+    prefs.set('quality.genuine', [...this.genuine]);
+    this.notify();
   }
 
   /** Quality of the file at `path` (a Serato track's file when `track` is given). */
   qualityOf(path, track) {
     const p = path ?? (track ? effectivePath(this.eff, track) : '');
-    return describeQuality(this.audioInfo.get(pathKey(p)), p, track);
+    const q = describeQuality(this.audioInfo.get(pathKey(p)), p, track);
+    const k = pathKey(p);
+    const suspect = this.genuine.has(k) ? null : suspicionOf(q, this.spectrum.get(k));
+    return suspect ? { ...q, suspect } : q;
   }
   trackQuality(t) {
     return this.qualityOf(null, t);

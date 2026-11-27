@@ -3,6 +3,7 @@ import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
 import { effectivePath, norm, subtreeIds } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
+import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { parseId, store } from '../store.js';
 import { openUnsortedEditor, unsortedReason } from '../unsorted.js';
 import { clear, confirmDialog, contextMenu, fmt, h, modal, prefs, promptDialog, revealInFinder, toast, VirtualList } from '../ui.js';
@@ -387,6 +388,7 @@ export function createStructureView({ navigate } = {}) {
     contextMenu(e, [
       { label: player.isCurrent(`t${t.id}`) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(t) },
       { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(store.eff, t)) },
+      spectrumAvailable() ? { label: _('Spectrum'), disabled: !t.exists, action: () => showSpectrum({ path: effectivePath(store.eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) }) } : null,
       'sep',
       { label: n > 1 ? _n(n, 'Add {n} song to…', 'Add {n} songs to…') : _('Add to…'), action: () => tracksTo('copy') },
       { label: n > 1 ? _n(n, 'Move {n} song to…', 'Move {n} songs to…') : _('Move to…'), action: () => tracksTo('move') },

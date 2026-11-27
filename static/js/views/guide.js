@@ -29,6 +29,7 @@ function zhContent() {
             `**${_('Folders')}**：篩選還沒匯入 Serato 的新歌。X 不要、V 留下，再按${q('Review and move to Trash…')}把不要的丟掉。留下的歌請**在 Serato 裡**把資料夾拖進 Inbox 底下的 crate（Backstage 不能幫你匯入新歌）。`,
             `**${_('Sort')}**：把 Inbox 裡的歌一首一首分到正式的 crate。`,
             `**${_('Cleanup')}**：處理${q('Missing files')}、${q('Duplicates')}、${q('Empty crates')}。`,
+            `**${_('Quality')}**：檢查新歌有沒有假 320k、假無損（要手動按，見下面「假音質」）。`,
             `**${_('Crates')}**：改名、移動、合併、刪除 crate。`,
             `**${_('Plan')}**：檢查要改的內容，關掉 Serato DJ，按${q('Apply to Serato…')}。`,
           ],
@@ -79,6 +80,30 @@ function zhContent() {
             `**標著${q('Missing file')}的歌**：到${q('Cleanup')} › ${q('Missing files')}重新指定位置、合併到同一首歌的其他記錄，或從曲庫移除。`,
           ],
         },
+      ],
+    },
+    {
+      id: 'fake',
+      title: '假音質（假 320k、假無損）',
+      blocks: [
+        '有些檔案標的是 MP3 320 或 WAV，其實是從比較差的檔案轉出來的，例如把 128k 的 MP3 轉存成 320k。檔案變大了，聲音不會變好。',
+        '**怎麼看出來**：編碼器會把高頻切掉，位元率越低切得越多：128k 大約切在 16.5 kHz、192k 在 18.5 kHz、320k 在 20 kHz，真的無損會到 22 kHz。轉檔救不回被切掉的部分，所以標 320 卻在 16.5 kHz 以上完全沒聲音，就是 128k 轉的。',
+        `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
+        { tip: '「可疑」只是工具自動判斷的參考，不是定論。刪除或換掉檔案之前，一定要用頻譜工具看過、用耳朵聽過再決定。有些歌本來就沒什麼高頻（老錄音、lo-fi、部分爵士），也可能被標到；反過來，沒被標到也不保證是真的。下載新歌之後，記得到「音質檢查」分頁按一次檢查（它不會自己跑），有疑問就照下面的步驟手動檢查。看過覺得沒問題的，按「聽起來沒問題」就不會再標可疑。' },
+        '**手動檢查的步驟**：',
+        {
+          steps: [
+            `在歌上按右鍵 → ${q('Spectrum')}（分類新歌的右邊、重複曲目的每一行也有${q('Spectrum')}按鈕）。也可以用免費的 Spek，或 Audacity 的頻譜圖模式。`,
+            '看彩色區域的**上緣**：真的 MP3 320 會到 20 kHz 左右。整首歌在 16 kHz 有一條**平的天花板**，就是 128k 轉的；在 19 kHz 左右是 192k。',
+            '看**整首歌**，不要只看一段：前奏和安靜的段落本來就少高頻。轉檔的上限是一條貫穿整首、很直的線；自然的高頻會跟著音樂起伏。',
+            'WAV、AIFF 也一樣：在 16–20 kHz 有平的天花板，就是 MP3 轉成的「假無損」。Mashup pack 常常拼了不同來源，前後段的天花板可能不一樣。',
+            '用好一點的耳機聽鈸、hi-hat 和人聲的齒音：轉檔的常常聽起來比較悶，或有「水水的、刷刷的」怪聲。',
+            '還是不確定，就拿可靠來源的版本（Beatport、Bandcamp 的試聽或買來的檔案）來比。',
+          ],
+        },
+        `**確認是假的之後**：從可靠的來源重新買或下載，在 Serato 匯入後到${q('Cleanup')} › ${q('Duplicates')}合併，保留新的那份（crate 會一起帶過去），舊的可以一起丟到垃圾桶。`,
+        '這個功能需要 ffmpeg（終端機執行 `brew install ffmpeg`）。沒有安裝的話，「可疑」標記和「頻譜」按鈕不會出現。',
+        { go: 'quality' },
       ],
     },
     {
@@ -144,6 +169,7 @@ function enContent() {
             `**${_('Folders')}**: screen new songs that are not in Serato yet. X rejects, V keeps; then ${qe('Review and move to Trash…')}. Drag the kept folder into a crate under Inbox **in Serato** (Backstage cannot import songs).`,
             `**${_('Sort')}**: sort the songs in Inbox into your real crates, one by one.`,
             `**${_('Cleanup')}**: ${qe('Missing files')}, ${qe('Duplicates')} and ${qe('Empty crates')}.`,
+            `**${_('Quality')}**: check new songs for fake 320k and fake lossless (run it by hand; see "Fake quality" below).`,
             `**${_('Crates')}**: rename, move, merge and delete crates.`,
             `**${_('Plan')}**: check the changes, quit Serato DJ, press ${qe('Apply to Serato…')}.`,
           ],
@@ -197,6 +223,30 @@ function enContent() {
       ],
     },
     {
+      id: 'fake',
+      title: 'Fake quality (fake 320k, fake lossless)',
+      blocks: [
+        'Some files say MP3 320 or WAV but were converted from something worse, for example a 128k MP3 saved again as 320k. The file gets bigger; the sound does not get better.',
+        '**How it shows**: encoders cut the highest frequencies, more at lower bit rates: about 16.5 kHz at 128k, 18.5 kHz at 192k, 20 kHz at 320k, while real lossless reaches 22 kHz. Converting cannot bring the cut part back, so an "MP3 320" with nothing above 16.5 kHz was made from a 128k file.',
+        `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
+        { tip: '"Suspect" is an automatic guess, not proof. Before you delete or replace a file, always look at its spectrum and listen to it. Songs with little high end (old or lo-fi recordings, some jazz) can be marked too, and a file without the mark is not guaranteed to be real. After downloading new songs, remember to run the check in the Quality tab (it does not run by itself), and check by hand when in doubt. Files you checked and found fine can be marked "Sounds fine" so they are no longer flagged.' },
+        '**Checking by hand**:',
+        {
+          steps: [
+            `Right-click a song → ${qe('Spectrum')} (Sort and each duplicate row also have a ${qe('Spectrum')} button). The free app Spek, or Audacity's spectrogram view, work too.`,
+            'Look at the **top edge** of the coloured area. A real MP3 320 reaches about 20 kHz. A **flat ceiling** across the whole song at about 16 kHz means a 128k source; about 19 kHz means 192k.',
+            'Look at the **whole song**, not one part: intros and quiet parts have little high end anyway. A transcode\'s limit is a straight line through the whole song; natural high end moves with the music.',
+            'The same goes for WAV and AIFF: a flat ceiling between 16 and 20 kHz means a "fake lossless" file made from an MP3. Mashup packs often mix sources, so the ceiling can change between parts.',
+            'Listen on good headphones to cymbals, hi-hats and vocal "s" sounds: transcodes often sound dull, swirly or watery.',
+            'Still unsure? Compare with a copy from a trusted source (a Beatport or Bandcamp preview or purchase).',
+          ],
+        },
+        `**Once it is confirmed**: buy or download it again from a trusted source, import it in Serato, then merge in ${qe('Cleanup')} › ${qe('Duplicates')} keeping the new copy (its crates move over); the old file can go to the Trash at the same time.`,
+        'This needs ffmpeg (run `brew install ffmpeg` in Terminal). Without it, the Suspect marks and Spectrum buttons do not appear.',
+        { go: 'quality' },
+      ],
+    },
+    {
       id: 'plan',
       title: 'The plan and undo',
       blocks: [
@@ -242,7 +292,7 @@ function rich(text) {
   });
 }
 
-const VIEW_LABELS = { home: 'Overview', inbox: 'Sort', plan: 'Plan' };
+const VIEW_LABELS = { home: 'Overview', folders: 'Folders', inbox: 'Sort', quality: 'Quality', plan: 'Plan' };
 
 export function createGuideView({ navigate } = {}) {
   const sections = lang === 'zh' ? zhContent() : enContent();

@@ -33,6 +33,7 @@ pub const ZH: &[(&str, &str)] = &[
     ("Folders", "資料夾"),
     ("Sort", "分類新歌"),
     ("Cleanup", "清理"),
+    ("Quality", "音質檢查"),
     ("Crates", "Crate 結構"),
     ("Plan", "變更計畫"),
     ("Guide", "使用說明"),

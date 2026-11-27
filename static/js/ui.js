@@ -159,7 +159,7 @@ export function toast(message, { action, actionLabel = _('Undo'), tone = 'info',
 }
 
 // ---------- Modals ----------
-export function modal({ title, body, actions, onKey, wide = false }) {
+export function modal({ title, body, actions, onKey, wide = false, className = '' }) {
   return new Promise((resolve) => {
     const close = (value) => {
       document.removeEventListener('keydown', keyHandler, true);
@@ -177,7 +177,7 @@ export function modal({ title, body, actions, onKey, wide = false }) {
     };
     const box = h(
       'div',
-      { class: `modal ${wide ? 'modal-wide' : ''}`, role: 'dialog', 'aria-modal': 'true' },
+      { class: `modal ${wide ? 'modal-wide' : ''} ${className}`, role: 'dialog', 'aria-modal': 'true' },
       h('h2', { class: 'modal-title' }, title),
       h('div', { class: 'modal-body' }, typeof body === 'function' ? body(close) : body),
       actions && h('div', { class: 'modal-actions' }, actions(close)),

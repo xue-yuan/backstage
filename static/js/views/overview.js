@@ -51,8 +51,8 @@ export function createOverviewView({ navigate }) {
     return report;
   }
 
-  const openFolder = (key, lowOnly = false) => {
-    prefs.set('folders.link', { key, lowOnly });
+  const openFolder = (key, { lowOnly = false, suspectOnly = false } = {}) => {
+    prefs.set('folders.link', { key, lowOnly, suspectOnly });
     navigate('folders');
   };
   const openCleanup = (tab) => {
@@ -95,6 +95,7 @@ export function createOverviewView({ navigate }) {
     const empty = findEmptyCrates(eff).length;
     const low = r ? r.sum.low : waiting;
     const unreadable = r ? r.sum.unreadable : 0;
+    const spec = store.spectrumProgress;
     const rootKey = r?.roots[0]?.key;
 
     const serato =
@@ -174,8 +175,21 @@ export function createOverviewView({ navigate }) {
           sub: unreadable ? _n(unreadable, '{n} file macOS cannot open', '{n} files macOS cannot open') : null,
           tone: 'missing',
           title: store.audioProgress?.running ? _('Still reading file formats…') : undefined,
-          onClick: () => (rootKey ? openFolder(rootKey, true) : navigate('folders')),
+          onClick: () => (rootKey ? openFolder(rootKey, { lowOnly: true }) : navigate('folders')),
         }),
+        spec?.available === false
+          ? null
+          : card({
+              num: store.suspects().filter((x) => !x.genuine).length,
+              label: _('suspected transcodes (fake 320k, fake lossless)'),
+              sub: spec?.running
+                ? _('Looking for transcodes… {done} / {total}', { done: spec.done.toLocaleString(), total: spec.total.toLocaleString() })
+                : spec?.pending
+                  ? _n(spec.pending, '{n} new file not checked yet', '{n} new files not checked yet')
+                  : _('Automatic guess: check the spectrum before deleting'),
+              tone: 'warn',
+              onClick: () => navigate('quality'),
+            }),
       ),
     );
   }

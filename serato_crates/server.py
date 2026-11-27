@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .apply import ApplyError, apply_changes, backup as backup_serato, files_in_use, restore as restore_serato, serato_processes, serato_running
 from .audioinfo import AudioInfoProber
+from .spectrum import SpectrumProber
 from .folders import scan_folders
 from .library import load_library, scan_audio_files
 from .snapshot import DEFAULT_SOURCE, SnapshotError, load_meta, source_signature, take_snapshot
@@ -64,6 +65,7 @@ class AppState:
         self.folder_files: set[str] = set()  # audio files found by the folder scan (preview allowed)
         self.folder_dirs: set[str] = set()  # folders found by the folder scan (reveal allowed)
         self.audio_info = AudioInfoProber(data_dir / "audio_info.json")
+        self.spectrum = SpectrumProber(data_dir / "spectrum.json")
         self.apply_lock = threading.Lock()
 
     @property
@@ -272,6 +274,34 @@ class AppState:
         self.audio_info.start(paths)
         return self.audio_info.status()
 
+    def spectrum_paths(self) -> list[str]:
+        """The files the transcode check covers: the same set as the format reading."""
+        lib = self.ensure_library()
+        self.folders()
+        with self.lock:
+            return sorted(self.folder_files | {t["path"] for t in lib["tracks"] if t["exists"]})
+
+    def spectrum_status(self, items: bool = False) -> dict:
+        paths = self.spectrum_paths()
+        self.spectrum.use_paths(paths)
+        payload = {**self.spectrum.status(), **self.spectrum.coverage(paths)}
+        if items:
+            payload["items"] = self.spectrum.items()
+        return payload
+
+    def spectrum_action(self, body: dict) -> dict:
+        """Start (only new or changed files) or stop the transcode check. It never runs on its own."""
+        if body.get("action") == "stop":
+            self.spectrum.stop()
+        elif body.get("action") == "start":
+            self.spectrum.start(self.spectrum_paths(), str(body.get("speed", "normal")))
+        return self.spectrum_status()
+
+    def can_read(self, path: str) -> bool:
+        """Scanned files and library songs (for spectrum pictures)."""
+        with self.lock:
+            return path in self.folder_files or path in self.extra_audio_paths or path in self.track_paths.values()
+
     def can_preview(self, path: str) -> bool:
         with self.lock:
             return path in self.extra_audio_paths or path in self.folder_files
@@ -363,6 +393,14 @@ def make_handler(state: AppState, port: int):
             except (BrokenPipeError, ConnectionResetError):
                 pass
 
+        def _send_bytes(self, body: bytes, content_type: str):
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
         def _send_audio(self, path: str | None):
             if not path:
                 return self._error(HTTPStatus.NOT_FOUND, tr("Not a file in the library"))
@@ -416,6 +454,17 @@ def make_handler(state: AppState, port: int):
                     if parse_qs(url.query).get("items", ["0"])[0] == "1":
                         payload["items"] = state.audio_info.items()
                     return self._json(payload)
+                if p == "/api/spectrum":
+                    return self._json(state.spectrum_status(items=parse_qs(url.query).get("items", ["0"])[0] == "1"))
+                if p == "/api/spectrogram":
+                    wanted = parse_qs(url.query).get("path", [""])[0]
+                    if not state.can_read(wanted) or not os.path.isfile(wanted):
+                        return self._error(HTTPStatus.NOT_FOUND, tr("Not a file in the library"))
+                    try:
+                        png = state.spectrum.spectrogram(wanted)
+                    except (ValueError, OSError, subprocess.TimeoutExpired) as e:
+                        return self._error(HTTPStatus.SERVICE_UNAVAILABLE, str(e))
+                    return self._send_bytes(png, "image/png")
                 if p == "/api/folders":
                     refresh = parse_qs(url.query).get("refresh", ["0"])[0] == "1"
                     return self._json(state.folders(refresh=refresh))
@@ -441,6 +490,8 @@ def make_handler(state: AppState, port: int):
                     return self._json({"lang": i18n.lang()})
                 if self.path == "/api/audio-info":
                     return self._json(state.start_audio_info())
+                if self.path == "/api/spectrum":
+                    return self._json(state.spectrum_action(body))
                 if self.path == "/api/apply":
                     if not isinstance(body.get("changes"), list) or not isinstance(body.get("expected"), dict):
                         raise ValueError(tr("invalid apply data"))

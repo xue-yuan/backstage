@@ -6,6 +6,7 @@ import { BAR, buildReport, byName, HINT, LABEL, STATUSES } from '../folderReport
 import { dirOf, effectivePath, isClassified } from '../model.js';
 import { player } from '../player.js';
 import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
+import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
 import { openUnsortedEditor, unsortedRoots } from '../unsorted.js';
 import { clear, confirmDialog, contextMenu, fmt, h, modal, prefs, toast, VirtualList } from '../ui.js';
@@ -25,6 +26,7 @@ export function createFoldersView({ navigate }) {
   let sortBy = prefs.get('folders.sort', 'name');
   let statusFilter = 'all';
   let lowOnly = false;
+  let suspectOnly = false; // suspected transcodes (fake 320k / lossless)
   // One-shot link from the Overview: open this folder, optionally showing only low-quality files.
   const link = prefs.get('folders.link', null);
   if (link) {
@@ -34,6 +36,7 @@ export function createFoldersView({ navigate }) {
       for (let k = link.key; k.includes('/'); k = k.slice(0, k.lastIndexOf('/'))) expanded.add(k); // reveal it in the tree
     }
     lowOnly = !!link.lowOnly;
+    suspectOnly = !!link.suspectOnly;
   }
   let includeSub = prefs.get('folders.includeSub', true);
   let filter = '';
@@ -143,6 +146,8 @@ export function createFoldersView({ navigate }) {
               : store.audioProgress?.error
                 ? h('span', { class: 'muted small' }, _('Could not read file formats: {error}', { error: store.audioProgress.error }))
                 : h('span', { class: 'legend-item', title: _('Low quality: {reasons}', { reasons: LOW_QUALITY_TEXT }) }, h('span', { class: 'qbadge is-low' }, _('Low quality')), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
+            r.sum.suspect ? h('span', { class: 'legend-item', title: _('Suspected transcodes: the sound stops where a lower bit rate cuts it (automatic guess)') }, h('span', { class: 'qbadge-suspect' }, _('Suspect')), h('strong', { class: 'num' }, r.sum.suspect.toLocaleString())) : null,
+            store.spectrumProgress?.running ? h('span', { class: 'muted small' }, _('Looking for transcodes… {done} / {total}', { done: store.spectrumProgress.done.toLocaleString(), total: store.spectrumProgress.total.toLocaleString() })) : null,
             r.outsideCount ? h('span', { class: 'muted small', title: _('For example files on ~/Desktop or in the _Serato_ folder') }, _n(r.outsideCount, '{n} more Serato song is outside the scanned folders', '{n} more Serato songs are outside the scanned folders')) : null,
             r.outsideMissing ? h('span', { class: 'muted small' }, _n(r.outsideMissing, '· {n} missing song is outside them', '· {n} missing songs are outside them')) : null,
           )
@@ -287,6 +292,7 @@ export function createFoldersView({ navigate }) {
     prefs.set('folders.selected', key);
     statusFilter = 'all';
     lowOnly = false;
+    suspectOnly = false;
     selectedFile = null;
     renderTree();
     renderDetail();
@@ -400,6 +406,25 @@ export function createFoldersView({ navigate }) {
           ),
         ),
       );
+    if (t.suspect)
+      notes.push(
+        h(
+          'div',
+          { class: 'fnote fnote-warn' },
+          h('span', {}, _n(t.suspect, '{n} file looks like a transcode: its sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic guess; check the spectrum before deleting.', '{n} files look like transcodes: their sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic guess; check the spectrum before deleting.')),
+          h(
+            'button',
+            {
+              class: `btn btn-sm ${suspectOnly ? 'btn-primary' : ''}`,
+              onclick: () => {
+                suspectOnly = !suspectOnly;
+                renderDetail();
+              },
+            },
+            suspectOnly ? _('Show all') : _('Suspect only'),
+          ),
+        ),
+      );
     if (t.missing)
       notes.push(
         h(
@@ -454,6 +479,9 @@ export function createFoldersView({ navigate }) {
             h('span', { class: 'chip-x' }, '×'),
           )
         : null,
+      suspectOnly
+        ? h('button', { class: 'chip', onclick: () => { suspectOnly = false; renderDetail(); } }, _('Suspect only'), h('span', { class: 'chip-x' }, '×'))
+        : null,
       lowOnly
         ? h(
             'button',
@@ -493,11 +521,11 @@ export function createFoldersView({ navigate }) {
     const node = selected();
     if (!node) return;
     const rank = { unsorted: 0, notImported: 1, missing: 2, copy: 3, rejected: 4, classified: 5 };
-    const files = subtreeFiles(node).filter((f) => (statusFilter === 'all' || f.status === statusFilter) && (!lowOnly || f.quality?.low || f.quality?.unreadable) && fileMatches(f, filter));
+    const files = subtreeFiles(node).filter((f) => (statusFilter === 'all' || f.status === statusFilter) && (!lowOnly || f.quality?.low || f.quality?.unreadable) && (!suspectOnly || f.quality?.suspect) && fileMatches(f, filter));
     // Work still to do first; within a status, keep the folder order from the tree.
     const order = new Map(files.map((f, i) => [f, i]));
     fileItems = files.slice().sort((a, b) => rank[a.status] - rank[b.status] || order.get(a) - order.get(b));
-    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || statusFilter !== 'all' ? _('No matching files') : _('This folder has no audio files')));
+    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || suspectOnly || statusFilter !== 'all' ? _('No matching files') : _('This folder has no audio files')));
   }
 
   // ---------- screening ----------
@@ -807,6 +835,7 @@ export function createFoldersView({ navigate }) {
       canKeep ? { label: f.kept ? _('Undo keep') : _('Keep'), hint: 'V', action: () => markKeep(f) } : null,
       'sep',
       f.status !== 'missing' ? { label: _('Show in Finder'), action: () => reveal(f.path) } : null,
+      f.status !== 'missing' && spectrumAvailable() ? { label: _('Spectrum'), action: () => showSpectrum({ path: f.path, title: f.assetId != null ? store.trackLabel(f.assetId) : stripExt(f.name), quality: f.quality }) } : null,
     ]);
   }
 

@@ -15,7 +15,7 @@ export const HINT = {
   missing: _('Serato expects the file here, but it is gone'),
 };
 export const BAR = ['classified', 'unsorted', 'notImported', 'copy', 'rejected'];
-const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, kept: 0 });
+const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, suspect: 0, kept: 0 });
 export const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
 // "Serato already has this song": for a file Serato does not use, find live Serato tracks that are
@@ -137,6 +137,7 @@ export function buildReport(scan, eff, rules, qualityOf, screen) {
     file.quality = qualityOf ? qualityOf(path, file.assetId != null ? eff.base.tracks.get(file.assetId) : undefined) : null;
     if (file.quality?.low) node.direct.low++;
     if (file.quality?.unreadable) node.direct.unreadable++;
+    if (file.quality?.suspect) node.direct.suspect++;
     node.files.push(file);
     node.direct[file.status]++;
   }

@@ -6,18 +6,20 @@ import { createFoldersView } from './views/folders.js';
 import { createInboxView } from './views/inbox.js';
 import { createOverviewView } from './views/overview.js';
 import { createPlanView } from './views/plan.js';
+import { createQualityView } from './views/quality.js';
 import { createStructureView } from './views/structure.js';
 import { createGuideView } from './views/guide.js';
 import { shortcutTable } from './shortcuts.js';
 import { startWatch } from './watch.js';
 import { _, _n, lang, setLang, switchTo, syncServerLang } from './i18n.js';
 
-// Tab order = ⌘1–7 (the Mac app's View menu lists the same ids in src-tauri/src/main.rs).
+// Tab order = ⌘1–8 (the Mac app's View menu lists the same ids in src-tauri/src/main.rs).
 const VIEWS = {
   home: { label: _('Overview'), create: createOverviewView },
   folders: { label: _('Folders'), create: createFoldersView },
   inbox: { label: _('Sort'), create: createInboxView },
   cleanup: { label: _('Cleanup'), create: createCleanupView },
+  quality: { label: _('Quality'), create: createQualityView },
   structure: { label: _('Crates'), create: createStructureView },
   plan: { label: _('Plan'), create: createPlanView },
   guide: { label: _('Guide'), create: createGuideView },
@@ -95,7 +97,7 @@ function showHelp() {
   });
 }
 
-// App commands, from the keyboard (⌘R, ⌘1–7) and from the Mac app's menu bar. In the Mac app a key
+// App commands, from the keyboard (⌘R, ⌘1–8) and from the Mac app's menu bar. In the Mac app a key
 // can reach both the page and the menu, so the same command twice in a row within a moment runs once.
 const VIEW_KEYS = Object.keys(VIEWS);
 let lastCommand = { name: null, at: 0 };

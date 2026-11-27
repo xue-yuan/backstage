@@ -2,6 +2,7 @@
 import { effectivePath, findDuplicates, findEmptyCrates, findUncategorized, liveTracks, pathKey } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge, qualityScore } from '../quality.js';
+import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
 import { clear, confirmDialog, fmt, h, prefs } from '../ui.js';
 import { _, _n } from '../i18n.js';
@@ -396,6 +397,16 @@ export function createCleanupView({ navigate }) {
               h('span', {}, t.key || '–'),
               h('span', { class: 'dupe-path', title: t.path }, fmt.shortPath(t.path), !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
               h('span', { class: 'muted small', title: crates.map((c) => eff.pathOf(c)).join('\n') }, _('{crates} crates · {plays} plays', { crates: crates.length, plays: t.plays })),
+              spectrumAvailable() && t.exists
+                ? h('button', {
+                    class: 'btn btn-ghost btn-xs',
+                    title: _('Check where the sound stops (spots transcodes such as fake 320k)'),
+                    onclick: (e) => {
+                      e.preventDefault(); // inside the row's label: do not pick this copy
+                      showSpectrum({ path: effectivePath(eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) });
+                    },
+                  }, _('Spectrum'))
+                : h('span'),
             );
           }),
         ),

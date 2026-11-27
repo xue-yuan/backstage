@@ -47,7 +47,7 @@ function rows() {
       [
         ['⌘Z', _('Undo the last change')],
         ['⌘R', _('Reload the Serato snapshot')],
-        ['⌘1–7', _('Switch tabs')],
+        ['⌘1–8', _('Switch tabs')],
         ['?', _('Show this help')],
       ],
     ],

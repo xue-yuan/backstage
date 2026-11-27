@@ -6,7 +6,7 @@
 // the app ever dies, via --exit-with-parent). The port is fixed so the page's saved settings
 // (localStorage is per origin) survive restarts.
 //
-// Also: a menu bar whose View menu runs page commands (⌘R reload, ⌘1–7 tabs), the window's size and
+// Also: a menu bar whose View menu runs page commands (⌘R reload, ⌘1–8 tabs), the window's size and
 // position remembered between launches, and the Dock icon badged with the number of unapplied changes.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -27,12 +27,13 @@ use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, Webvie
 mod locale_zh;
 
 const PORT: u16 = 47615;
-// The page's tabs in order (ids as in static/js/main.js); the View menu binds them to ⌘1–7.
-const VIEWS: [(&str, &str); 7] = [
+// The page's tabs in order (ids as in static/js/main.js); the View menu binds them to ⌘1–8.
+const VIEWS: [(&str, &str); 8] = [
     ("home", "Overview"),
     ("folders", "Folders"),
     ("inbox", "Sort"),
     ("cleanup", "Cleanup"),
+    ("quality", "Quality"),
     ("structure", "Crates"),
     ("plan", "Plan"),
     ("guide", "Guide"),

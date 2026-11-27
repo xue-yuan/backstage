@@ -3,6 +3,7 @@ import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
 import { addedInPlan, baseName, effectivePath, isClassified, liveTracks, norm, pathKey, suggestCrates, trackMatches } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
+import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { store } from '../store.js';
 import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
@@ -579,7 +580,14 @@ export function createInboxView({ navigate } = {}) {
         meta(_('Plays'), t.plays ? _n(t.plays, '{n} time', '{n} times') : _('Never played')),
         meta(_('Album'), t.album || '–'),
       ),
-      h('div', { class: 'path', title: t.path }, fmt.shortPath(t.path)),
+      h(
+        'div',
+        { class: 'path-row' },
+        h('div', { class: 'path', title: t.path }, fmt.shortPath(t.path)),
+        t.exists && spectrumAvailable()
+          ? h('button', { class: 'btn btn-ghost btn-xs', title: _('Check where the sound stops (spots transcodes such as fake 320k)'), onclick: () => openSpectrum(t) }, _('Spectrum'))
+          : null,
+      ),
       !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is not on disk. You can relocate it in Cleanup.')) : null,
     );
 
@@ -686,6 +694,8 @@ export function createInboxView({ navigate } = {}) {
   }
 
   // ---------- right-click menus ----------
+  const openSpectrum = (t) => showSpectrum({ path: effectivePath(store.eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) });
+
   function songMenu(e, t) {
     if (t.id !== selectedId) select(t.id, { scroll: false });
     const eff = store.eff;
@@ -708,6 +718,7 @@ export function createInboxView({ navigate } = {}) {
       { label: _('Reject'), hint: 'X', danger: true, action: () => rejectSelected() },
       { label: _('Remove from the library, keep the file'), hint: '⇧X', action: () => rejectSelected({ keepFile: true }) },
       'sep',
+      spectrumAvailable() ? { label: _('Spectrum'), disabled: !t.exists, action: () => openSpectrum(t) } : null,
       { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(eff, t)) },
     ]);
   }

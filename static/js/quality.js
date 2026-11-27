@@ -67,16 +67,49 @@ export function describeQuality(info, path, track) {
 /** Comparable score for picking which copy of a duplicate to keep (higher is better). */
 export function qualityScore(q) {
   if (q.unreadable) return -1;
+  if (q.suspect) return q.suspect.source; // a transcode is only as good as its source
   if (q.lossless) return 2000;
   if (!q.kbps) return 0;
   return q.codec.includes('AAC') ? q.kbps * 1.25 : q.kbps;
 }
 
 export function qualityBadge(q, { compact = false } = {}) {
+  const suspect = q.suspect ? suspectText(q) : null;
   return h(
     'span',
-    { class: `qbadge ${q.low || q.unreadable ? 'is-low' : ''} ${q.lossless ? 'is-lossless' : ''} ${q.known ? '' : 'is-unknown'}`, title: q.detail },
+    { class: `qbadge ${q.low || q.unreadable ? 'is-low' : ''} ${q.lossless && !q.suspect ? 'is-lossless' : ''} ${q.known ? '' : 'is-unknown'}`, title: suspect ? `${suspect}\n\n${q.detail}` : q.detail },
     q.label || '–',
     q.low && !compact ? h('span', { class: 'qbadge-low' }, _('Low quality')) : null,
+    suspect ? h('span', { class: 'qbadge-suspect' }, _('Suspect')) : null,
   );
+}
+
+// ---------- transcodes ("fake 320k", "fake lossless") ----------
+// spec: [cutoff kHz, kind] from /api/spectrum (serato_crates/spectrum.py). Only a "wall" (an encoder's
+// low-pass) counts; a gentle slope is how the song sounds and gets no verdict.
+
+/** The bit rate whose encoder usually cuts the sound at this frequency. */
+export function sourceKbps(khz) {
+  return khz < 17.3 ? 128 : khz < 18 ? 160 : khz < 19 ? 192 : khz < 19.6 ? 256 : 320;
+}
+
+/** { cutoff, source, lossless } when the sound stops well below what the format can hold; else null. */
+export function suspicionOf(q, spec) {
+  if (!spec || !q.known || q.unreadable) return null;
+  const [cutoff, kind] = spec;
+  if (kind !== 'wall' || cutoff == null) return null;
+  const source = sourceKbps(cutoff);
+  if (q.lossless) return cutoff <= 20.6 ? { cutoff, source, lossless: true } : null;
+  const kbps = q.kbps || 0;
+  if ((kbps >= 250 && cutoff < 19) || (kbps >= 180 && kbps < 250 && cutoff < 17.3)) return { cutoff, source, lossless: false };
+  return null;
+}
+
+export function suspectText(q) {
+  const s = q.suspect;
+  const khz = s.cutoff.toFixed(1);
+  const main = s.lossless
+    ? _('Suspect: the sound stops at {khz} kHz. Real lossless audio goes up to about 22 kHz, so this {label} was probably made from an MP3 or AAC file.', { khz, label: q.label })
+    : _('Suspect: the sound stops at {khz} kHz, where a {source}k encoder cuts it. This {label} was probably converted from a {source}k file.', { khz, source: s.source, label: q.label });
+  return `${main} ${_('This is an automatic guess: check the spectrum (right-click → Spectrum) before you delete or replace it.')}`;
 }
