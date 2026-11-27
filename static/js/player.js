@@ -1,5 +1,5 @@
 // One shared audio element + the bottom player bar.
-import { clear, h } from './ui.js';
+import { clear, h, prefs } from './ui.js';
 import { _, _n } from './i18n.js';
 
 const audio = new Audio();
@@ -7,6 +7,15 @@ audio.preload = 'auto';
 let current = null; // { key, title, artist }
 const listeners = new Set();
 let bar;
+// Where a newly started preview begins (fraction of the song): DJ edits have long intros.
+const START_CHOICES = [0, 0.2, 0.3, 0.4, 0.5];
+let startAt = prefs.get('player.startAt', 0.3);
+let pendingSeek = null; // { key, fraction } applied once the new file's duration is known
+
+audio.addEventListener('loadedmetadata', () => {
+  if (pendingSeek && pendingSeek.key === current?.key && Number.isFinite(audio.duration)) audio.currentTime = pendingSeek.fraction * audio.duration;
+  pendingSeek = null;
+});
 
 function notify() {
   for (const fn of listeners) fn();
@@ -31,15 +40,17 @@ export const player = {
   playId(track) {
     return track.playKey ?? `t${track.id}`;
   },
-  /** track: a library track; or { playKey, src, title, artist } for arbitrary files */
+  /**
+   * track: a library track; or { playKey, src, title, artist } for arbitrary files.
+   * at: fraction to start from; a new song otherwise starts at the player's start point (30% by default).
+   */
   play(track, { at } = {}) {
     const key = this.playId(track);
     if (current?.key !== key) {
       current = { key, title: track.title || track.fileName, artist: track.artist || '', error: null };
+      const fraction = at ?? startAt;
+      pendingSeek = fraction ? { key, fraction } : null;
       audio.src = track.src ?? `/api/audio/${track.id}`;
-      if (at != null) {
-        audio.addEventListener('loadedmetadata', () => (audio.currentTime = at * audio.duration), { once: true });
-      }
     } else if (at != null && audio.duration) {
       audio.currentTime = at * audio.duration;
     }
@@ -100,7 +111,20 @@ export function mountPlayerBar(host) {
     oninput: (e) => (audio.volume = Number(e.target.value)),
   });
   vol.value = String(audio.volume);
-  host.append(els.btn, els.title, els.track, els.time, vol);
+  const start = h(
+    'select',
+    {
+      class: 'input input-sm player-start',
+      title: _('Where new previews start (Q jumps back to the beginning)'),
+      onchange: (e) => {
+        prefs.set('player.startAt', (startAt = Number(e.target.value)));
+        e.target.blur(); // give the keyboard shortcuts back
+      },
+    },
+    START_CHOICES.map((f) => h('option', { value: String(f) }, f ? _('Start at {pct}%', { pct: Math.round(f * 100) }) : _('Start at the beginning'))),
+  );
+  start.value = String(START_CHOICES.includes(startAt) ? startAt : 0.3);
+  host.append(els.btn, els.title, els.track, els.time, start, vol);
   renderBar();
 }
 
