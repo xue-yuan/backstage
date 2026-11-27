@@ -60,6 +60,7 @@ class AudioInfoProber:
     def __init__(self, cache_path: Path):
         self.cache_path = cache_path
         self.lock = threading.Lock()
+        self.save_lock = threading.Lock()  # runs and status requests can both save
         self.cache: dict[str, list] = {}  # path -> [size, mtime, codec, bps, sampleRate, bitDepth]
         self.paths: list[str] = []
         self.running = False
@@ -89,6 +90,24 @@ class AudioInfoProber:
                 todo.append((p, st.st_size, int(st.st_mtime)))
         return todo
 
+    def _same_content(self, changed: list[tuple[str, int, int]]) -> set[str]:
+        """Of these changed files, the ones whose content did not really change (subclasses may check). Runs without the lock."""
+        return set()
+
+    def _pending(self, paths: list[str]) -> list[tuple[str, int, int]]:
+        """_todo, minus changed files that _same_content() clears: those keep their result with the new size / mtime."""
+        with self.lock:
+            todo = self._todo(paths)
+            changed = [t for t in todo if t[0] in self.cache]
+        kept = self._same_content(changed) if changed else set()
+        if kept:
+            with self.lock:
+                for path, size, mtime in changed:
+                    if path in kept and path in self.cache:
+                        self.cache[path][0:2] = [size, mtime]
+            self._save()
+        return [t for t in todo if t[0] not in kept]
+
     def use_paths(self, paths: list[str]) -> None:
         """Set the files items() reports on, without probing anything."""
         with self.lock:
@@ -98,16 +117,18 @@ class AudioInfoProber:
     def coverage(self, paths: list[str]) -> dict:
         """How many of these files are already probed, and how many still need it."""
         on_disk = [p for p in paths if os.path.exists(p)]
-        with self.lock:
-            pending = len(self._todo(on_disk))
+        pending = len(self._pending(on_disk))
         return {"checked": len(on_disk) - pending, "pending": pending}
 
     def start(self, paths: list[str]) -> None:
         with self.lock:
             if self.running:
                 return
+        todo = self._pending(paths)  # outside the lock: it may look inside files
+        with self.lock:
+            if self.running:
+                return
             self.paths = paths
-            todo = self._todo(paths)
             self.total = len(todo)
             self.done = 0
             self.error = None
@@ -140,12 +161,17 @@ class AudioInfoProber:
             with self.lock:
                 self.running = False
 
+    def _extra(self) -> dict:
+        """More top-level keys for the cache file (called with the lock held)."""
+        return {}
+
     def _save(self) -> None:
-        with self.lock:
-            data = json.dumps({"version": self.version, "files": self.cache}, ensure_ascii=False)
-        tmp = self.cache_path.with_suffix(".json.tmp")
-        tmp.write_text(data)
-        os.replace(tmp, self.cache_path)
+        with self.save_lock:
+            with self.lock:
+                data = json.dumps({"version": self.version, "files": self.cache, **self._extra()}, ensure_ascii=False)
+            tmp = self.cache_path.with_suffix(".json.tmp")
+            tmp.write_text(data)
+            os.replace(tmp, self.cache_path)
 
     def status(self) -> dict:
         with self.lock:

@@ -42,6 +42,14 @@ export function applyPlan(base, changes) {
     return false;
   };
   const childrenOf = (parent) => [...crates.values()].filter((c) => c.parent === parent);
+  // Order value that puts a crate just before sibling `before` under `parent` (missing / not a sibling: last).
+  const orderBefore = (parent, before, self) => {
+    const b = before != null ? crates.get(before) : null;
+    if (!b || b.parent !== parent || b.id === self) return ++maxOrder;
+    const sibs = childrenOf(parent).filter((x) => x.id !== self).sort((x, y) => x.order - y.order);
+    const i = sibs.findIndex((x) => x.id === b.id);
+    return ((i > 0 ? sibs[i - 1].order : b.order - 1) + b.order) / 2;
+  };
   const nameTaken = (parent, name, exceptId) =>
     childrenOf(parent).some((c) => c.id !== exceptId && sameName(c.name, name));
   const validParent = (p) => p === base.rootId || crates.has(p);
@@ -109,8 +117,10 @@ export function applyPlan(base, changes) {
         if (op.parent === c.id || isDescendant(op.parent, c.id)) return _('Cannot move a crate into itself');
         if (nameTaken(op.parent, c.name, c.id)) return _('"{name}" already exists in the target', { name: c.name });
         if (!c.status.created && c.status.originalParent === undefined) c.status.originalParent = c.parent;
+        // "before" (a sibling id, or null for last) places it; plans from before that always went last.
+        c.order = 'before' in op ? orderBefore(op.parent, op.before, c.id) : ++maxOrder;
+        if ('before' in op && op.parent === c.parent && !c.status.created) c.status.reordered = true;
         c.parent = op.parent;
-        c.order = ++maxOrder;
         if (c.status.originalParent === c.parent) delete c.status.originalParent;
         return null;
       }

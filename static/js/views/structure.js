@@ -174,7 +174,7 @@ export function createStructureView({ navigate } = {}) {
       h('span', { class: 'tree-name' }, c.name),
       st.created ? h('span', { class: 'tag tag-new' }, _('New')) : null,
       st.originalName != null ? h('span', { class: 'tag tag-edit', title: _('Original name: {name}', { name: st.originalName }) }, _('Renamed')) : null,
-      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, _('Moved')) : null,
+      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, _('Moved')) : st.reordered ? h('span', { class: 'tag tag-edit', title: _('New position in this level (added to the plan)') }, _('Reordered')) : null,
       st.merged ? h('span', { class: 'tag tag-edit' }, _('Merged')) : null,
       // Mark only the top-most unsorted crate; its sub-crates inherit it.
       store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: _('Songs in this crate (and its child crates) count as unsorted') }, _('Unsorted crate')) : null,
@@ -184,26 +184,66 @@ export function createStructureView({ navigate } = {}) {
     return row;
   }
 
+  // A crate dragged over the top or bottom edge of a row goes before / after that crate (same level);
+  // over the middle it goes into it. Songs always go into the crate.
+  function dropZone(e, node, target) {
+    if (dragging?.kind !== 'crate' || target === store.eff.rootId) return 'into';
+    const r = node.getBoundingClientRect();
+    const y = (e.clientY - r.top) / r.height;
+    return y < 0.3 ? 'before' : y > 0.7 ? 'after' : 'into';
+  }
+
+  /** { parent, before } for dropping crate d before / after target, or null when not possible or no change. */
+  function placeOf(d, target, zone) {
+    const eff = store.eff;
+    const t = eff.crates.get(target);
+    if (!t || target === d.id) return null;
+    const inside = subtreeIds(eff, d.id);
+    if (inside.includes(target) || inside.includes(t.parent)) return null;
+    const others = (eff.children.get(t.parent) || []).filter((x) => x !== d.id);
+    const before = zone === 'before' ? target : (others[others.indexOf(target) + 1] ?? null);
+    return isAt(d.id, t.parent, before) ? null : { parent: t.parent, before };
+  }
+
+  /** Is the crate already under `parent`, just before `before` (null: last)? */
+  function isAt(id, parent, before) {
+    const eff = store.eff;
+    if (eff.crates.get(id)?.parent !== parent) return false;
+    const sibs = eff.children.get(parent) || [];
+    const others = sibs.filter((x) => x !== id);
+    return sibs.indexOf(id) === (before == null ? others.length : others.indexOf(before));
+  }
+
   function wireDrop(node, targetId) {
+    const ZONES = ['is-drop', 'is-drop-before', 'is-drop-after'];
     // WebKit (the Mac app) only accepts a drop if both dragenter and dragover are cancelled.
     const accept = (e) => {
       const target = targetId();
-      if (!dragging || !canDrop(dragging, target)) return;
+      if (!dragging) return;
+      const zone = dropZone(e, node, target);
+      const ok = zone === 'into' ? canDrop(dragging, target) : !!placeOf(dragging, target, zone);
+      node.classList.toggle('is-drop', ok && zone === 'into');
+      node.classList.toggle('is-drop-before', ok && zone === 'before');
+      node.classList.toggle('is-drop-after', ok && zone === 'after');
+      if (!ok) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = dragging.kind === 'tracks' && !e.altKey ? 'copy' : 'move';
-      node.classList.add('is-drop');
     };
     node.addEventListener('dragenter', accept);
     node.addEventListener('dragover', accept);
-    node.addEventListener('dragleave', () => node.classList.remove('is-drop'));
+    node.addEventListener('dragleave', () => node.classList.remove(...ZONES));
     node.addEventListener('drop', (e) => {
       e.preventDefault();
-      node.classList.remove('is-drop');
+      node.classList.remove(...ZONES);
+      const zone = dropZone(e, node, targetId());
       const d = dragging;
       dragging = null;
       if (!d) return;
       const target = targetId();
-      if (d.kind === 'crate') moveCrateTo(d.id, target);
+      if (d.kind === 'crate' && zone !== 'into') {
+        const place = placeOf(d, target, zone);
+        if (place) placeCrate(d.id, place.parent, place.before);
+      } else if (d.kind === 'crate') moveCrateTo(d.id, target);
       else addTracksTo(d.ids, target, e.altKey ? d.from : null);
     });
   }
@@ -289,6 +329,48 @@ export function createStructureView({ navigate } = {}) {
     }
   }
 
+  /** Put a crate just before `before` under `parent` (null: last). Repeated reorders of one crate stay one change. */
+  function placeCrate(id, parent, before) {
+    const eff = store.eff;
+    const c = eff.crates.get(id);
+    if (!c) return;
+    if (parent !== c.parent && siblingNameTaken(parent, c.name, id)) {
+      toast(_('"{name}" already exists in the target. To merge, use "Merge into…"', { name: c.name }), { tone: 'danger' });
+      return;
+    }
+    const op = store.opMove(id, parent, before);
+    const last = store.plan.changes.at(-1);
+    const prev = last?.ops.length === 1 ? last.ops[0] : null;
+    if (op.reorder && prev?.type === 'moveCrate' && prev.reorder && prev.crate === id && prev.parent === parent) {
+      store.undo(last.id);
+      if (isAt(id, parent, before)) {
+        toast(_('"{name}" is back in its original place', { name: c.name }));
+        selectCrate(id);
+        return;
+      }
+    }
+    if (store.commit(op.text, [op])) {
+      if (parent !== store.eff.rootId) expanded.add(parent);
+      saveExpanded();
+      selectCrate(id);
+    }
+  }
+
+  const siblingsOf = (id) => store.eff.children.get(store.eff.crates.get(id)?.parent) || [];
+
+  /** One place up (-1) or down (+1) within its level. */
+  function nudge(id, delta) {
+    const sibs = siblingsOf(id);
+    const i = sibs.indexOf(id);
+    if (i < 0 || i + delta < 0 || i + delta >= sibs.length) return;
+    placeCrate(id, store.eff.crates.get(id).parent, delta < 0 ? sibs[i - 1] : (sibs[i + 2] ?? null));
+  }
+
+  function toEdge(id, top) {
+    const others = siblingsOf(id).filter((x) => x !== id);
+    placeCrate(id, store.eff.crates.get(id).parent, top ? (others[0] ?? null) : null);
+  }
+
   async function moveDialog(id) {
     const eff = store.eff;
     const exclude = new Set(subtreeIds(eff, id));
@@ -360,6 +442,18 @@ export function createStructureView({ navigate } = {}) {
       { label: _('Rename'), hint: 'F2', action: () => renameCrate(id) },
       { label: _('New child crate'), hint: 'N', action: () => createCrate(id) },
       { label: _('Move…'), action: () => moveDialog(id) },
+      ...(() => {
+        const sibs = siblingsOf(id);
+        const i = sibs.indexOf(id);
+        const first = i <= 0;
+        const last = i === sibs.length - 1;
+        return [
+          { label: _('Move up'), hint: '⌥↑', disabled: first, action: () => nudge(id, -1) },
+          { label: _('Move down'), hint: '⌥↓', disabled: last, action: () => nudge(id, 1) },
+          { label: _('Move to the top of this level'), disabled: first, action: () => toEdge(id, true) },
+          { label: _('Move to the bottom of this level'), disabled: last, action: () => toEdge(id, false) },
+        ];
+      })(),
       { label: _('Merge into…'), action: () => mergeDialog(id) },
       'sep',
       reason === 'inherited'
@@ -609,6 +703,10 @@ export function createStructureView({ navigate } = {}) {
         }
       }
       // tree
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (selected != null) nudge(selected, e.key === 'ArrowUp' ? -1 : 1);
+        return true;
+      }
       const idx = visible.findIndex((r) => r.id === selected);
       switch (e.key) {
         case 'ArrowDown':

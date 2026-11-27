@@ -17,6 +17,11 @@ keeps the files whose verdict the floor cannot have changed and leaves the rest 
 
 It only runs when asked (the Quality tab), to save power. The levels are cached in spectrum.json
 (checked against size and mtime, like audio_info.json), so a run only analyses new or changed files.
+Serato writes its analysis and cue points into the music file, which changes size and mtime but not
+the sound. So each result also keeps an audio fingerprint (MD5 of the compressed audio packets of
+0-10 s and 60-70 s, read without decoding, about 0.04 s a file): a changed file whose fingerprint is
+the same keeps its result. Files checked before fingerprints existed get one in a single low-priority
+pass when the Quality data is first asked for.
 ffmpeg runs at background priority (efficiency cores), 1, 3 or 6 files at a time depending on the
 chosen speed. Without ffmpeg (Homebrew's `brew install ffmpeg`) the feature is simply off.
 """
@@ -27,6 +32,9 @@ import os
 import re
 import shutil
 import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .audioinfo import AudioInfoProber
@@ -52,6 +60,18 @@ def find_ffmpeg() -> str | None:
 def _background(cmd: list[str]) -> list[str]:
     # macOS: efficiency cores and throttled disk access, so Serato never waits for us.
     return [TASKPOLICY, "-c", "background", *cmd] if os.path.exists(TASKPOLICY) else ["nice", "-n", "19", *cmd]
+
+
+def fingerprint(ffmpeg: str, path: str, background: bool = False) -> str | None:
+    """MD5 of the audio packets of 0-10 s and 60-70 s, copied without decoding. Tags are not part of
+    it, so it stays the same when only tags change (Serato's analysis, cue points). None if ffmpeg failed."""
+    cmd = [ffmpeg, "-nostdin", "-v", "error", "-t", "10", "-i", path, "-ss", "60", "-t", "10", "-i", path,
+           "-map", "0:a:0", "-map", "1:a:0?", "-c", "copy", "-f", "md5", "-"]
+    try:
+        out = subprocess.run(_background(cmd) if background else cmd, capture_output=True, text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out[4:] if out.startswith("MD5=") else None
 
 
 def duration(ffmpeg: str, path: str) -> float:
@@ -116,14 +136,88 @@ class SpectrumProber(AudioInfoProber):
     workers = SPEEDS["normal"]
 
     def _load(self, stored: dict) -> dict:
+        prints, last = stored.get("prints"), stored.get("lastRun")
+        self._stored = {"prints": prints if isinstance(prints, dict) else {}, "lastRun": last if isinstance(last, (int, float)) else None}
         if stored.get("version") == 1:
             return {p: v for p, v in stored["files"].items() if not floor_matters(v[2:])}
         return super()._load(stored)
 
     def __init__(self, cache_path: Path):
         super().__init__(cache_path)
+        stored = getattr(self, "_stored", {})
+        self.prints: dict[str, str] = stored.get("prints") or {}  # path -> audio fingerprint of the checked content
+        self.last_run: float | None = stored.get("lastRun")
+        self.compared: dict[tuple[str, int, int], bool] = {}  # (path, size, mtime) -> fingerprint still the same
+        self.backfill_started = False
         self.ffmpeg = find_ffmpeg()
-        self.probe = lambda path: band_levels(self.ffmpeg, path)
+        self.probe = self._probe
+
+    def _probe(self, path: str) -> list[float] | None:
+        levels = band_levels(self.ffmpeg, path)
+        if levels:  # remember what the audio was, so a tag-only change later keeps this result
+            fp = fingerprint(self.ffmpeg, path)
+            if fp:
+                with self.lock:
+                    self.prints[path] = fp
+        return levels
+
+    def _extra(self) -> dict:
+        return {"prints": self.prints, "lastRun": self.last_run}
+
+    def _run(self, todo: list[tuple[str, int, int]]) -> None:
+        super()._run(todo)
+        self.last_run = time.time()
+        self._save()
+
+    def _same_content(self, changed: list[tuple[str, int, int]]) -> set[str]:
+        """Changed files whose audio fingerprint is still the one their result was made from."""
+        if not self.ffmpeg:
+            return set()
+        ask = [t for t in changed if self.prints.get(t[0]) and t not in self.compared]
+        if ask:
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                now = list(pool.map(lambda t: fingerprint(self.ffmpeg, t[0]), ask))
+            for t, fp in zip(ask, now):
+                if fp is not None:  # ffmpeg failed: ask again next time
+                    self.compared[t] = fp == self.prints.get(t[0])
+        return {t[0] for t in changed if self.compared.get(t)}
+
+    def coverage(self, paths: list[str]) -> dict:
+        self._start_backfill(paths)
+        return super().coverage(paths)
+
+    def _start_backfill(self, paths: list[str]) -> None:
+        """Once per app run: fingerprints for results made before fingerprints existed (one file at a time, background priority)."""
+        if self.backfill_started or not self.ffmpeg:
+            return
+        self.backfill_started = True
+        with self.lock:
+            todo = [(p, h[0], h[1]) for p in paths if (h := self.cache.get(p)) and len(h) > 2 and p not in self.prints]
+        if todo:
+            threading.Thread(target=self._backfill, args=(todo,), daemon=True).start()
+
+    def _backfill(self, todo: list[tuple[str, int, int]]) -> None:
+        def unchanged(path: str, size: int, mtime: int) -> bool:
+            try:
+                st = os.stat(path)
+            except OSError:
+                return False
+            return (st.st_size, int(st.st_mtime)) == (size, mtime)
+
+        added = 0
+        for path, size, mtime in todo:
+            # Only while the file is still exactly what was checked; otherwise the fingerprint would vouch for other audio.
+            if not unchanged(path, size, mtime):
+                continue
+            fp = fingerprint(self.ffmpeg, path, background=True)
+            if fp and unchanged(path, size, mtime):
+                with self.lock:
+                    self.prints.setdefault(path, fp)
+                added += 1
+                if added % 500 == 0:
+                    self._save()
+        if added:
+            self._save()
 
     def start(self, paths: list[str], speed: str = "normal") -> None:
         if self.ffmpeg and not self.running:
@@ -131,10 +225,12 @@ class SpectrumProber(AudioInfoProber):
             super().start(paths)
 
     def status(self) -> dict:
-        try:
-            last = os.path.getmtime(self.cache_path)  # written at the end of every run
-        except OSError:
-            last = None
+        last = self.last_run
+        if last is None:  # caches from before lastRun was stored: the file was written at the end of every run
+            try:
+                last = os.path.getmtime(self.cache_path)
+            except OSError:
+                last = None
         return {**super().status(), "available": bool(self.ffmpeg), "lastRun": last}
 
     def items(self) -> dict[str, list]:

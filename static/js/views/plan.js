@@ -13,6 +13,7 @@ const KIND = {
   createCrate: _('New crate'),
   renameCrate: _('Rename'),
   moveCrate: _('Move crate'),
+  reorderCrate: _('Reorder crate'),
   deleteCrate: _('Delete crate'),
   mergeCrate: _('Merge crate'),
   removeTrack: _('Remove song'),
@@ -35,7 +36,10 @@ export function createPlanView() {
 
   function counts() {
     const c = {};
-    for (const ch of store.plan.changes) for (const op of ch.ops) c[op.type] = (c[op.type] || 0) + 1;
+    for (const ch of store.plan.changes) for (const op of ch.ops) {
+      const k = op.type === 'moveCrate' && op.reorder ? 'reorderCrate' : op.type;
+      c[k] = (c[k] || 0) + 1;
+    }
     return c;
   }
 

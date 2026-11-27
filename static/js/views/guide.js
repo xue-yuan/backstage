@@ -30,7 +30,7 @@ function zhContent() {
             `**${_('Sort')}**：把 Inbox 裡的歌一首一首分到正式的 crate。`,
             `**${_('Cleanup')}**：處理${q('Missing files')}、${q('Duplicates')}、${q('Empty crates')}。`,
             `**${_('Quality')}**：檢查新歌有沒有假 320k、假無損（要手動按，見下面「假音質」）。`,
-            `**${_('Crates')}**：改名、移動、合併、刪除 crate。`,
+            `**${_('Crates')}**：改名、移動、合併、刪除 crate，也可以調整順序（拖到兩個 crate 中間，或選好後按 ⌥↑ ⌥↓）。`,
             `**${_('Plan')}**：檢查要改的內容，關掉 Serato DJ，按${q('Apply to Serato…')}。`,
           ],
         },
@@ -88,7 +88,7 @@ function zhContent() {
       blocks: [
         '有些檔案標的是 MP3 320 或 WAV，其實是從比較差的檔案轉出來的，例如把 128k 的 MP3 轉存成 320k。檔案變大了，聲音不會變好。',
         '**怎麼看出來**：編碼器會把高頻切掉，位元率越低切得越多：128k 大約切在 16.5 kHz、192k 在 19 kHz、320k 在 20 kHz，真的無損會到 22 kHz。轉檔救不回被切掉的部分，所以標 320 卻在 16.5 kHz 以上完全沒聲音，就是 128k 轉的。',
-        `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
+        `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。Serato 分析或加 cue 點時會把資料寫進音樂檔，但聲音沒變，Backstage 會比對聲音指紋認出來，不會再檢查一次。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
         { tip: '「可疑」只是工具自動判斷的參考，不是定論。刪除或換掉檔案之前，一定要用頻譜工具看過、用耳朵聽過再決定。有些歌本來就沒什麼高頻（老錄音、lo-fi、部分爵士），也可能被標到；反過來，沒被標到也不保證是真的。下載新歌之後，記得到「音質檢查」分頁按一次檢查（它不會自己跑），有疑問就照下面的步驟手動檢查。看過覺得沒問題的，按「聽起來沒問題」就不會再標可疑。' },
         '**手動檢查的步驟**：',
         {
@@ -187,7 +187,7 @@ function enContent() {
             `**${_('Sort')}**: sort the songs in Inbox into your real crates, one by one.`,
             `**${_('Cleanup')}**: ${qe('Missing files')}, ${qe('Duplicates')} and ${qe('Empty crates')}.`,
             `**${_('Quality')}**: check new songs for fake 320k and fake lossless (run it by hand; see "Fake quality" below).`,
-            `**${_('Crates')}**: rename, move, merge and delete crates.`,
+            `**${_('Crates')}**: rename, move, merge and delete crates, and change their order (drag between two crates, or select one and press ⌥↑ ⌥↓).`,
             `**${_('Plan')}**: check the changes, quit Serato DJ, press ${qe('Apply to Serato…')}.`,
           ],
         },
@@ -245,7 +245,7 @@ function enContent() {
       blocks: [
         'Some files say MP3 320 or WAV but were converted from something worse, for example a 128k MP3 saved again as 320k. The file gets bigger; the sound does not get better.',
         '**How it shows**: encoders cut the highest frequencies, more at lower bit rates: about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k, while real lossless reaches 22 kHz. Converting cannot bring the cut part back, so an "MP3 320" with nothing above 16.5 kHz was made from a 128k file.',
-        `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
+        `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. Serato writes its analysis and cue points into the music file without changing the sound; Backstage compares an audio fingerprint, so those files are not checked again. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
         { tip: '"Suspect" is an automatic guess, not proof. Before you delete or replace a file, always look at its spectrum and listen to it. Songs with little high end (old or lo-fi recordings, some jazz) can be marked too, and a file without the mark is not guaranteed to be real. After downloading new songs, remember to run the check in the Quality tab (it does not run by itself), and check by hand when in doubt. Files you checked and found fine can be marked "Sounds fine" so they are no longer flagged.' },
         '**Checking by hand**:',
         {

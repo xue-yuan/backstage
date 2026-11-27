@@ -170,7 +170,7 @@ class AppState:
             "lastBackup": str(backups[0]) if backups else None,
         }
 
-    def apply(self, changes: list, expected: dict) -> dict:
+    def apply(self, changes: list, expected: dict, expected_order: dict | None = None) -> dict:
         if not self.apply_lock.acquire(blocking=False):
             raise ApplyError(tr("Already applying"))
         try:
@@ -186,11 +186,11 @@ class AppState:
             for name in ("master.sqlite", "master.sqlite-wal", "master.sqlite-shm", "root.sqlite"):
                 if (SERATO_LIBRARY / name).exists():
                     shutil.copy2(SERATO_LIBRARY / name, rehearsal / name)
-            apply_changes(rehearsal, changes, expected)
+            apply_changes(rehearsal, changes, expected, expected_order=expected_order)
             shutil.rmtree(rehearsal, ignore_errors=True)
             # 2) Back up the real databases, 3) write them (one transaction, verified before commit).
             dest = backup_serato(SERATO_LIBRARY, SERATO_BACKUPS, BEFORE_APPLY)
-            result = apply_changes(SERATO_LIBRARY, changes, expected)
+            result = apply_changes(SERATO_LIBRARY, changes, expected, expected_order=expected_order)
             result["backup"] = str(dest)
         finally:
             self.apply_lock.release()
@@ -515,10 +515,11 @@ def make_handler(state: AppState, port: int):
                 if self.path == "/api/spectrum":
                     return self._json(state.spectrum_action(body))
                 if self.path == "/api/apply":
-                    if not isinstance(body.get("changes"), list) or not isinstance(body.get("expected"), dict):
+                    order = body.get("expectedOrder")
+                    if not isinstance(body.get("changes"), list) or not isinstance(body.get("expected"), dict) or not isinstance(order, (dict, type(None))):
                         raise ValueError(tr("invalid apply data"))
                     try:
-                        return self._json(state.apply(body["changes"], body["expected"]))
+                        return self._json(state.apply(body["changes"], body["expected"], order))
                     except ApplyError as e:
                         return self._json({"ok": False, "error": str(e)})
                 if self.path == "/api/apply/restore":

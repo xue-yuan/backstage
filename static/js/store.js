@@ -518,12 +518,25 @@ class Store {
   opRename(crate, name) {
     return { type: 'renameCrate', crate, name, text: _('Rename "{crate}" → "{name}"', { crate: this.crateLabel(crate), name }) };
   }
-  opMove(crate, parent) {
-    const text =
-      parent === this.eff.rootId
-        ? _('Move "{crate}" to the top level', { crate: this.crateLabel(crate) })
-        : _('Move "{crate}" under "{parent}"', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
-    return { type: 'moveCrate', crate, parent, text };
+  /** before: undefined = last (the original move), a sibling id = just before it, null = last of that level. */
+  opMove(crate, parent, before) {
+    if (before === undefined) {
+      const text =
+        parent === this.eff.rootId
+          ? _('Move "{crate}" to the top level', { crate: this.crateLabel(crate) })
+          : _('Move "{crate}" under "{parent}"', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
+      return { type: 'moveCrate', crate, parent, text };
+    }
+    const reorder = this.eff.crates.get(crate)?.parent === parent;
+    const level = parent === this.eff.rootId ? _('the top level') : _('the crate "{name}"', { name: this.crateLabel(parent) });
+    const text = reorder
+      ? before != null
+        ? _('Reorder: "{crate}" before "{before}"', { crate: this.crateLabel(crate), before: this.eff.crates.get(before)?.name ?? '' })
+        : _('Reorder: "{crate}" to the end of {level}', { crate: this.crateLabel(crate), level })
+      : before != null
+        ? _('Move "{crate}" into {level}, before "{before}"', { crate: this.crateLabel(crate), level, before: this.eff.crates.get(before)?.name ?? '' })
+        : _('Move "{crate}" to the end of {level}', { crate: this.crateLabel(crate), level });
+    return { type: 'moveCrate', crate, parent, before, reorder, text };
   }
   opDelete(crate) {
     return { type: 'deleteCrate', crate, text: _('Delete crate "{crate}"', { crate: this.crateLabel(crate) }) };

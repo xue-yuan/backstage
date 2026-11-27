@@ -101,7 +101,10 @@ export function summarizePlan({ changes, eff, skip, trackLabel, issues = [] }) {
       if (op.type === 'remove') addItem(groupFor(`remove:${op.crate}`, { kind: 'remove', crate: op.crate }), key, ch.at, [op], { asset: op.asset });
       else if (op.type === 'removeTrack') addItem(groupFor(op.deleteFile ? 'reject' : 'removeTrack', { kind: op.deleteFile ? 'reject' : 'removeTrack' }), key, ch.at, [op], { asset: op.asset, reason: op.reason });
       else if (op.type === 'relocate') addItem(groupFor('relocate', { kind: 'relocate' }), key, ch.at, [op]);
-      else if (STRUCTURE.includes(op.type)) addItem(groupFor(op.type, { kind: op.type }), key, ch.at, [op]);
+      else if (STRUCTURE.includes(op.type)) {
+        const kind = op.type === 'moveCrate' && op.reorder ? 'reorderCrate' : op.type;
+        addItem(groupFor(kind, { kind }), key, ch.at, [op]);
+      }
       else addItem(groupFor('other', { kind: 'other' }), key, ch.at, [op]);
     }
   }
@@ -173,6 +176,7 @@ function groupTitle(g, items, eff) {
         createCrate: ['Created {n} crate', 'Created {n} crates'],
         renameCrate: ['Renamed {n} crate', 'Renamed {n} crates'],
         moveCrate: ['Moved {n} crate', 'Moved {n} crates'],
+        reorderCrate: ['Reordered {n} crate', 'Reordered {n} crates'],
         deleteCrate: ['Deleted {n} crate', 'Deleted {n} crates'],
         mergeCrate: ['Merged {n} crate', 'Merged {n} crates'],
         other: ['{n} other action', '{n} other actions'],

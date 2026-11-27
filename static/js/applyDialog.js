@@ -12,6 +12,7 @@ const KIND = {
   createCrate: _('New crate'),
   renameCrate: _('Rename'),
   moveCrate: _('Move crate'),
+  reorderCrate: _('Reorder crate'),
   deleteCrate: _('Delete crate'),
   mergeCrate: _('Merge crate'),
   relocate: _('Relocate'),
@@ -39,7 +40,15 @@ function expectedTree(changes) {
   };
   const out = {};
   for (const id of eff.crates.keys()) out[key(id)] = [...new Set(eff.members.get(id) || [])].sort((a, b) => a - b);
-  return out;
+  // Levels the plan put in a new order: the crate names there, in that order (apply.py checks both files).
+  const order = {};
+  for (const ch of changes) {
+    for (const op of ch.ops) {
+      if (op.type !== 'moveCrate' || !('before' in op) || (op.parent !== eff.rootId && !eff.crates.has(op.parent))) continue;
+      order[op.parent === eff.rootId ? '' : key(op.parent)] = (eff.children.get(op.parent) || []).map((id) => eff.crates.get(id).name);
+    }
+  }
+  return { expected: out, expectedOrder: order };
 }
 
 function trashNote(trashed) {
@@ -62,7 +71,10 @@ function trashNote(trashed) {
 
 const count = (changes) => {
   const c = {};
-  for (const ch of changes) for (const op of ch.ops) c[op.type] = (c[op.type] || 0) + 1;
+  for (const ch of changes) for (const op of ch.ops) {
+      const k = op.type === 'moveCrate' && op.reorder ? 'reorderCrate' : op.type;
+      c[k] = (c[k] || 0) + 1;
+    }
   return c;
 };
 
@@ -161,8 +173,9 @@ export async function openApplyDialog() {
   async function run() {
     const { supported } = split();
     let expected;
+    let expectedOrder;
     try {
-      expected = expectedTree(supported);
+      ({ expected, expectedOrder } = expectedTree(supported));
     } catch (e) {
       phase = 'failed';
       result = { error: e.message };
@@ -171,7 +184,7 @@ export async function openApplyDialog() {
     phase = 'running';
     render();
     try {
-      result = await api2.apply({ changes: supported, expected });
+      result = await api2.apply({ changes: supported, expected, expectedOrder });
     } catch (e) {
       result = { ok: false, error: e.message };
     }

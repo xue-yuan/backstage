@@ -39,6 +39,7 @@ function rows() {
         ['← →', _('Collapse / expand')],
         ['Enter / F2', _('Rename')],
         ['N', _('New child crate')],
+        ['⌥↑ ⌥↓', _('Move the crate up / down within its level')],
         ['Delete', _('Delete crate (added to the plan)')],
         ['⌘A', _('Select all songs (after clicking the song list)')],
       ],

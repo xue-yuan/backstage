@@ -266,8 +266,33 @@ class _Writer:
         if self._name_taken(mparent, name, mid):
             raise ApplyError(tr('"{name}" already exists in the target', name=name))
         rid, rparent = self._root_of(mid), self._root_of(mparent)
-        self.con.execute("UPDATE db1.container SET parent_id = ?, list_order = ?, revision = ? WHERE id = ?", (rparent, self._next_order("db1", rparent), self.rev, rid))
-        self.con.execute("UPDATE main.container SET parent_id = ?, list_order = ? WHERE id = ?", (mparent, self._next_order("main", mparent), mid))
+        if "before" not in op:  # plans from before crates could be placed: to the end of the level, as always
+            self.con.execute("UPDATE db1.container SET parent_id = ?, list_order = ?, revision = ? WHERE id = ?", (rparent, self._next_order("db1", rparent), self.rev, rid))
+            self.con.execute("UPDATE main.container SET parent_id = ?, list_order = ? WHERE id = ?", (mparent, self._next_order("main", mparent), mid))
+            return
+        # Placed: just before the sibling `before` (None or no longer a sibling: last). Like Serato when you drag
+        # a crate, each file renumbers that level 1..N on its own (master has crates root does not); only a crate
+        # that changes parent gets a new revision (Serato does not bump it for a reorder).
+        mbefore = None
+        if op["before"] is not None:
+            try:
+                mbefore = self.crate(op["before"])
+            except ApplyError:
+                mbefore = None
+            if mbefore is not None and (mbefore == mid or self._one("SELECT parent_id FROM main.container WHERE id = ?", (mbefore,)) != mparent):
+                mbefore = None
+        if self._one("SELECT parent_id FROM main.container WHERE id = ?", (mid,)) != mparent:
+            self.con.execute("UPDATE db1.container SET parent_id = ?, revision = ? WHERE id = ?", (rparent, self.rev, rid))
+            self.con.execute("UPDATE main.container SET parent_id = ? WHERE id = ?", (mparent, mid))
+        self._place("main", mid, mparent, mbefore)
+        self._place("db1", rid, rparent, self._root_of(mbefore) if mbefore is not None else None)
+
+    def _place(self, schema: str, cid: int, parent: int, before: int | None) -> None:
+        """Renumber the children of `parent` 1..N with `cid` just before `before` (None: last)."""
+        rest = [r[0] for r in self.con.execute(f"SELECT id FROM {schema}.container WHERE parent_id = ? AND id != ? ORDER BY list_order, id", (parent, cid))]
+        rest.insert(rest.index(before) if before in rest else len(rest), cid)
+        for n, x in enumerate(rest, 1):
+            self.con.execute(f"UPDATE {schema}.container SET list_order = ? WHERE id = ? AND list_order IS NOT ?", (n, x, n))
 
     def delete(self, op: dict) -> None:
         mid = self.crate(op["crate"])
@@ -383,6 +408,44 @@ class _Writer:
                 out[path(cid)].append(aid)
         return {k: sorted(set(v)) for k, v in out.items()}
 
+    def _by_path(self, key: str) -> int | None:
+        """Master id of the crate at this path (names joined with U+0000, like actual_tree); "" is the top level."""
+        mid = self.mroot
+        for name in key.split("\x00") if key else []:
+            mid = self._one(
+                "SELECT id FROM main.container WHERE parent_id = ? AND name = ? AND space_id = ? AND type = 1 AND id NOT IN (SELECT container_id FROM main.smart_crate_rules)",
+                (mid, name, self.mspace),
+            )
+            if mid is None:
+                return None
+        return mid
+
+    def order_problems(self, expected_order: dict[str, list[str]]) -> list[str]:
+        """For each level the plan reordered: master lists the crates in the expected order, and root agrees."""
+        problems = []
+        for key, want in expected_order.items():
+            label = key.replace("\x00", " / ") or tr("top level")
+            mparent = self._by_path(key)
+            if mparent is None:
+                problems.append(tr("{level}: not found", level=label))
+                continue
+            rows = self.con.execute(
+                "SELECT c.id, c.name FROM main.container c WHERE c.parent_id = ? AND c.space_id = ? AND c.type = 1 "
+                "AND c.id NOT IN (SELECT container_id FROM main.smart_crate_rules) ORDER BY c.list_order, c.id",
+                (mparent, self.mspace),
+            ).fetchall()
+            if [r[1] for r in rows] != list(want):
+                problems.append(tr("{level}: the crates are not in the expected order", level=label))
+                continue
+            r_orders = [
+                self._one("SELECT list_order FROM db1.container WHERE id = ?", (rid,))
+                for mid, _ in rows
+                if (rid := self._one("SELECT external_container_id FROM main.location_container WHERE container_id = ? AND location_id = ?", (mid, LOCAL))) is not None
+            ]
+            if any(b is None or a is None or b <= a for a, b in zip(r_orders, r_orders[1:])):
+                problems.append(tr("{level}: root.sqlite has a different crate order", level=label))
+        return problems
+
     def mirror_problems(self) -> list[str]:
         """Master's view of the local drive must equal root.sqlite's."""
         problems = []
@@ -429,7 +492,7 @@ class _Writer:
         return problems[:20]
 
 
-def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[int]] | None, *, dry_run: bool = False) -> dict:
+def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[int]] | None, *, expected_order: dict[str, list[str]] | None = None, dry_run: bool = False) -> dict:
     master, root = lib_dir / "master.sqlite", lib_dir / "root.sqlite"
     con = sqlite3.connect(master, isolation_level=None)
     try:
@@ -504,6 +567,11 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
                     )
                 )
             checks.append(tr("All {n} crates hold exactly the expected songs", n=len(actual)))
+        if expected_order:
+            problems = w.order_problems(expected_order)
+            if problems:
+                raise ApplyError(tr("Crate order after applying differs from the plan: {problems}. Usually crates were added or moved in Serato after Backstage read the snapshot: press \"↻ Reload\" at the top right, check the plan, then apply again. Nothing was written.", problems=tr("; ").join(problems)))
+            checks.append(trn(len(expected_order), "The crates are in the planned order ({n} level)", "The crates are in the planned order ({n} levels)"))
         if dry_run:
             con.execute("ROLLBACK")
         else:
