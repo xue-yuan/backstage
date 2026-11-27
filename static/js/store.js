@@ -262,6 +262,31 @@ class Store {
     return touched;
   }
 
+  /**
+   * Take back staged additions of `asset` to `crate`, with the removal from the source crate staged
+   * together with them (sorting with "remove from the source crate"). Returns the removed ops.
+   */
+  revertAdd(crate, asset) {
+    const removed = [];
+    for (const ch of this.plan.changes) {
+      const adds = ch.ops.filter((o) => o.type === 'add' && o.crate === crate && o.asset === asset);
+      if (!adds.length) continue;
+      const sources = adds.map((o) => o.source).filter((s) => s != null);
+      const paired = (o) => o.type === 'remove' && o.asset === asset && (sources.length ? sources.includes(o.crate) : o.crate !== crate);
+      ch.ops = ch.ops.filter((o) => {
+        const drop = adds.includes(o) || paired(o);
+        if (drop) removed.push(o);
+        return !drop;
+      });
+    }
+    if (removed.length) {
+      this.plan.changes = this.plan.changes.filter((c) => c.ops.length);
+      this.recompute();
+      this.persist();
+    }
+    return removed;
+  }
+
   findOps(pred) {
     return this.plan.changes.flatMap((c) => c.ops.filter(pred));
   }

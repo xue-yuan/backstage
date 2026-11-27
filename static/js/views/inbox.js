@@ -1,29 +1,77 @@
 // Sort view: pick a source (uncategorised / recent / an inbox crate / a disk folder), listen, assign crates fast.
 import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
-import { addedInPlan, baseName, effectivePath, isClassified, liveTracks, pathKey, suggestCrates, trackMatches } from '../model.js';
+import { addedInPlan, baseName, effectivePath, isClassified, liveTracks, norm, pathKey, suggestCrates, trackMatches } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
 import { store } from '../store.js';
-import { clear, fmt, h, prefs, VirtualList } from '../ui.js';
+import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
 
 export function createInboxView({ navigate } = {}) {
   let source = prefs.get('inbox.source', { kind: 'uncategorized' });
   let filter = '';
-  let hideDone = prefs.get('inbox.hideDone', false);
+  // 'all' | 'todo' (not sorted yet) | 'done' (sorted only); older versions saved a "hide sorted" checkbox.
+  let show = prefs.get('inbox.show', prefs.get('inbox.hideDone', false) ? 'todo' : 'all');
   let sort = prefs.get('inbox.sort', 'added');
   let autoAdvance = prefs.get('inbox.autoAdvance', true);
-  let moveOut = prefs.get('inbox.moveOut', false);
+  let moveOut = prefs.get('inbox.moveOut', false); // sorting from an already-sorted crate
+  let moveOutInbox = prefs.get('inbox.moveOutInbox', true); // sorting from an unsorted crate: on, so the Inbox shrinks
   let pinned = prefs.get('inbox.pinned', []);
+  let collapsed = new Set(prefs.get('inbox.collapsed', []));
+  let crateFilter = '';
+  const openDone = new Set(); // parents whose finished crates are listed (this visit only)
+  // Crate order is fixed while the view is open (biggest backlog first, decided when a crate is first
+  // listed), so rows do not jump while you sort and "next crate" walks a stable order.
+  const rank = new Map();
+  let nextRank = 0;
   let selectedId = null;
   let items = [];
   let suggestions = [];
 
   // ---------- layout ----------
-  const sourcesEl = h('aside', { class: 'panel inbox-sources' });
+  const sourcesTop = h('div');
+  const crateHead = h('div', { class: 'section-label row-between' });
+  const crateFilterInput = h('input', {
+    class: 'input input-sm source-filter',
+    placeholder: _('Filter crates…'),
+    oninput: (e) => {
+      crateFilter = e.target.value;
+      renderCrateList();
+    },
+    onkeydown: (e) => {
+      if (e.key === 'Escape') {
+        e.target.value = crateFilter = '';
+        renderCrateList();
+        e.target.blur();
+      }
+      e.stopPropagation();
+    },
+  });
+  const crateListEl = h('div', { class: 'source-tree' });
+  const sourcesEl = h(
+    'aside',
+    { class: 'panel inbox-sources' },
+    sourcesTop,
+    crateHead,
+    crateFilterInput,
+    crateListEl,
+    h(
+      'button',
+      {
+        class: 'btn btn-ghost btn-block',
+        onclick: async () => {
+          const id = await pickCrateDialog({ title: _('Which crate do you want to sort?'), allowCreate: false });
+          if (id != null) setSource({ kind: 'crate', id });
+        },
+      },
+      _('Pick another crate…'),
+    ),
+  );
   const listTitle = h('div', { class: 'list-title' });
   const progress = h('div', { class: 'progress' }, h('div', { class: 'progress-fill' }));
   const progressText = h('span', { class: 'muted small' });
+  const nextBtn = h('button', { class: 'btn btn-sm', title: _('Next crate with songs left (N)'), onclick: () => goNextCrate() }, _('Next crate →'));
+  const cleanOutBtn = h('button', { class: 'btn btn-sm', onclick: () => cleanOut() });
   const filterInput = h('input', {
     class: 'input input-sm',
     placeholder: _('Filter by title, artist, genre…'),
@@ -53,29 +101,38 @@ export function createInboxView({ navigate } = {}) {
     h('option', { value: 'title' }, _('Title')),
   );
   sortSelect.value = sort;
-  const hideDoneBox = h('input', {
-    type: 'checkbox',
-    checked: hideDone,
-    onchange: (e) => {
-      hideDone = e.target.checked;
-      prefs.set('inbox.hideDone', hideDone);
-      renderList();
+  const showSelect = h(
+    'select',
+    {
+      class: 'input input-sm',
+      title: _('Which songs to list'),
+      onchange: (e) => {
+        show = e.target.value;
+        prefs.set('inbox.show', show);
+        e.target.blur(); // give the keyboard shortcuts back
+        renderList();
+      },
     },
-  });
+    h('option', { value: 'all' }, _('All songs')),
+    h('option', { value: 'todo' }, _('Not sorted yet')),
+    h('option', { value: 'done' }, _('Sorted only')),
+  );
+  showSelect.value = show;
 
   const vlist = new VirtualList({ rowHeight: 44, renderRow, className: 'track-list' });
   const listEl = h(
     'section',
     { class: 'panel inbox-list' },
-    h('div', { class: 'panel-head' }, listTitle, h('div', { class: 'progress-row' }, progress, progressText)),
-    h('div', { class: 'toolbar' }, filterInput, sortSelect, h('label', { class: 'check' }, hideDoneBox, _('Hide sorted'))),
+    h('div', { class: 'panel-head' }, listTitle, h('div', { class: 'progress-row' }, progress, progressText, cleanOutBtn, nextBtn)),
+    h('div', { class: 'toolbar' }, filterInput, showSelect, sortSelect),
     h(
       'div',
-      { class: 'trow trow-head' },
+      { class: 'trow trow-inbox trow-head' },
       h('span'),
       h('span', {}, _('Title / artist')),
       h('span', { class: 'num' }, 'BPM'),
       h('span', {}, 'Key'),
+      h('span', {}, _('Format')),
       h('span', {}, _('Genre')),
       h('span', { class: 'num' }, 'Crates'),
     ),
@@ -92,19 +149,15 @@ export function createInboxView({ navigate } = {}) {
     activeIds: () => new Set(store.eff.cratesOf.get(selectedId) || []),
     onPick: (id) => toggleCrate(id, { forceAdd: true }),
   });
-  const moveOutRow = h(
-    'label',
-    { class: 'check' },
-    h('input', {
-      type: 'checkbox',
-      checked: moveOut,
-      onchange: (e) => {
-        moveOut = e.target.checked;
-        prefs.set('inbox.moveOut', moveOut);
-      },
-    }),
-    _('Remove from the source crate when adding'),
-  );
+  // One checkbox, two remembered settings: unsorted sources default to on, sorted crates to off.
+  const moveOutBox = h('input', {
+    type: 'checkbox',
+    onchange: (e) => {
+      if (fromUnsorted()) prefs.set('inbox.moveOutInbox', (moveOutInbox = e.target.checked));
+      else prefs.set('inbox.moveOut', (moveOut = e.target.checked));
+    },
+  });
+  const moveOutRow = h('label', { class: 'check' }, moveOutBox, _('Remove from the source crate when adding'));
   const optionsEl = h(
     'div',
     { class: 'detail-section options' },
@@ -123,6 +176,7 @@ export function createInboxView({ navigate } = {}) {
     ),
     moveOutRow,
     h('div', { class: 'muted small' }, _('X: reject this song (added to the plan; it is removed and its file moved to the Trash only when you apply to Serato)')),
+    h('div', { class: 'muted small' }, _('⇧X: only remove it from the Serato library and keep the file (samples, demo tracks, files that belong to other apps)')),
   );
   const detailEl = h(
     'aside',
@@ -145,34 +199,37 @@ export function createInboxView({ navigate } = {}) {
   // ---------- data ----------
   const selected = () => store.base.tracks.get(selectedId);
 
-  function sourceList() {
+  // Songs of a source. A crate keeps listing songs moved out of it in the plan (shown as sorted).
+  function sourceList(src = source) {
     const { base, eff } = store;
     let list;
-    if (source.kind === 'uncategorized') {
+    if (src.kind === 'uncategorized') {
       list = [...base.tracks.values()].filter((t) => !(base.baseCratesOf.get(t.id) || []).length);
-    } else if (source.kind === 'recent') {
-      const cutoff = Date.now() / 1000 - source.days * 86400;
+    } else if (src.kind === 'recent') {
+      const cutoff = Date.now() / 1000 - src.days * 86400;
       list = [...base.tracks.values()].filter((t) => t.addedAt >= cutoff);
-    } else if (source.kind === 'folder') {
-      const prefix = `${pathKey(source.path)}/`;
+    } else if (src.kind === 'folder') {
+      const prefix = `${pathKey(src.path)}/`;
       list = liveTracks(eff).filter((t) => pathKey(effectivePath(eff, t)).startsWith(prefix));
     } else {
-      const ids = [...new Set([...(base.members.get(source.id) || []), ...(eff.members.get(source.id) || [])])];
+      const ids = [...new Set([...(base.members.get(src.id) || []), ...(eff.members.get(src.id) || [])])];
       list = ids.map((id) => base.tracks.get(id)).filter(Boolean);
     }
     return list.filter((t) => !eff.removedTracks.has(t.id));
   }
 
-  function isDone(t) {
+  function doneIn(src, t) {
     const eff = store.eff;
     // Same rule as the Folders report: a song is done once it sits in a crate that is not unsorted.
     // (Only when reorganising an already-sorted crate does "got another crate / left this one" count.)
-    if (source.kind !== 'crate' || store.rules.skip.has(source.id)) return isClassified(eff, store.rules, t.id);
-    const gained = addedInPlan(eff, t.id).filter((c) => !(source.kind === 'crate' && c === source.id));
-    if (gained.length) return true;
-    if (source.kind === 'crate' && !(eff.members.get(source.id) || []).includes(t.id)) return true;
-    return false;
+    if (src.kind !== 'crate' || store.rules.skip.has(src.id)) return isClassified(eff, store.rules, t.id);
+    if (addedInPlan(eff, t.id).some((c) => c !== src.id)) return true;
+    return !(eff.members.get(src.id) || []).includes(t.id);
   }
+  const isDone = (t) => doneIn(source, t);
+  const leftIn = (src) => sourceList(src).filter((t) => !doneIn(src, t)).length;
+  const fromUnsorted = () => source.kind === 'crate' && store.rules.skip.has(source.id);
+  const moveOutOn = () => (fromUnsorted() ? moveOutInbox : moveOut);
 
   function sorted(list) {
     const by = {
@@ -186,67 +243,213 @@ export function createInboxView({ navigate } = {}) {
   }
 
   // Crates whose songs still need sorting (Inbox and everything under it, plus any crate marked unsorted).
-  function inboxCrateIds() {
+  const inboxCrateIds = () => [...store.rules.skip].filter((id) => store.eff.crates.has(id));
+
+  /** The unsorted crates as a tree: { id, total, left, leftIds (whole subtree), children, active, hasActive }. */
+  function crateTree() {
     const eff = store.eff;
-    return [...store.rules.skip].filter((id) => eff.crates.has(id)).sort((a, b) => eff.pathOf(a).localeCompare(eff.pathOf(b), undefined, { numeric: true }));
+    const skip = store.rules.skip;
+    const build = (id) => {
+      const src = { kind: 'crate', id };
+      const tracks = sourceList(src);
+      const left = tracks.filter((t) => !doneIn(src, t));
+      const children = (eff.children.get(id) || []).filter((c) => skip.has(c)).map(build).filter(Boolean);
+      const leftIds = new Set(left.map((t) => t.id));
+      for (const c of children) for (const a of c.leftIds) leftIds.add(a);
+      const active = source.kind === 'crate' && source.id === id;
+      const node = { id, total: tracks.length, left: left.length, leftIds, children, active, hasActive: active || children.some((c) => c.hasActive) };
+      return node.total || children.length || active ? node : null;
+    };
+    const roots = inboxCrateIds().filter((id) => !skip.has(eff.crates.get(id).parent));
+    return ordered(roots.map(build).filter(Boolean));
+  }
+
+  function ordered(nodes) {
+    const eff = store.eff;
+    const fresh = nodes
+      .filter((n) => !rank.has(n.id))
+      .sort((a, b) => b.leftIds.size - a.leftIds.size || eff.pathOf(a.id).localeCompare(eff.pathOf(b.id), undefined, { numeric: true }));
+    for (const n of fresh) rank.set(n.id, nextRank++);
+    for (const n of nodes) n.children = ordered(n.children);
+    return nodes.sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  }
+
+  /** Crates with songs of their own, in list order (collapsed and finished ones included). */
+  function crateOrder(nodes, out = []) {
+    for (const n of nodes) {
+      if (n.total) out.push(n);
+      crateOrder(n.children, out);
+    }
+    return out;
+  }
+
+  /** The next crate after the current one (in list order, wrapping) that still has songs to sort. */
+  function nextCrate(tree = crateTree()) {
+    const list = crateOrder(tree);
+    const i = list.findIndex((n) => n.active);
+    for (let k = 1; k <= list.length; k++) {
+      const n = list[(i + k) % list.length];
+      if (!n.active && n.left) return n;
+    }
+    return null;
+  }
+
+  function goNextCrate() {
+    const n = nextCrate();
+    if (!n) {
+      toast(_('Every unsorted crate is done 🎉'));
+      return;
+    }
+    setSource({ kind: 'crate', id: n.id });
+  }
+
+  function toggleCollapsed(id) {
+    if (collapsed.has(id)) collapsed.delete(id);
+    else collapsed.add(id);
+    prefs.set('inbox.collapsed', [...collapsed]);
+    renderCrateList();
   }
 
   // ---------- rendering ----------
-  function renderSources() {
-    const { base, eff } = store;
-    const uncategorized = [...base.tracks.values()].filter((t) => !(base.baseCratesOf.get(t.id) || []).length);
-    const left = uncategorized.filter((t) => !(eff.cratesOf.get(t.id) || []).length && !eff.removedTracks.has(t.id)).length;
-    const now = Date.now() / 1000;
-    const recent = (days) => [...base.tracks.values()].filter((t) => t.addedAt >= now - days * 86400).length;
-    const inboxCrates = inboxCrateIds().filter((id) => (eff.members.get(id) || []).length || id === source.id);
-    if (source.kind === 'crate' && !inboxCrates.includes(source.id) && eff.crates.has(source.id)) inboxCrates.push(source.id);
+  const leftCount = (left, total) =>
+    h(
+      'span',
+      { class: `count ${!left && total ? 'count-done' : ''}`, title: _('{left} of {total} left', { left: left.toLocaleString(), total: total.toLocaleString() }) },
+      left || !total ? left.toLocaleString() : '✓',
+    );
 
-    const item = (src, label, count, sub) => {
-      const active = JSON.stringify(src) === JSON.stringify(source);
-      return h(
-        'button',
-        { class: `source ${active ? 'is-active' : ''}`, title: label, onclick: () => setSource(src) },
-        h('span', { class: 'source-label' }, label, sub ? h('span', { class: 'muted small' }, ` ${sub}`) : null),
-        h('span', { class: 'count' }, count),
-      );
-    };
+  function sourceItem(src, label, { sub, style } = {}) {
+    const list = sourceList(src);
+    const left = list.filter((t) => !doneIn(src, t)).length;
+    const active = JSON.stringify(src) === JSON.stringify(source);
+    return h(
+      'button',
+      { class: `source ${active ? 'is-active' : ''}`, title: label, style, onclick: () => setSource(src) },
+      h('span', { class: 'source-label' }, label, sub ? h('span', { class: 'muted small' }, ` ${sub}`) : null),
+      leftCount(left, list.length),
+    );
+  }
+
+  function renderSources() {
     clear(
-      sourcesEl,
+      sourcesTop,
       h('div', { class: 'section-label' }, _('Source')),
-      item({ kind: 'uncategorized' }, _('In no crate'), uncategorized.length, left !== uncategorized.length ? _('{n} left', { n: left }) : ''),
-      item({ kind: 'recent', days: 7 }, _('Added in the last {n} days', { n: 7 }), recent(7)),
-      item({ kind: 'recent', days: 30 }, _('Added in the last {n} days', { n: 30 }), recent(30)),
+      sourceItem({ kind: 'uncategorized' }, _('In no crate')),
+      sourceItem({ kind: 'recent', days: 7 }, _('Added in the last {n} days', { n: 7 })),
+      sourceItem({ kind: 'recent', days: 30 }, _('Added in the last {n} days', { n: 30 })),
       source.kind === 'folder'
-        ? [h('div', { class: 'section-label' }, _('Sort from a folder')), item(source, baseName(source.path), sourceList().length, fmt.shortPath(source.path).replace(/\/[^/]*$/, ''))]
+        ? [h('div', { class: 'section-label' }, _('Sort from a folder')), sourceItem(source, baseName(source.path), { sub: fmt.shortPath(source.path).replace(/\/[^/]*$/, '') })]
         : null,
       navigate
         ? h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('folders') }, source.kind === 'folder' ? _('Pick another folder…') : _('Pick from folders…'))
         : null,
-      h('div', { class: 'section-label' }, _('Sort from a crate')),
-      inboxCrates.map((id) => item({ kind: 'crate', id }, eff.pathOf(id), (eff.members.get(id) || []).length)),
-      h(
-        'button',
-        {
-          class: 'btn btn-ghost btn-block',
-          onclick: async () => {
-            const id = await pickCrateDialog({ title: _('Which crate do you want to sort?'), allowCreate: false });
-            if (id != null) setSource({ kind: 'crate', id });
-          },
-        },
-        _('Pick another crate…'),
-      ),
     );
+    renderCrateList();
+  }
+
+  function renderCrateList() {
+    const eff = store.eff;
+    const tree = crateTree();
+    const next = nextCrate(tree);
+    clear(
+      crateHead,
+      _('Sort from a crate'),
+      h('button', { class: 'btn btn-ghost btn-xs', disabled: !next, title: _('Next crate with songs left (N)'), onclick: () => goNextCrate() }, _('Next →')),
+    );
+    const all = crateOrder(tree);
+    crateFilterInput.hidden = all.length < 8 && !crateFilter;
+
+    const node = (n, depth) => {
+      const kids = n.children.length > 0;
+      const open = kids && !collapsed.has(n.id);
+      return [
+        h(
+          'button',
+          {
+            class: `source ${n.active ? 'is-active' : ''}`,
+            style: { paddingLeft: `${8 + depth * 14}px` },
+            title: eff.pathOf(n.id),
+            onclick: () => (n.total ? setSource({ kind: 'crate', id: n.id }) : toggleCollapsed(n.id)),
+            oncontextmenu: (e) => crateNodeMenu(e, n),
+          },
+          h(
+            'span',
+            { class: 'source-label' },
+            h(
+              'span',
+              {
+                class: `source-chev ${kids ? '' : 'is-leaf'}`,
+                onclick: (e) => {
+                  if (!kids) return;
+                  e.stopPropagation();
+                  toggleCollapsed(n.id);
+                },
+              },
+              kids ? h('span', { class: `chev ${open ? 'is-open' : ''}` }) : null,
+            ),
+            eff.crates.get(n.id).name,
+          ),
+          leftCount(n.leftIds.size, n.total),
+        ),
+        open ? level(n.children, n.id, depth + 1) : null,
+      ];
+    };
+    // Crates with songs left first; finished ones fold into one "N done" row per level.
+    const level = (nodes, parentKey, depth) => {
+      const done = nodes.filter((n) => !n.leftIds.size && !n.hasActive);
+      const out = nodes.filter((n) => !done.includes(n)).map((n) => node(n, depth));
+      if (done.length) {
+        const open = openDone.has(parentKey);
+        out.push(
+          h(
+            'button',
+            {
+              class: 'source source-done',
+              style: { paddingLeft: `${8 + depth * 14}px` },
+              onclick: () => {
+                if (open) openDone.delete(parentKey);
+                else openDone.add(parentKey);
+                renderCrateList();
+              },
+            },
+            h('span', { class: 'source-label' }, h('span', { class: 'source-chev' }, h('span', { class: `chev ${open ? 'is-open' : ''}` })), _n(done.length, '{n} crate done', '{n} crates done')),
+          ),
+          open ? done.map((n) => node(n, depth)) : null,
+        );
+      }
+      return out;
+    };
+
+    let body;
+    if (crateFilter.trim()) {
+      const words = norm(crateFilter).split(' ').filter(Boolean);
+      const hits = all.filter((n) => words.every((w) => norm(eff.pathOf(n.id)).includes(w)));
+      body = hits.length
+        ? hits.map((n) => sourceItem({ kind: 'crate', id: n.id }, eff.pathOf(n.id)))
+        : h('div', { class: 'muted small source-empty' }, _('No matching crate'));
+    } else {
+      body = level(tree, 'root', 0);
+    }
+    // A sorted crate picked with "Pick another crate…" is listed on its own.
+    const other = source.kind === 'crate' && !store.rules.skip.has(source.id) && eff.crates.has(source.id) ? sourceItem(source, eff.pathOf(source.id)) : null;
+    clear(crateListEl, body, other);
   }
 
   function setSource(src) {
     source = src;
     prefs.set('inbox.source', source);
+    if (src.kind === 'crate' && store.eff.crates.has(src.id)) {
+      // Show the new source: open the crates it sits in (you can fold them again afterwards).
+      for (let p = store.eff.crates.get(src.id).parent; store.eff.crates.has(p); p = store.eff.crates.get(p).parent) collapsed.delete(p);
+      prefs.set('inbox.collapsed', [...collapsed]);
+    }
     selectedId = null;
     if (src.kind === 'crate' && sort === 'added') sort = 'order';
     if (src.kind !== 'crate' && sort === 'order') sort = 'added';
     sortSelect.value = sort;
     renderAll();
     vlist.el.scrollTop = 0;
+    requestAnimationFrame(() => sourcesEl.querySelector('.source.is-active')?.scrollIntoView({ block: 'nearest' }));
   }
 
   function renderList() {
@@ -254,7 +457,9 @@ export function createInboxView({ navigate } = {}) {
     if (source.kind === 'crate' && !eff.crates.has(source.id)) source = { kind: 'uncategorized' };
     const all = sourceList();
     const doneCount = all.filter(isDone).length;
-    items = sorted(all).filter((t) => trackMatches(t, filter) && (!hideDone || !isDone(t) || t.id === selectedId));
+    // The selected song stays listed until you move on, so it does not vanish right after you sort it.
+    const shown = (t) => show === 'all' || t.id === selectedId || (show === 'done') === isDone(t);
+    items = sorted(all).filter((t) => trackMatches(t, filter) && shown(t));
     if (selectedId == null || !items.some((t) => t.id === selectedId)) selectedId = items.find((t) => !isDone(t))?.id ?? items[0]?.id ?? null;
 
     const title =
@@ -269,7 +474,43 @@ export function createInboxView({ navigate } = {}) {
     progress.firstChild.style.width = all.length ? `${(doneCount / all.length) * 100}%` : '0%';
     progressText.textContent = _('Sorted {done} / {total}', { done: doneCount, total: all.length });
     moveOutRow.hidden = source.kind !== 'crate';
-    vlist.setItems(items, h('div', { class: 'empty' }, filter ? _('No songs match the filter') : _('No songs left here 🎉')));
+    moveOutBox.checked = moveOutOn();
+
+    const finished = doneCount === all.length;
+    const hasNext = !!nextCrate();
+    nextBtn.hidden = !hasNext || (source.kind !== 'crate' && !finished);
+    nextBtn.className = `btn btn-sm ${finished ? 'btn-primary' : ''}`;
+    const stale = staleInSource();
+    cleanOutBtn.hidden = !stale.length;
+    cleanOutBtn.textContent = _n(stale.length, 'Take {n} sorted song out of this crate', 'Take {n} sorted songs out of this crate');
+    cleanOutBtn.title = _('These songs are already in a sorted crate but still sit in this unsorted one. Removes them from this crate only (added to the plan).');
+
+    const empty = filter
+      ? h('div', { class: 'empty' }, _('No songs match the filter'))
+      : show === 'done' && all.length
+        ? h('div', { class: 'empty' }, _('Nothing sorted here yet'))
+        : h('div', { class: 'empty' }, h('p', {}, _('No songs left here 🎉')), hasNext ? h('button', { class: 'btn btn-primary', onclick: () => goNextCrate() }, _('Next crate →')) : null);
+    vlist.setItems(items, empty);
+  }
+
+  /** Songs of an unsorted source crate that are already sorted elsewhere but still sit in it. */
+  function staleInSource() {
+    return source.kind === 'crate' ? staleIn(source.id) : [];
+  }
+  function staleIn(crateId) {
+    const eff = store.eff;
+    if (!store.rules.skip.has(crateId)) return [];
+    return (eff.members.get(crateId) || []).filter((a) => isClassified(eff, store.rules, a));
+  }
+
+  function cleanOut(crateId = source.id) {
+    const ids = staleIn(crateId);
+    if (!ids.length) return;
+    const crate = store.eff.pathOf(crateId);
+    store.commit(
+      _n(ids.length, 'Took {n} sorted song out of {crate}', 'Took {n} sorted songs out of {crate}', { crate }),
+      ids.map((a) => store.opRemove(crateId, a)),
+    );
   }
 
   function renderRow(t) {
@@ -278,8 +519,9 @@ export function createInboxView({ navigate } = {}) {
     return h(
       'div',
       {
-        class: `trow ${t.id === selectedId ? 'is-selected' : ''} ${done ? 'is-done' : ''}`,
+        class: `trow trow-inbox ${t.id === selectedId ? 'is-selected' : ''} ${done ? 'is-done' : ''}`,
         onclick: () => select(t.id),
+        oncontextmenu: (e) => songMenu(e, t),
         ondblclick: () => player.play(t),
       },
       h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : done ? '✓' : ''),
@@ -291,6 +533,7 @@ export function createInboxView({ navigate } = {}) {
       ),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
       h('span', {}, t.key || '–'),
+      h('span', { class: 'ellipsis' }, qualityBadge(store.trackQuality(t), { compact: true })),
       h('span', { class: 'ellipsis muted' }, t.genre || ''),
       h('span', { class: 'num' }, n ? h('span', { class: 'pill' }, n) : h('span', { class: 'muted' }, '0')),
     );
@@ -442,24 +685,89 @@ export function createInboxView({ navigate } = {}) {
     renderDetail();
   }
 
+  // ---------- right-click menus ----------
+  function songMenu(e, t) {
+    if (t.id !== selectedId) select(t.id, { scroll: false });
+    const eff = store.eff;
+    const crates = eff.cratesOf.get(t.id) || [];
+    const name = t.title || t.fileName;
+    contextMenu(e, [
+      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(t) },
+      { label: _('Play from the start'), hint: 'Q', action: () => player.play(t, { at: 0 }) },
+      'sep',
+      {
+        label: _('Add to a crate…'),
+        hint: '/',
+        action: async () => {
+          const id = await pickCrateDialog({ title: _('Add "{track}" to…', { track: name }), exclude: new Set(crates) });
+          if (id != null) toggleCrate(id, { forceAdd: true });
+        },
+      },
+      ...crates.slice(0, 6).map((c) => ({ label: _('Remove from {crate}', { crate: eff.pathOf(c) }), action: () => toggleCrate(c) })),
+      'sep',
+      { label: _('Reject'), hint: 'X', danger: true, action: () => rejectSelected() },
+      { label: _('Remove from the library, keep the file'), hint: '⇧X', action: () => rejectSelected({ keepFile: true }) },
+      'sep',
+      { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(eff, t)) },
+    ]);
+  }
+
+  function crateNodeMenu(e, n) {
+    const stale = staleIn(n.id);
+    contextMenu(e, [
+      n.total ? { label: _('Sort this crate'), action: () => setSource({ kind: 'crate', id: n.id }) } : null,
+      stale.length ? { label: _n(stale.length, 'Take {n} sorted song out of this crate', 'Take {n} sorted songs out of this crate'), action: () => cleanOut(n.id) } : null,
+      n.children.length ? { label: collapsed.has(n.id) ? _('Expand') : _('Collapse'), action: () => toggleCollapsed(n.id) } : null,
+      'sep',
+      navigate
+        ? {
+            label: _('Open in Crates'),
+            action: () => {
+              prefs.set('tree.selected', n.id);
+              navigate('structure');
+            },
+          }
+        : null,
+    ]);
+  }
+
   // ---------- actions ----------
   function toggleCrate(crateId, { forceAdd = false } = {}) {
     const t = selected();
     if (!t) return;
     const eff = store.eff;
     const name = t.title || t.fileName;
+    const crate = eff.pathOf(crateId);
     const inIt = (eff.members.get(crateId) || []).includes(t.id);
     if (inIt && !forceAdd) {
-      store.commit(_('"{name}" removed from {crate}', { name, crate: eff.pathOf(crateId) }), [store.opRemove(crateId, t.id)]);
+      const label = _('"{name}" removed from {crate}', { name, crate });
+      if (addedInPlan(eff, t.id).includes(crateId)) {
+        // Added earlier in this plan: take that back instead of staging an add and a remove.
+        const reverted = store.revertAdd(crateId, t.id);
+        if (reverted.length) toast(label, { action: () => store.commit(_('"{name}" → {crate}', { name, crate }), reverted, { silent: true }) });
+        return;
+      }
+      store.commit(label, [store.opRemove(crateId, t.id)]);
       return;
     }
     if (inIt) return;
-    const ops = [store.opAdd(crateId, t.id)];
-    const leaveSource =
-      moveOut && source.kind === 'crate' && source.id !== crateId && (eff.members.get(source.id) || []).includes(t.id);
+    const leftBefore = source.kind === 'crate' ? leftIn(source) : 0;
+    const add = store.opAdd(crateId, t.id);
+    if (source.kind === 'crate') add.source = source.id; // where the song was sorted from (for the plan summary)
+    const ops = [add];
+    const leaveSource = moveOutOn() && source.kind === 'crate' && source.id !== crateId && (eff.members.get(source.id) || []).includes(t.id);
     if (leaveSource) ops.push(store.opRemove(source.id, t.id));
-    const change = store.commit(`${_('"{name}" → {crate}', { name, crate: eff.pathOf(crateId) })}${leaveSource ? _(' (removed from the source)') : ''}`, ops);
+    const change = store.commit(`${_('"{name}" → {crate}', { name, crate })}${leaveSource ? _(' (removed from the source)') : ''}`, ops);
     if (change && autoAdvance) advance();
+    if (change) celebrate(leftBefore);
+  }
+
+  // When the last song of a crate gets sorted, offer the next crate.
+  function celebrate(leftBefore) {
+    if (source.kind !== 'crate' || !leftBefore || leftIn(source)) return;
+    const next = nextCrate();
+    const crate = store.eff.pathOf(source.id);
+    toast(_('All of {crate} is sorted 🎉', { crate }), next ? { action: () => goNextCrate(), actionLabel: _('Next: {crate}', { crate: store.eff.crates.get(next.id).name }), timeout: 10000 } : {});
   }
 
   function advance() {
@@ -469,17 +777,22 @@ export function createInboxView({ navigate } = {}) {
   }
 
   // Reject: staged in the plan (remove from Serato + move the file to the Trash when the plan is applied).
-  function rejectSelected() {
+  // keepFile (⇧X): only remove it from the library, e.g. samples and demo tracks that belong to other apps.
+  function rejectSelected({ keepFile = false } = {}) {
     const t = selected();
     if (!t) return;
     const idx = items.findIndex((x) => x.id === t.id);
     const next = items.slice(idx + 1).find((x) => !isDone(x)) || items[idx + 1] || items[idx - 1];
     const wasPlaying = player.playing && player.current?.key === `t${t.id}`;
-    if (!store.commit(_('Reject: {track}', { track: t.title || t.fileName }), [store.opReject(t.id)])) return;
+    const leftBefore = source.kind === 'crate' ? leftIn(source) : 0;
+    const name = t.title || t.fileName;
+    const ops = keepFile ? [store.opRemoveTrack(t.id, '')] : [store.opReject(t.id)];
+    if (!store.commit(keepFile ? _('Remove from the Serato library (file kept): {track}', { track: name }) : _('Reject: {track}', { track: name }), ops)) return;
     if (next) {
       select(next.id);
       if (wasPlaying) player.play(next);
     }
+    celebrate(leftBefore);
   }
 
   function move(delta) {
@@ -537,10 +850,16 @@ export function createInboxView({ navigate } = {}) {
         case '/':
           picker.focus();
           return true;
+        case 'n':
+          goNextCrate();
+          return true;
         case 'x':
         case 'Delete':
         case 'Backspace':
           rejectSelected();
+          return true;
+        case 'X':
+          rejectSelected({ keepFile: true });
           return true;
         default:
           return false;
