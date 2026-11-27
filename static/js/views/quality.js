@@ -3,6 +3,7 @@
 import { trackMatches } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
+import { noteMark, noteMenuItem } from '../notes.js';
 import { showSpectrum } from '../spectrogram.js';
 import { store } from '../store.js';
 import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList } from '../ui.js';
@@ -121,8 +122,9 @@ export function createQualityView({ navigate } = {}) {
     const pending = s?.pending ?? null;
     const checked = s?.checked ?? 0;
     let eta = '';
-    if (running && s.done > 3 && s.startedAt) {
-      const left = ((Date.now() - s.startedAt) / s.done) * (s.total - s.done);
+    const doneHere = s?.done - (s?.startDone ?? 0); // files finished since this page started watching
+    if (running && doneHere > 3 && s.startedAt) {
+      const left = ((Date.now() - s.startedAt) / doneHere) * (s.total - s.done);
       eta = left > 90000 ? _('about {n} min left', { n: Math.round(left / 60000) }) : _('less than 2 min left');
     }
     const speedSelect = h(
@@ -241,6 +243,7 @@ export function createQualityView({ navigate } = {}) {
         h(
           'div',
           { class: 'trow-title', title: r.path },
+          noteMark(t ? { track: t } : { path: r.path }),
           t ? t.title || t.fileName : r.path.slice(r.path.lastIndexOf('/') + 1),
           r.genuine ? h('span', { class: 'tag tag-ok' }, _('Marked fine')) : null,
           rejected ? h('span', { class: 'tag tag-danger' }, _('Rejected')) : removed ? h('span', { class: 'tag tag-danger' }, _('Removed (in the plan)')) : null,
@@ -278,7 +281,17 @@ export function createQualityView({ navigate } = {}) {
 
   // ---------- actions ----------
   function setFine(r, on) {
+    // Marking a file fine moves on to the next one (and keeps playing), like working down a list in Sort.
+    // With "Show the ones marked fine" off the row leaves the list, so the next row is picked before that.
+    const i = items.findIndex((x) => x.key === r.key);
+    const next = on && r.key === selectedKey ? (items[i + 1] ?? (showGenuine ? null : items[i - 1])) : null;
+    const wasPlaying = next && player.playing && player.isCurrent(player.playId(playable(r)));
+    if (next) selectedKey = next.key;
     store.setGenuine(r.path, on);
+    if (next) {
+      select(next.key, { scroll: true });
+      if (wasPlaying) player.play(playable(next));
+    }
     toast(on ? _('Marked as fine: {track}', { track: titleOf(r) }) : _('Suspect again: {track}', { track: titleOf(r) }));
   }
 
@@ -298,6 +311,7 @@ export function createQualityView({ navigate } = {}) {
       { label: player.isCurrent(player.playId(playable(r))) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(playable(r)) },
       { label: _('Spectrum'), hint: 'Enter', action: () => openSpectrum(r) },
       { label: _('Show in Finder'), action: () => revealInFinder(r.path) },
+      r.track ? noteMenuItem({ track: r.track }) : noteMenuItem({ path: r.path }),
       'sep',
       r.genuine ? { label: _('Mark as suspect again'), action: () => setFine(r, false) } : { label: _('Sounds fine (not a transcode)'), hint: 'F', action: () => setFine(r, true) },
       'sep',

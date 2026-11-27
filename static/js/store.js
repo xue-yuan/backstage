@@ -1,5 +1,5 @@
 // App state: snapshot (base) + staged plan. Every edit is a "change" holding ops.
-import { APPLY_SUPPORTED, applyPlan, buildBase, buildProfiles, classificationRules, dirOf, effectivePath, pathKey } from './model.js';
+import { APPLY_SUPPORTED, applyPlan, baseName, buildBase, buildProfiles, classificationRules, dirOf, effectivePath, pathKey } from './model.js';
 import { describeQuality, suspicionOf } from './quality.js';
 import { prefs, toast } from './ui.js';
 import { _, _n } from './i18n.js';
@@ -28,6 +28,8 @@ export const api = {
   spectrum: (items = false) => request('GET', `/api/spectrum${items ? '?items=1' : ''}`),
   spectrumAction: (body) => request('POST', '/api/spectrum', body),
   screen: () => request('GET', '/api/screen'),
+  notes: () => request('GET', '/api/notes'),
+  saveNotes: (notes) => request('PUT', '/api/notes', { notes }),
   saveScreen: (screen) => request('PUT', '/api/screen', screen),
   rules: () => request('GET', '/api/rules'),
   saveRules: (rules) => request('PUT', '/api/rules', rules),
@@ -56,6 +58,8 @@ class Store {
     this.spectrumProgress = null; // { available, running, done, total }
     this.screen = { reject: new Set(), keep: new Set() }; // marks for files not in Serato (saved on the server)
     this.lastTrashed = []; // paths moved to the Trash in the last batch (for one-click restore)
+    this.notes = []; // [{ id, text, song: { id?, path, title, artist } | null, created, updated }] newest first (notes.json)
+    this.notesError = null; // set when notes.json could not be read: saving is then refused, so nothing is lost
     this.ruleOverrides = {}; // crateId -> 'count' | 'skip' (saved on the server in rules.json)
     this._screenTimer = null;
     this._saveTimer = null;
@@ -63,8 +67,16 @@ class Store {
   }
 
   async load() {
-    const [lib, plan, screen, rules] = await Promise.all([api.library(), api.plan(), api.screen(), api.rules()]);
+    const [lib, plan, screen, rules, notes] = await Promise.all([
+      api.library(),
+      api.plan(),
+      api.screen(),
+      api.rules(),
+      api.notes().catch((e) => ({ error: e.message })),
+    ]);
     this.base = buildBase(lib);
+    this.notes = Array.isArray(notes.notes) ? notes.notes : [];
+    this.notesError = notes.error || null;
     this.plan = { version: 1, changes: [], ...plan };
     this.screen = { reject: new Set(screen.reject || []), keep: new Set(screen.keep || []) };
     this.ruleOverrides = rules.overrides || {};
@@ -156,14 +168,20 @@ class Store {
   /** speed: 'saver' (1 file at a time) | 'normal' (3) | 'fast' (6). Only new or changed files are analysed. */
   async runSpectrum(speed) {
     const status = await api.spectrumAction({ action: 'start', speed });
-    this.spectrumProgress = { ...status, startedAt: Date.now() };
+    this.spectrumProgress = { ...status, startedAt: Date.now(), startDone: status.done };
     this.notify();
     this.followSpectrum();
   }
   async stopSpectrum() {
     this.spectrumProgress = { ...this.spectrumProgress, stopping: true };
     this.notify();
-    await api.spectrumAction({ action: 'stop' });
+    try {
+      await api.spectrumAction({ action: 'stop' });
+    } catch (e) {
+      this.spectrumProgress = { ...this.spectrumProgress, stopping: false };
+      this.notify();
+      toast(_('Could not stop the check: {error}', { error: e.message }), { tone: 'danger' });
+    }
   }
   async followSpectrum() {
     if (this._following) return;
@@ -190,7 +208,12 @@ class Store {
   }
   setSpectrum(status) {
     const { items, ...rest } = status;
-    this.spectrumProgress = { ...rest, startedAt: rest.running ? (this.spectrumProgress?.startedAt ?? Date.now()) : null };
+    // startedAt / startDone: when this page started watching the run and how far it was then, so the
+    // time left is right even when the page opens in the middle of a run.
+    const prev = this.spectrumProgress?.startedAt ? this.spectrumProgress : null;
+    this.spectrumProgress = rest.running
+      ? { ...rest, startedAt: prev?.startedAt ?? Date.now(), startDone: prev ? (prev.startDone ?? 0) : rest.done }
+      : { ...rest, startedAt: null, startDone: 0 };
     if (items) this.spectrum = new Map(Object.entries(items).map(([path, v]) => [pathKey(path), [...v, path]])); // [cutoff, kind, path]
   }
 
@@ -214,6 +237,69 @@ class Store {
     this._suspects = out;
     this._suspectsFor = this.version;
     return out;
+  }
+
+  // ---- notes about songs (Notes tab). Saved in notes.json on the server; never written to Serato ----
+  /** What a note keeps about its song: the Serato id and the file, plus title / artist to show if both go away. */
+  songRef(track, path) {
+    if (track) return { id: track.id, path: effectivePath(this.eff, track), title: track.title || track.fileName, artist: track.artist || '' };
+    return { path, title: baseName(path).replace(/\.[^.]+$/, ''), artist: '' };
+  }
+  /** The library song a note points to now: by Serato id, else by file (a file noted before it was imported). */
+  noteTrack(song) {
+    if (!song) return null;
+    if (song.id != null && this.base.tracks.has(song.id)) return this.base.tracks.get(song.id);
+    return song.path ? (this.notesIndex().byPath.get(pathKey(song.path)) ?? null) : null;
+  }
+  /** Notes about this library song, newest first. */
+  notesFor(track) {
+    return track ? (this.notesIndex().byTrack.get(track.id) ?? []) : [];
+  }
+  notesForPath(path) {
+    const track = this.notesIndex().byPath.get(pathKey(path));
+    return track ? this.notesFor(track) : this.notes.filter((n) => !n.song?.id && n.song?.path && pathKey(n.song.path) === pathKey(path));
+  }
+  notesIndex() {
+    if (this._notesIndexFor === this.version) return this._notesIndex;
+    const byPath = new Map([...this.base.tracks.values()].map((t) => [pathKey(effectivePath(this.eff, t)), t]));
+    this._notesIndex = { byPath, byTrack: new Map() };
+    this._notesIndexFor = this.version;
+    for (const n of this.notes) {
+      const t = this.noteTrack(n.song);
+      if (!t) continue;
+      if (!this._notesIndex.byTrack.has(t.id)) this._notesIndex.byTrack.set(t.id, []);
+      this._notesIndex.byTrack.get(t.id).push(n);
+    }
+    return this._notesIndex;
+  }
+  addNote(text, song = null) {
+    const now = Date.now();
+    const note = { id: `n${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`, text, song, created: now, updated: now };
+    this.setNotes([note, ...this.notes]);
+    return note;
+  }
+  updateNote(id, patch) {
+    this.setNotes(this.notes.map((n) => (n.id === id ? { ...n, ...patch, updated: Date.now() } : n)));
+  }
+  deleteNote(id) {
+    const at = this.notes.findIndex((n) => n.id === id);
+    if (at < 0) return;
+    const note = this.notes[at];
+    this.setNotes(this.notes.filter((n) => n.id !== id));
+    toast(_('Note deleted'), { action: () => this.setNotes([...this.notes.slice(0, at), note, ...this.notes.slice(at)]), timeout: 6000 });
+  }
+  setNotes(notes) {
+    if (this.notesError) {
+      toast(_('Notes could not be read ({error}), so they are not saved. Reload the page to try again.', { error: this.notesError }), { tone: 'danger', timeout: 8000 });
+      return;
+    }
+    this.notes = notes;
+    this.notify();
+    // Saved right away (no debounce), one request after another so the last state always wins.
+    const snapshot = notes;
+    this._notesSave = (this._notesSave || Promise.resolve()).then(() =>
+      api.saveNotes(snapshot).catch((e) => toast(_('Could not save the notes: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 })),
+    );
   }
 
   // ---- files the user checked and found fine: no "Suspect" mark (saved in this browser / the app) ----

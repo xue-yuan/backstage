@@ -20,8 +20,9 @@ Data lives in `~/Library/Application Support/Backstage/`:
 - the Serato snapshot
 - the plan
 - screening marks
+- notes (`notes.json`; `notes.prev.json` keeps the version before the last save)
 - unsorted-crate rules
-- the audio-format cache
+- the audio-format cache and the transcode-check cache (`spectrum.json`)
 - the trash log
 - `app.log` and `server.log`
 
@@ -48,12 +49,15 @@ Strings are written in English in the code and wrapped in `_()` / `_n()` (front 
 
 | View | What it does |
 |---|---|
-| Overview | The start page: songs left to sort, files left to screen per folder, staged changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality). Every card opens the view that handles it |
+| Overview | The start page: songs left to sort, files left to screen per folder, staged changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality, suspected transcodes). Every card opens the view that handles it |
 | Folders | Scans `~/Music/DJ` and labels every song: sorted, unsorted, not imported, copy, rejected or missing. Shows which folders are done, real audio format and quality, and lets you screen files and open folders in Finder |
 | Sort | Go through unsorted songs (a crate under Inbox, a disk folder, songs in no crate, recently added) and sort them. Keys 1–9 add to pinned crates, ⇧+number adds a suggested crate, `/` searches or creates a crate, `X` rejects |
 | Cleanup | Missing files (relocate, or merge into the record that already points at the moved file), duplicates (keep one, merge crates), empty crates |
+| Quality | Runs the transcode check by hand and lists the suspect files: listen, look at the spectrum, mark "Sounds fine", reject (see Audio quality) |
 | Crates | Tree editing (drag to move, auto-scrolls near the edges), rename, merge, delete, multi-select songs to add or move, mark crates as unsorted |
 | Plan | Everything staged so far, undo, export, and Apply to Serato |
+| Notes | Free notes about songs and songs to remember, optionally linked to a library song, with #tags, search and Markdown export (see Notes) |
+| Guide | How everything works and the suggested workflow, in the interface language |
 
 Press `?` for all keyboard shortcuts.
 
@@ -89,7 +93,7 @@ Marks are saved in `screen.json`.
 What happens to rejected songs depends on whether they are in Serato:
 
 - **Files Serato does not use**: they can be moved to the macOS Trash after a confirmation list. A fresh Serato snapshot is taken first, and any file Serato uses is refused. Each move is logged in `trash_log.jsonl` with its original path and size, so the app can restore it until the Trash is emptied. Finder's "Put Back" may not know about these items.
-- **Songs that are in Serato**: they are staged in the plan instead, to be removed when the plan is applied. This is not supported yet; see Limitations.
+- **Songs that are in Serato**: they are staged in the plan instead. Applying the plan removes them from Serato and then moves their files to the Trash, with the same refusal check and log as above. `⇧X` in Sort removes a song from the library but keeps the file (samples, demo tracks).
 
 ### Audio quality
 
@@ -98,8 +102,21 @@ Serato only stores the file extension, which cannot tell AAC from lossless ALAC,
 - **Labels**: `AAC 256`, `MP3 320`, `WAV 24-bit`, `ALAC`. Lossless formats are shown in green.
 - **Low quality** (shown in red): MP3 below 256k, AAC below 192k, or a sample rate below 44.1 kHz. AAC 256 is roughly MP3 320 and is not flagged.
 - **Unreadable**: files macOS cannot open are flagged separately.
-- **Suspect** (orange, optional, needs `brew install ffmpeg`): transcodes such as an MP3 320 made from a 128k file, or a WAV made from an MP3. Encoders cut the highest frequencies (about 16.5 kHz at 128k, 18.5 kHz at 192k, 20 kHz at 320k; lossless reaches 22 kHz), and converting cannot bring them back. `serato_crates/spectrum.py` decodes 3 × 10 s of each file with ffmpeg, measures 250 Hz bands from 14 to 22 kHz against an 8–12 kHz reference, and flags a sharp "wall" well below what the format can hold. It never runs on its own (to save power): the Quality tab shows how many new or changed files are unchecked and runs the check when asked, at background priority (macOS `taskpolicy -c background`; 1, 3 or 6 files at a time) with a Stop button. Levels are cached in `spectrum.json`, so each run only checks new or changed files. The Quality tab lists the suspects (listen, Spectrum, mark "Sounds fine", reject); right-click → Spectrum anywhere shows ffmpeg's picture of the file to check by eye. The mark is a guess: songs mastered without much high end can be flagged too, which is what "Sounds fine" is for.
+- **Suspect** (orange, optional, needs `brew install ffmpeg`): transcodes such as an MP3 320 made from a 128k file, or a WAV made from an MP3. Encoders cut the highest frequencies (about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k; lossless reaches 22 kHz), and converting cannot bring them back. `serato_crates/spectrum.py` decodes 3 × 10 s of each file with ffmpeg, measures 250 Hz bands from 14 to 22 kHz against an 8–12 kHz reference, and flags a sharp "wall" well below what the format can hold: at 19 kHz or lower for MP3 320 / AAC 256, below 17.3 kHz for 192k, at 20.6 kHz or lower for lossless. Levels are measured in floating point (ffmpeg `astats`), because `volumedetect` works in 16 bits and cannot see below about −90 dB, which hid transcodes in quiet songs. It never runs on its own (to save power): the Quality tab shows how many new or changed files are unchecked and runs the check when asked, at background priority (macOS `taskpolicy -c background`; 1, 3 or 6 files at a time) with a Stop button. Levels are cached in `spectrum.json`, so each run only checks new or changed files; results from the old 16-bit meter are kept where the verdict cannot change and the rest show up as unchecked again. The Quality tab lists the suspects (listen, Spectrum, mark "Sounds fine", reject; keys `↑` `↓`, space, `Enter` for the spectrum, `F` for "Sounds fine", which moves on to the next file, and `X` to reject); right-click → Spectrum anywhere shows ffmpeg's picture of the file to check by eye. The mark is a guess: songs mastered without much high end can be flagged too, which is what "Sounds fine" is for.
 - **Duplicates**: the same information is used to pick which copy to keep.
+
+### Notes
+
+The Notes tab is a place for thoughts about songs ("good opener", "mix out at the second drop") and for songs to remember (heard in a set, to buy). Notes are kept in `notes.json` only; they are never written to Serato.
+
+- **Writing**: type in the box at the top and press ⌘↵. Press `N` to jump there, `/` to search.
+- **Linking a song**: "Link a song…" searches the library (empty search shows the playing song and the newest songs), or one click links the song that is playing. A note keeps the song's Serato id and file path, plus title and artist to show if the song later leaves the library.
+- **From other views**: right-click a song in Sort, Crates, Folders or Quality → "Add a note…", or press `M` in Sort. Sort shows the selected song's newest notes in its detail panel, and songs with notes show 📝 before their title in those lists (hover for the newest notes, click to add one).
+- **Files not imported yet**: a note about a file in Folders is linked by path, so it attaches to the song once the file is imported in Serato.
+- **Songs to find**: an unlinked note such as "Artist - Title" can be linked later; the search starts with the note's first line.
+- **#tags** (`#opener`, `#開場`) become filter chips above the list. Delete has an Undo, and Export downloads every note as Markdown.
+
+If `notes.json` cannot be read, the tab refuses to save rather than overwrite it.
 
 ## Apply to Serato
 
@@ -124,8 +141,9 @@ Supported actions:
 - create, rename, move, delete and merge crates
 - add songs to crates and remove them from crates
 - point a song at a new file location
+- remove songs from the library, the way Serato's own ⌘⌫ does: their crate memberships go, play history is kept. For rejected songs, the files go to the Trash only after the database write has been committed.
 
-Removing songs from Serato is not supported yet. `serato_crates/apply.py` documents the Serato 4 database layout.
+`serato_crates/apply.py` documents the Serato 4 database layout.
 
 ## Safety
 
@@ -136,7 +154,6 @@ Removing songs from Serato is not supported yet. `serato_crates/apply.py` docume
 
 ## Limitations
 
-- Apply to Serato cannot remove songs yet. Rejected Serato songs, and the removal half of merging missing files or duplicates, stay in the plan.
 - The Folders report only scans `~/Music/DJ`. Finding missing files searches all of `~/Music`. `~/Downloads` is not scanned, because the Mac app would need an extra macOS permission for it.
 - Importing new songs has to happen in Serato (drag them in). Serato fills search fields through internal SQL functions that other programs cannot call.
 - In a browser, Chrome cannot play AIFF. Safari and the Mac app can.

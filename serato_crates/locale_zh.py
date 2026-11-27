@@ -55,6 +55,7 @@ ZH = {
     "Not found in the Trash (it may have been emptied)": "垃圾桶裡找不到（可能已經清空）",
     "Another program is using the Serato database: {files}": "有程式正在使用 Serato 的資料庫：{files}",
     "invalid screen data": "screen 格式錯誤",
+    "invalid notes data": "筆記格式錯誤",
     "invalid rules data": "rules 格式錯誤",
     "Already applying": "已經在套用中",
     "Serato DJ is still open. Quit it before applying": "Serato DJ 還開著，請先關掉再套用",

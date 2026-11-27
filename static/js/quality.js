@@ -88,9 +88,12 @@ export function qualityBadge(q, { compact = false } = {}) {
 // spec: [cutoff kHz, kind] from /api/spectrum (serato_crates/spectrum.py). Only a "wall" (an encoder's
 // low-pass) counts; a gentle slope is how the song sounds and gets no verdict.
 
-/** The bit rate whose encoder usually cuts the sound at this frequency. */
+/**
+ * The bit rate whose encoder usually cuts the sound at this frequency. Cut-offs come in 0.25 kHz steps;
+ * a 192k source measures 18.75 or 19.0 (19.0 when the song has a lot of high end), real 320 20.0-20.25.
+ */
 export function sourceKbps(khz) {
-  return khz < 17.3 ? 128 : khz < 18 ? 160 : khz < 19 ? 192 : khz < 19.6 ? 256 : 320;
+  return khz < 17.3 ? 128 : khz < 18 ? 160 : khz <= 19 ? 192 : khz < 19.6 ? 256 : 320;
 }
 
 /** { cutoff, source, lossless } when the sound stops well below what the format can hold; else null. */
@@ -101,7 +104,7 @@ export function suspicionOf(q, spec) {
   const source = sourceKbps(cutoff);
   if (q.lossless) return cutoff <= 20.6 ? { cutoff, source, lossless: true } : null;
   const kbps = q.kbps || 0;
-  if ((kbps >= 250 && cutoff < 19) || (kbps >= 180 && kbps < 250 && cutoff < 17.3)) return { cutoff, source, lossless: false };
+  if ((kbps >= 250 && cutoff <= 19) || (kbps >= 180 && kbps < 250 && cutoff < 17.3)) return { cutoff, source, lossless: false };
   return null;
 }
 

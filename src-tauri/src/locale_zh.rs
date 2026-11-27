@@ -36,6 +36,7 @@ pub const ZH: &[(&str, &str)] = &[
     ("Quality", "音質檢查"),
     ("Crates", "Crate 結構"),
     ("Plan", "變更計畫"),
+    ("Notes", "筆記"),
     ("Guide", "使用說明"),
     ("Enter Full Screen", "進入全螢幕"),
     ("Window", "視窗"),

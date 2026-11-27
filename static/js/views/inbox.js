@@ -3,6 +3,7 @@ import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
 import { addedInPlan, baseName, effectivePath, isClassified, liveTracks, norm, pathKey, suggestCrates, trackMatches } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
+import { noteDialog, noteMark, noteMenuItem, noteText, when } from '../notes.js';
 import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { store } from '../store.js';
 import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList } from '../ui.js';
@@ -529,7 +530,7 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'trow-main' },
-        h('div', { class: 'trow-title' }, t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
+        h('div', { class: 'trow-title' }, noteMark({ track: t }), t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
         h('div', { class: 'trow-sub' }, t.artist || '—'),
       ),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
@@ -589,6 +590,7 @@ export function createInboxView({ navigate } = {}) {
           : null,
       ),
       !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is not on disk. You can relocate it in Cleanup.')) : null,
+      detailNotes(t),
     );
 
     const crates = eff.cratesOf.get(t.id) || [];
@@ -693,6 +695,18 @@ export function createInboxView({ navigate } = {}) {
     renderDetail();
   }
 
+  // Notes about the song (Notes tab), newest first; M writes a new one.
+  function detailNotes(t) {
+    const notes = store.notesFor(t);
+    return h(
+      'div',
+      { class: 'detail-notes' },
+      notes.slice(0, 3).map((n) => h('div', { class: 'note-mini', ondblclick: () => noteDialog({ track: t }) }, noteText(n.text), h('div', { class: 'muted small' }, when(n.created)))),
+      notes.length > 3 ? h('a', { class: 'small', href: '#notes' }, _n(notes.length - 3, '{n} more in Notes →', '{n} more in Notes →')) : null,
+      h('button', { class: 'btn btn-ghost btn-xs detail-note-add', title: 'M', onclick: () => noteDialog({ track: t }) }, notes.length ? _('+ Add a note') : _('+ Note about this song')),
+    );
+  }
+
   // ---------- right-click menus ----------
   const openSpectrum = (t) => showSpectrum({ path: effectivePath(store.eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) });
 
@@ -718,6 +732,7 @@ export function createInboxView({ navigate } = {}) {
       { label: _('Reject'), hint: 'X', danger: true, action: () => rejectSelected() },
       { label: _('Remove from the library, keep the file'), hint: '⇧X', action: () => rejectSelected({ keepFile: true }) },
       'sep',
+      noteMenuItem({ track: t, hint: 'M' }),
       spectrumAvailable() ? { label: _('Spectrum'), disabled: !t.exists, action: () => openSpectrum(t) } : null,
       { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(eff, t)) },
     ]);
@@ -863,6 +878,9 @@ export function createInboxView({ navigate } = {}) {
           return true;
         case 'n':
           goNextCrate();
+          return true;
+        case 'm':
+          if (t) noteDialog({ track: t });
           return true;
         case 'x':
         case 'Delete':

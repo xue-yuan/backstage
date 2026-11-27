@@ -120,6 +120,26 @@ class AppState:
         tmp.write_text(json.dumps({"reject": screen["reject"], "keep": screen["keep"]}, ensure_ascii=False))
         os.replace(tmp, self.screen_path)
 
+    # ---- notes about songs (the Notes tab). Only Backstage keeps them; Serato is never written ----
+    @property
+    def notes_path(self) -> Path:
+        return self.data_dir / "notes.json"
+
+    def read_notes(self) -> dict:
+        if self.notes_path.exists():
+            return json.loads(self.notes_path.read_text())
+        return {"version": 1, "notes": []}
+
+    def write_notes(self, body: dict) -> None:
+        notes = body.get("notes") if isinstance(body, dict) else None
+        if not isinstance(notes, list) or not all(isinstance(n, dict) and isinstance(n.get("id"), str) and isinstance(n.get("text"), str) for n in notes):
+            raise ValueError(tr("invalid notes data"))
+        if self.notes_path.exists():
+            shutil.copy2(self.notes_path, self.data_dir / "notes.prev.json")  # the version before the last save, in case of a mistake
+        tmp = self.notes_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps({"version": 1, "notes": notes}, ensure_ascii=False, indent=1))
+        os.replace(tmp, self.notes_path)
+
     # ---- which crates count as unsorted (per-crate overrides; see classificationRules in model.js) ----
     @property
     def rules_path(self) -> Path:
@@ -443,6 +463,8 @@ def make_handler(state: AppState, port: int):
                     return self._json(state.read_plan())
                 if p == "/api/screen":
                     return self._json(state.read_screen())
+                if p == "/api/notes":
+                    return self._json(state.read_notes())
                 if p == "/api/rules":
                     return self._json(state.read_rules())
                 if p == "/api/apply/status":
@@ -533,6 +555,9 @@ def make_handler(state: AppState, port: int):
                     return self._json({"ok": True})
                 if self.path == "/api/screen":
                     state.write_screen(body)
+                    return self._json({"ok": True})
+                if self.path == "/api/notes":
+                    state.write_notes(body)
                     return self._json({"ok": True})
                 if self.path == "/api/rules":
                     state.write_rules(body)

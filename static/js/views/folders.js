@@ -6,6 +6,7 @@ import { BAR, buildReport, byName, HINT, LABEL, STATUSES } from '../folderReport
 import { dirOf, effectivePath, isClassified } from '../model.js';
 import { player } from '../player.js';
 import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
+import { noteMark, noteMenuItem } from '../notes.js';
 import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
 import { openUnsortedEditor, unsortedRoots } from '../unsorted.js';
@@ -686,6 +687,7 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'trow-title', title: f.path },
+          f.assetId != null && store.base.tracks.has(f.assetId) ? noteMark({ track: store.base.tracks.get(f.assetId) }) : noteMark({ path: f.path }),
           title,
           f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null,
           f.inSerato ? h('span', { class: 'tag tag-warn', title: inSeratoTip(f) }, _('Already in Serato')) : null,
@@ -836,6 +838,7 @@ export function createFoldersView({ navigate }) {
       'sep',
       f.status !== 'missing' ? { label: _('Show in Finder'), action: () => reveal(f.path) } : null,
       f.status !== 'missing' && spectrumAvailable() ? { label: _('Spectrum'), action: () => showSpectrum({ path: f.path, title: f.assetId != null ? store.trackLabel(f.assetId) : stripExt(f.name), quality: f.quality }) } : null,
+      f.assetId != null && store.base.tracks.has(f.assetId) ? noteMenuItem({ track: store.base.tracks.get(f.assetId) }) : noteMenuItem({ path: f.path }),
     ]);
   }
 

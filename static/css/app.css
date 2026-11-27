@@ -642,3 +642,51 @@ button.ov-card:hover { border-color: var(--muted); }
   .trow-quality > :nth-child(6) { display: none; }
 }
 .qc-done { color: var(--ok); font-weight: 600; }
+
+/* ---------- notes ---------- */
+.notes { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.notes > .panel { width: 100%; max-width: 920px; margin: 0 auto; }
+.note-compose { padding: 12px 14px; gap: 10px; flex: none; overflow: visible; }
+.note-input { resize: vertical; min-height: 64px; font: inherit; line-height: 1.5; display: block; }
+.note-compose-bar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.note-song-chip { max-width: 420px; min-width: 0; }
+.note-playing { max-width: 320px; min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.note-list-panel { flex: 1; min-height: 0; }
+.note-toolbar { padding-top: 12px; }
+.note-toolbar .segmented { flex: none; }
+.note-tags { padding: 0 16px 10px; }
+.note-tags .chip { cursor: pointer; padding-right: 10px; gap: 6px; }
+.note-tags .chip:hover { border-color: var(--accent); }
+.note-tags .chip.is-active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.note-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 16px 16px; display: flex; flex-direction: column; gap: 8px; }
+.note-card { border: 1px solid var(--border-soft); background: var(--panel-2); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; flex: none; }
+.note-card:hover { border-color: var(--border); }
+.note-card.is-editing { border-color: var(--accent); }
+.note-song { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.note-song-title { font-weight: 600; min-width: 0; }
+.note-song .tag { margin-left: 0; }
+.note-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.note-tag { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 4px; font: inherit; line-height: inherit; cursor: pointer; }
+span.note-tag { cursor: default; }
+.note-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.note-foot > .muted { margin-right: auto; }
+.note-empty { max-width: 520px; margin: 0 auto; }
+.note-empty p { margin: 0 0 8px; }
+.note-mini { background: var(--panel-2); border: 1px solid var(--border-soft); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+.modal-note { width: min(560px, calc(100vw - 32px)); }
+.note-history { max-height: 240px; overflow: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; }
+.note-history .section-label { margin-top: 0; }
+.modal-body .note-dialog-hint { margin-top: 8px; }
+.detail-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.detail-notes .note-mini { align-self: stretch; }
+.song-pick { max-height: 340px; overflow: auto; margin-top: 8px; display: flex; flex-direction: column; border: 1px solid var(--border-soft); border-radius: 8px; }
+.song-pick-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border: 0; background: transparent; text-align: left; cursor: pointer; flex: none; }
+.song-pick-row.is-selected { background: var(--sel); }
+.song-pick-main { display: flex; flex-direction: column; min-width: 0; }
+.song-pick-hint { margin-top: 8px; }
+/* 📝 before a title: inline-block so a struck-through (rejected) title does not strike it too */
+.note-mark { display: inline-block; border: 0; background: transparent; padding: 0 5px 0 0; margin: 0; font-size: 12px; line-height: 1; cursor: pointer; vertical-align: 1px; text-decoration: none; }
+.note-mark:hover { transform: scale(1.15); }
+@media (max-width: 1100px) {
+  .tab { padding: 7px 7px; }
+}

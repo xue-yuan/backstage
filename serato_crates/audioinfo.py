@@ -68,11 +68,13 @@ class AudioInfoProber:
         self.error: str | None = None
         self.stopping = False  # stop() asks a run to finish early; unfinished files stay uncached
         try:
-            stored = json.loads(cache_path.read_text())
-            if stored.get("version") == self.version:
-                self.cache = stored["files"]
-        except (OSError, ValueError, AttributeError, KeyError):
+            self.cache = self._load(json.loads(cache_path.read_text()))
+        except (OSError, ValueError, AttributeError, KeyError, TypeError):
             self.cache = {}
+
+    def _load(self, stored: dict) -> dict:
+        """The cached files from the stored JSON. Another version starts empty (subclasses may migrate it)."""
+        return stored["files"] if stored.get("version") == self.version else {}
 
     def _todo(self, paths: list[str]) -> list[tuple[str, int, int]]:
         """Files not in the cache yet, or changed since (size / mtime). Call with the lock held."""

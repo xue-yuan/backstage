@@ -17,6 +17,7 @@ function rows() {
         ['X', _('Reject this song')],
         ['⇧X', _('Remove from the library, keep the file')],
         ['N', _('Next crate with songs left')],
+        ['M', _('Write a note about this song')],
       ],
     ],
     [
@@ -43,11 +44,30 @@ function rows() {
       ],
     ],
     [
+      _('Quality'),
+      [
+        ['↑ ↓ / J K', _('Previous / next file')],
+        [_('Space'), _('Play / pause')],
+        ['Enter', _('Show the spectrum')],
+        ['F', _('Sounds fine (moves on to the next file)')],
+        ['X', _('Reject')],
+      ],
+    ],
+    [
+      _('Notes'),
+      [
+        ['N', _('Write a new note')],
+        ['/', _('Search notes')],
+        ['⌘↵', _('Save the note')],
+        ['Esc', _('Cancel editing')],
+      ],
+    ],
+    [
       _('Everywhere'),
       [
         ['⌘Z', _('Undo the last change')],
         ['⌘R', _('Reload the Serato snapshot')],
-        ['⌘1–8', _('Switch tabs')],
+        ['⌘1–9', _('Switch tabs')],
         ['?', _('Show this help')],
       ],
     ],

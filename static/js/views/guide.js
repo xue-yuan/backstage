@@ -87,7 +87,7 @@ function zhContent() {
       title: '假音質（假 320k、假無損）',
       blocks: [
         '有些檔案標的是 MP3 320 或 WAV，其實是從比較差的檔案轉出來的，例如把 128k 的 MP3 轉存成 320k。檔案變大了，聲音不會變好。',
-        '**怎麼看出來**：編碼器會把高頻切掉，位元率越低切得越多：128k 大約切在 16.5 kHz、192k 在 18.5 kHz、320k 在 20 kHz，真的無損會到 22 kHz。轉檔救不回被切掉的部分，所以標 320 卻在 16.5 kHz 以上完全沒聲音，就是 128k 轉的。',
+        '**怎麼看出來**：編碼器會把高頻切掉，位元率越低切得越多：128k 大約切在 16.5 kHz、192k 在 19 kHz、320k 在 20 kHz，真的無損會到 22 kHz。轉檔救不回被切掉的部分，所以標 320 卻在 16.5 kHz 以上完全沒聲音，就是 128k 轉的。',
         `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
         { tip: '「可疑」只是工具自動判斷的參考，不是定論。刪除或換掉檔案之前，一定要用頻譜工具看過、用耳朵聽過再決定。有些歌本來就沒什麼高頻（老錄音、lo-fi、部分爵士），也可能被標到；反過來，沒被標到也不保證是真的。下載新歌之後，記得到「音質檢查」分頁按一次檢查（它不會自己跑），有疑問就照下面的步驟手動檢查。看過覺得沒問題的，按「聽起來沒問題」就不會再標可疑。' },
         '**手動檢查的步驟**：',
@@ -131,6 +131,23 @@ function zhContent() {
         '每次套用前的備份放在 `~/Backstage Backups/Serato 資料庫/`。「不要」的歌，檔案要等套用成功後才會丟到垃圾桶。',
       ],
     },
+    {
+      id: 'notes',
+      title: _('Notes'),
+      blocks: [
+        '想到什麼就記下來：這首歌適合開場、從第二段 drop 接出去、在誰的 set 聽到想找的歌……筆記只存在 Backstage（`notes.json`），**不會寫進 Serato**。',
+        {
+          list: [
+            `**連結歌曲**：寫筆記時按${q('Link a song…')}，或一鍵連結正在播放的歌。也可以在${q('Sort')}按 M，或在歌上按右鍵 →${q('Add a note…')}。`,
+            `**還沒匯入的歌**：在${q('Folders')}對還沒匯入的檔案寫筆記，等你在 Serato 匯入之後，筆記會自動連到那首歌（用檔案位置對）。`,
+            `**想找的歌**：不用連結，直接寫「演出者 - 歌名」。之後買到、匯入了，按${q('Link a song…')}，搜尋框會自動帶入第一行，按 Enter 就連好。`,
+            '**#標籤**：在內容裡寫 #開場、#轉場、#想買，上方就會出現標籤，點一下只看那一類。',
+          ],
+        },
+        `在${q('Sort')}選到有筆記的歌，右邊會顯示最近的筆記。刪掉的筆記可以按${q('Undo')}救回來，也可以按${q('Export')}存成 Markdown 檔。`,
+        { go: 'notes' },
+      ],
+    },
     { id: 'keys', title: _('Keyboard shortcuts'), blocks: ['**右鍵選單**：在歌、crate、資料夾上按右鍵（或 control + 點一下），常用的動作都在選單裡，例如加到 crate、在 Finder 中顯示、展開底下全部。', { shortcuts: true }] },
     {
       id: 'data',
@@ -138,7 +155,7 @@ function zhContent() {
       blocks: [
         {
           list: [
-            '變更計畫、篩選標記、設定：`~/Library/Application Support/Backstage/`',
+            '變更計畫、篩選標記、筆記、設定：`~/Library/Application Support/Backstage/`',
             '套用前的備份：`~/Backstage Backups/`',
           ],
         },
@@ -227,7 +244,7 @@ function enContent() {
       title: 'Fake quality (fake 320k, fake lossless)',
       blocks: [
         'Some files say MP3 320 or WAV but were converted from something worse, for example a 128k MP3 saved again as 320k. The file gets bigger; the sound does not get better.',
-        '**How it shows**: encoders cut the highest frequencies, more at lower bit rates: about 16.5 kHz at 128k, 18.5 kHz at 192k, 20 kHz at 320k, while real lossless reaches 22 kHz. Converting cannot bring the cut part back, so an "MP3 320" with nothing above 16.5 kHz was made from a 128k file.',
+        '**How it shows**: encoders cut the highest frequencies, more at lower bit rates: about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k, while real lossless reaches 22 kHz. Converting cannot bring the cut part back, so an "MP3 320" with nothing above 16.5 kHz was made from a 128k file.',
         `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
         { tip: '"Suspect" is an automatic guess, not proof. Before you delete or replace a file, always look at its spectrum and listen to it. Songs with little high end (old or lo-fi recordings, some jazz) can be marked too, and a file without the mark is not guaranteed to be real. After downloading new songs, remember to run the check in the Quality tab (it does not run by itself), and check by hand when in doubt. Files you checked and found fine can be marked "Sounds fine" so they are no longer flagged.' },
         '**Checking by hand**:',
@@ -271,12 +288,29 @@ function enContent() {
         'Backups from before each apply are in `~/Backstage Backups/Serato 資料庫/`. Files of rejected songs go to the Trash only after the apply succeeds.',
       ],
     },
+    {
+      id: 'notes',
+      title: _('Notes'),
+      blocks: [
+        'Write down anything: a song that makes a good opener, where to mix out, a song you heard in someone\'s set and want to find. Notes are kept by Backstage only (`notes.json`) and **never written to Serato**.',
+        {
+          list: [
+            `**Linking a song**: press ${qe('Link a song…')} while writing, or link the song that is playing in one click. You can also press M in ${qe('Sort')}, or right-click a song → ${qe('Add a note…')}.`,
+            `**Songs not imported yet**: a note written about a file in ${qe('Folders')} links itself to the song once you import the file in Serato (matched by its location).`,
+            `**Songs to find**: no link needed, just write "Artist - Title". Once you have it, press ${qe('Link a song…')}: the search starts with the note's first line, so Enter links it.`,
+            '**#tags**: write #opener, #transition or #to-buy in the text; the tags appear above the list and a click shows only those notes.',
+          ],
+        },
+        `In ${qe('Sort')}, the newest notes of the selected song show on the right. A deleted note comes back with ${qe('Undo')}, and ${qe('Export')} saves all notes as a Markdown file.`,
+        { go: 'notes' },
+      ],
+    },
     { id: 'keys', title: _('Keyboard shortcuts'), blocks: ['**Right-click menus**: right-click (or control-click) a song, a crate or a folder for the common actions, such as adding to a crate, showing it in Finder or expanding everything below.', { shortcuts: true }] },
     {
       id: 'data',
       title: 'Where things are stored',
       blocks: [
-        { list: ['Plan, screening marks, settings: `~/Library/Application Support/Backstage/`', 'Backups from before applying: `~/Backstage Backups/`'] },
+        { list: ['Plan, screening marks, notes, settings: `~/Library/Application Support/Backstage/`', 'Backups from before applying: `~/Backstage Backups/`'] },
         'Backstage never edits your music files. It only moves files to the Trash when you ask it to, or when an applied plan rejects a song.',
       ],
     },
@@ -292,7 +326,7 @@ function rich(text) {
   });
 }
 
-const VIEW_LABELS = { home: 'Overview', folders: 'Folders', inbox: 'Sort', quality: 'Quality', plan: 'Plan' };
+const VIEW_LABELS = { home: 'Overview', folders: 'Folders', inbox: 'Sort', quality: 'Quality', plan: 'Plan', notes: 'Notes' };
 
 export function createGuideView({ navigate } = {}) {
   const sections = lang === 'zh' ? zhContent() : enContent();
