@@ -538,6 +538,16 @@ class Store {
         : _('Move "{crate}" to the end of {level}', { crate: this.crateLabel(crate), level });
     return { type: 'moveCrate', crate, parent, before, reorder, text };
   }
+  /** Add a file on disk to the Serato library (optionally into a crate). Serato analyses it later. */
+  opImport(path, crate = null, crateName = null) {
+    const file = baseName(path);
+    const text = crate != null ? _('Add to Serato: {file} → {crate}', { file, crate: crateName ?? this.crateLabel(crate) }) : _('Add to Serato: {file}', { file });
+    return { type: 'importTrack', id: `imp-${uid()}`, path, crate, text };
+  }
+  /** Is this file already planned to be added to Serato? */
+  planned(path) {
+    return this.eff.imports.get(pathKey(path)) ?? null;
+  }
   opDelete(crate) {
     return { type: 'deleteCrate', crate, text: _('Delete crate "{crate}"', { crate: this.crateLabel(crate) }) };
   }

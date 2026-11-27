@@ -50,7 +50,7 @@ Strings are written in English in the code and wrapped in `_()` / `_n()` (front 
 | View | What it does |
 |---|---|
 | Overview | The start page: songs left to sort, files left to screen per folder, staged changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality, suspected transcodes). Every card opens the view that handles it |
-| Folders | Scans `~/Music/DJ` and labels every song: sorted, unsorted, not imported, copy, rejected or missing. Shows which folders are done, real audio format and quality, and lets you screen files and open folders in Finder |
+| Folders | Scans `~/Music/DJ` and labels every song: sorted, unsorted, not imported, copy, rejected or missing. Shows which folders are done, real audio format and quality, lets you screen files, add songs to Serato (see Adding songs to Serato) and open folders in Finder |
 | Sort | Go through unsorted songs (a crate under Inbox, a disk folder, songs in no crate, recently added) and sort them. Keys 1–9 add to pinned crates, ⇧+number adds a suggested crate, `/` searches or creates a crate, `X` rejects |
 | Cleanup | Missing files (relocate, or merge into the record that already points at the moved file), duplicates (keep one, merge crates), empty crates |
 | Quality | Runs the transcode check by hand and lists the suspect files: listen, look at the spectrum, mark "Sounds fine", reject (see Audio quality) |
@@ -105,6 +105,14 @@ Serato only stores the file extension, which cannot tell AAC from lossless ALAC,
 - **Suspect** (orange, optional, needs `brew install ffmpeg`): transcodes such as an MP3 320 made from a 128k file, or a WAV made from an MP3. Encoders cut the highest frequencies (about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k; lossless reaches 22 kHz), and converting cannot bring them back. `serato_crates/spectrum.py` decodes 3 × 10 s of each file with ffmpeg, measures 250 Hz bands from 14 to 22 kHz against an 8–12 kHz reference, and flags a sharp "wall" well below what the format can hold: at 19 kHz or lower for MP3 320 / AAC 256, below 17.3 kHz for 192k, at 20.6 kHz or lower for lossless. Levels are measured in floating point (ffmpeg `astats`), because `volumedetect` works in 16 bits and cannot see below about −90 dB, which hid transcodes in quiet songs. It never runs on its own (to save power): the Quality tab shows how many new or changed files are unchecked and runs the check when asked, at background priority (macOS `taskpolicy -c background`; 1, 3 or 6 files at a time) with a Stop button. Levels are cached in `spectrum.json`, so each run only checks new or changed files. Serato writes its analysis and cue points into the music file, which changes its size and date but not its sound, so each result also keeps an audio fingerprint (MD5 of the audio packets of 0–10 s and 60–70 s, read without decoding, about 0.04 s a file): a changed file with the same fingerprint keeps its result. Results from before fingerprints existed get one in a single low-priority pass the first time the Quality data is read; results from the old 16-bit meter are kept where the verdict cannot change and the rest show up as unchecked again. The Quality tab lists the suspects (listen, Spectrum, mark "Sounds fine", reject; keys `↑` `↓`, space, `Enter` for the spectrum, `F` for "Sounds fine", which moves on to the next file, and `X` to reject); right-click → Spectrum anywhere shows ffmpeg's picture of the file to check by eye. The mark is a guess: songs mastered without much high end can be flagged too, which is what "Sounds fine" is for.
 - **Duplicates**: the same information is used to pick which copy to keep.
 
+### Adding songs to Serato
+
+In Folders, songs that are not in Serato can be added from Backstage: the button in a folder's screening note, or right-click a folder or a file → "Add to Serato…". Pick where they go: a new crate "Inbox / folder name" (like dragging the folder into Serato), another crate, or only the library. Songs that look like ones Serato already has (same artist and title) are skipped unless you untick that. The songs go into the plan ("Adding to Serato" in Folders, "+ N songs" in Crates) and are added when the plan is applied.
+
+Applying writes what Serato's own import writes, which was worked out by comparing Serato's database before and after it imported single files and folders: one song row and one "Serato Library" row in each of `master.sqlite` and `root.sqlite`, plus the crate rows. Backstage fills only what describes the file (file name, size, bit rate, sample rate and length from macOS `afinfo`, the same numbers Serato stores) and the title tag; every other column gets the database default, which is what Serato stores itself. Serato's database computes a few columns with functions that only exist inside Serato DJ (search text and key number); Backstage registers equivalents under the same names, equal to Serato's for 99.998 % of a real library's values, and Serato recomputes them with its own the next time it updates the song. Both files allow only one song per file path, so a song can never be added twice, also not by dragging it into Serato later.
+
+Afterwards, select the songs in Serato DJ (for example their crate) and choose "Analyze Files": Serato reads the other tags (artist, album, key…) and works out BPM, beatgrid and waveform. The Apply result says so too. Tried on the real library: the song shows in its crate and in all songs, search finds it, it plays, and Serato read its tags and BPM when it was loaded on a deck.
+
 ### Notes
 
 The Notes tab is a place for thoughts about songs ("good opener", "mix out at the second drop") and for songs to remember (heard in a set, to buy). Notes are kept in `notes.json` only; they are never written to Serato.
@@ -142,6 +150,7 @@ Supported actions:
 - change the order of crates within a level. Like Serato when you drag a crate, each database file renumbers that level 1…N on its own (master holds a few crates root does not); after writing, Apply checks that both files list the level in the planned order. New crates still go to the end of their level
 - add songs to crates and remove them from crates
 - point a song at a new file location
+- add songs from disk to the library, optionally into a crate (see Adding songs to Serato)
 - remove songs from the library, the way Serato's own ⌘⌫ does: their crate memberships go, play history is kept. For rejected songs, the files go to the Trash only after the database write has been committed.
 
 `serato_crates/apply.py` documents the Serato 4 database layout.
@@ -150,12 +159,12 @@ Supported actions:
 
 - Serato DJ 4 keeps its library in `~/Library/Application Support/Serato/Library/`: `master.sqlite`, with `root.sqlite` for the local drive. The legacy `~/Music/_Serato_` files are no longer read by Serato 4.
 - **Reading**: the app never opens Serato's live files for reading. Even a read-only SQLite connection writes to `-shm`. It copies the bytes of `master.sqlite` and its `-wal`, checks nothing changed while copying, and works on that snapshot. This is safe while Serato is open.
-- **Writing**: Serato is written only by "Apply to Serato" (Serato closed, rehearsed, backed up, verified) and by `tools/serato_move_paths.py`. `tools/serato_import_poc.py` is a proof of concept that adds one song the way Serato's import does (title and file details only; Serato's analysis fills the rest), with the same safety steps; it only rehearses on a copy unless given `--apply`. The tool rewrites file paths after music folders were moved; it also requires Serato to be closed and only does a dry run without `--apply`.
+- **Writing**: Serato is written only by "Apply to Serato" (Serato closed, rehearsed, backed up, verified) and by `tools/serato_move_paths.py`. `tools/serato_import_poc.py` is a proof of concept that adds one song the way Serato's import does (title and file details only; Serato's analysis fills the rest), with the same safety steps; it only rehearses on a copy unless given `--apply`. `tools/serato_apply_ops.py` applies a list of plan actions from a JSON file the same way (used to clean up after testing); it never moves music files. The tool rewrites file paths after music folders were moved; it also requires Serato to be closed and only does a dry run without `--apply`.
 - **The server**: it listens on `127.0.0.1` only and checks the Host header. Writes must be JSON. Audio preview only serves files that are in the library or found by the folder scan.
 
 ## Limitations
 
 - The Folders report only scans `~/Music/DJ`. Finding missing files searches all of `~/Music`. `~/Downloads` is not scanned, because the Mac app would need an extra macOS permission for it.
-- Backstage cannot import new songs yet: drag them into Serato. Serato fills some columns (search text, musical key) with its own SQL functions, so an import from Backstage would have to reproduce them; it has not been built.
+- Songs added by Backstage are not analysed: select them in Serato and choose "Analyze Files" (loading one on a deck analyses it too). Dragging files into Serato analyses them on import.
 - In a browser, Chrome cannot play AIFF. Safari and the Mac app can.
 - Only the local Serato Library is handled; streaming playlists do not appear.

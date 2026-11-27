@@ -18,10 +18,8 @@ master and root match before committing. The music file itself is never written 
 from __future__ import annotations
 
 import argparse
-import re
 import shutil
 import sqlite3
-import subprocess
 import sys
 import tempfile
 import time
@@ -32,36 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from serato_crates.apply import ApplyError, apply_changes, backup as backup_serato, files_in_use, serato_running  # noqa: E402
 from serato_crates.server import BEFORE_APPLY, SERATO_BACKUPS, SERATO_LIBRARY  # noqa: E402
 from serato_crates.snapshot import take_snapshot  # noqa: E402
-from serato_crates.spectrum import find_ffmpeg  # noqa: E402
+from serato_crates.fileinfo import file_details  # noqa: E402
 
 
 def file_info(path: Path) -> dict:
-    """What Serato's import stores about the file itself (afinfo gives the same numbers), plus the title tag."""
-    out = subprocess.run(["afinfo", str(path)], capture_output=True, text=True, timeout=15).stdout
-    rate = re.search(r"bit rate: (\d+) bits per second", out)
-    sample = re.search(r"Data format:\s+\d+ ch,\s+([\d.]+) Hz", out)
-    length = re.search(r"estimated duration: ([\d.]+) sec", out)
-    if not sample or not length:
-        raise SystemExit(f"macOS cannot read this file as audio: {path}")
-    title = ""
-    ffmpeg = find_ffmpeg()
-    if ffmpeg:
-        probe = Path(ffmpeg).with_name("ffprobe")
-        if probe.exists():
-            title = subprocess.run(
-                [str(probe), "-v", "error", "-show_entries", "format_tags=title", "-of", "default=nw=1:nk=1", str(path)],
-                capture_output=True, text=True, timeout=15,
-            ).stdout.strip().splitlines()[0:1]
-            title = title[0] if title else ""
-    st = path.stat()
-    return {
-        "fileSize": st.st_size,
-        "mtime": int(st.st_mtime),
-        "bitRate": int(rate.group(1)) if rate else None,
-        "sampleRate": float(sample.group(1)),
-        "lengthMs": int(float(length.group(1)) * 1000),  # Serato truncates: 284.105986 s -> 284105
-        "name": title or path.stem,
-    }
+    """What Serato's import stores about the file (serato_crates/fileinfo.py, shared with Apply)."""
+    try:
+        return file_details(str(path))
+    except ValueError as e:
+        raise SystemExit(str(e))
 
 
 def crate_id(db: Path, name: str) -> int:

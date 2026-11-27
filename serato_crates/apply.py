@@ -24,7 +24,7 @@ How Serato 4 stores the local drive's library
   triggers only exist while Serato runs, so we delete those rows ourselves. The file on disk is
   not touched here; the server moves it to the Trash after a successful commit when asked to.
 
-- Adding a song (importTrack, proof of concept) writes what Serato's own import writes, verified by
+- Adding a song (importTrack) writes what Serato's own import writes, verified by
   diffing the files before and after Serato imported single files and folders: a db1.asset row
   (stamped with the revision), its db1.space_asset in the Serato Library space, the master.asset row
   (external_id = the db1 id, location 1) and its master space_asset. Every column we do not set gets
@@ -54,6 +54,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+from .fileinfo import file_details
 from .i18n import tr, trn
 
 LIBRARY = "Serato Library"
@@ -62,7 +63,7 @@ LOCAL = 1  # location id of the local drive (root.sqlite)
 # 202 = Serato DJ Pro 4.0.x. A newer Serato migrates the files on launch; we refuse to write until
 # the new schema has been checked, because the triggers and tables we rely on may have changed.
 KNOWN_SCHEMAS = {202}
-SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate", "removeTrack", "importTrack"}
+SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate", "removeTrack", "importTrack", "leaveLibrary"}
 
 # Serato fills some master.asset columns with functions that exist only inside Serato DJ (called by the
 # after_asset_insert / after_asset_update triggers). To insert songs we register equivalents by the same name.
@@ -394,6 +395,11 @@ class _Writer:
             st = os.stat(path)
         except OSError:
             raise ApplyError(tr("File not found: {path}", path=path)) from None
+        if "fileSize" not in op:  # from the page: read the details now (same numbers in the rehearsal and the real write)
+            try:
+                op = {**op, **file_details(path)}
+            except ValueError as e:
+                raise ApplyError(str(e)) from None
         if st.st_size != int(op["fileSize"]) or int(st.st_mtime) != int(op["mtime"]):
             raise ApplyError(tr("The file changed after it was read: {path}", path=path))
         pid = path[1:]
@@ -458,6 +464,21 @@ class _Writer:
             raise ApplyError(tr("Song #{id} was not removed completely", id=aid))
         self.removed.append({"asset": aid, "path": "/" + pid, "deleteFile": bool(op.get("deleteFile"))})
 
+    def leave_library(self, op: dict) -> None:
+        """Take a song out of the Serato Library but keep it where else Serato has it (the Apple Music view):
+        the inverse of dragging an Apple Music song into a crate. Its crate rows go with it (foreign key cascade);
+        the song itself stays because another space still holds it (after_space_asset_delete only deletes orphans)."""
+        aid = int(op["asset"])
+        rasset, msa, rsa = self.asset(aid)
+        if not self._one("SELECT COUNT(*) FROM main.space_asset WHERE asset_id = ? AND id != ?", (aid, msa)):
+            raise ApplyError(tr("Song #{id} is only in the Serato Library; remove it from the library instead", id=aid))
+        self.con.execute("DELETE FROM db1.space_asset WHERE id = ?", (rsa,))
+        self.con.execute("DELETE FROM main.space_asset WHERE id = ?", (msa,))
+        for t in self.list_caches:  # Serato's cached lists; it rebuilds them (as on removeTrack)
+            self.con.execute(f"DELETE FROM main.'{t}' WHERE asset_id = ?", (aid,))
+        if not self._one("SELECT COUNT(*) FROM main.asset WHERE id = ?", (aid,)) or not self._one("SELECT COUNT(*) FROM db1.asset WHERE id = ?", (rasset,)):
+            raise ApplyError(tr("Song #{id} would have been deleted, not only taken out of the library", id=aid))
+
     def run(self, op: dict) -> None:
         kind = op.get("type")
         if kind not in SUPPORTED:
@@ -473,6 +494,7 @@ class _Writer:
             "relocate": self.relocate,
             "removeTrack": self.remove_track,
             "importTrack": self.import_track,
+            "leaveLibrary": self.leave_library,
         }[kind](op)
 
     # -- verification --
@@ -634,7 +656,8 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         checks.append(tr("master.sqlite and root.sqlite match"))
         if expected is not None:
             actual = w.actual_tree()
-            want = {k: sorted(set(v)) for k, v in expected.items()}
+            # Songs the plan added are listed by their plan id ("imp-…"): use the id they got.
+            want = {k: sorted({w.imported.get(x, x) if isinstance(x, str) else x for x in v}, key=lambda y: (isinstance(y, str), str(y) if isinstance(y, str) else y)) for k, v in expected.items()}
             show = lambda keys: [k.replace("\x00", " / ") for k in keys]
             missing = show(sorted(set(want) - set(actual)))
             extra = show(sorted(set(actual) - set(want)))

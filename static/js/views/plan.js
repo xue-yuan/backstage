@@ -13,6 +13,7 @@ const KIND = {
   createCrate: _('New crate'),
   renameCrate: _('Rename'),
   moveCrate: _('Move crate'),
+  importTrack: _('Add to Serato'),
   reorderCrate: _('Reorder crate'),
   deleteCrate: _('Delete crate'),
   mergeCrate: _('Merge crate'),

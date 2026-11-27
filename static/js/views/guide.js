@@ -26,7 +26,7 @@ function zhContent() {
         {
           steps: [
             `**${_('Overview')}**：看還有哪些事要做，點卡片會直接跳到對應的畫面。`,
-            `**${_('Folders')}**：篩選還沒匯入 Serato 的新歌。X 不要、V 留下，再按${q('Review and move to Trash…')}把不要的丟掉。留下的歌請**在 Serato 裡**把資料夾拖進 Inbox 底下的 crate（Backstage 不能幫你匯入新歌）。`,
+            `**${_('Folders')}**：篩選還沒匯入 Serato 的新歌。X 不要、V 留下，再按${q('Review and move to Trash…')}把不要的丟掉。留下的歌按${q('Add to Serato…')}放進變更計畫（例如新增「Inbox / 資料夾名稱」），套用後在 Serato 對它們按「分析檔案」；也可以照舊在 Serato 裡把資料夾拖進 Inbox 底下的 crate。`,
             `**${_('Sort')}**：把 Inbox 裡的歌一首一首分到正式的 crate。`,
             `**${_('Cleanup')}**：處理${q('Missing files')}、${q('Duplicates')}、${q('Empty crates')}。`,
             `**${_('Quality')}**：檢查新歌有沒有假 320k、假無損（要手動按，見下面「假音質」）。`,
@@ -183,7 +183,7 @@ function enContent() {
         {
           steps: [
             `**${_('Overview')}**: see what is left to do; each card opens the view that handles it.`,
-            `**${_('Folders')}**: screen new songs that are not in Serato yet. X rejects, V keeps; then ${qe('Review and move to Trash…')}. Drag the kept folder into a crate under Inbox **in Serato** (Backstage cannot import songs).`,
+            `**${_('Folders')}**: screen new songs that are not in Serato yet. X rejects, V keeps; then ${qe('Review and move to Trash…')}. Then ${qe('Add to Serato…')} puts the kept songs in the plan (for example into a new "Inbox / folder name" crate); after applying, choose "Analyze Files" for them in Serato. Dragging the folder into a crate under Inbox in Serato still works too.`,
             `**${_('Sort')}**: sort the songs in Inbox into your real crates, one by one.`,
             `**${_('Cleanup')}**: ${qe('Missing files')}, ${qe('Duplicates')} and ${qe('Empty crates')}.`,
             `**${_('Quality')}**: check new songs for fake 320k and fake lossless (run it by hand; see "Fake quality" below).`,

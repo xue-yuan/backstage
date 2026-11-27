@@ -12,6 +12,7 @@ const KIND = {
   createCrate: _('New crate'),
   renameCrate: _('Rename'),
   moveCrate: _('Move crate'),
+  importTrack: _('Add to Serato'),
   reorderCrate: _('Reorder crate'),
   deleteCrate: _('Delete crate'),
   mergeCrate: _('Merge crate'),
@@ -40,6 +41,8 @@ function expectedTree(changes) {
   };
   const out = {};
   for (const id of eff.crates.keys()) out[key(id)] = [...new Set(eff.members.get(id) || [])].sort((a, b) => a - b);
+  // Songs the plan adds have no Serato id yet: their plan id stands in (apply.py swaps in the new id).
+  for (const imp of eff.imports.values()) if (imp.crate != null && eff.crates.has(imp.crate)) out[key(imp.crate)].push(imp.id);
   // Levels the plan put in a new order: the crate names there, in that order (apply.py checks both files).
   const order = {};
   for (const ch of changes) {
@@ -106,6 +109,13 @@ export async function openApplyDialog() {
         h('div', { class: 'fnote fnote-ok' }, h('strong', {}, _n(result.applied, '✓ Written to Serato: {n} action', '✓ Written to Serato: {n} actions'))),
         h('ul', { class: 'apply-checks' }, result.checks.map((x) => h('li', {}, '✓ ', x))),
         trashNote(result.trashed),
+        Object.keys(result.imported || {}).length
+          ? h(
+              'div',
+              { class: 'fnote fnote-warn' },
+              h('span', {}, _n(Object.keys(result.imported).length, '{n} song was added to Serato, not analysed yet. In Serato DJ, select it (for example its crate) and choose "Analyze Files": Serato then reads its tags and works out BPM, key, beatgrid and waveform.', '{n} songs were added to Serato, not analysed yet. In Serato DJ, select them (for example their crate) and choose "Analyze Files": Serato then reads their tags and works out BPM, key, beatgrid and waveform.')),
+            )
+          : null,
         h('p', { class: 'muted small' }, _('Database backup from before applying: '), h('code', {}, fmt.shortPath(result.backup))),
         h('p', {}, _('Open Serato DJ and check that the crates look right. If something is wrong, quit Serato, then press "Restore the backup from before the last apply" in Plan.')),
         h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onclick: () => closeFn?.() }, _('Done'))),

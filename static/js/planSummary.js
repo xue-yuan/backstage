@@ -101,6 +101,7 @@ export function summarizePlan({ changes, eff, skip, trackLabel, issues = [] }) {
       if (op.type === 'remove') addItem(groupFor(`remove:${op.crate}`, { kind: 'remove', crate: op.crate }), key, ch.at, [op], { asset: op.asset });
       else if (op.type === 'removeTrack') addItem(groupFor(op.deleteFile ? 'reject' : 'removeTrack', { kind: op.deleteFile ? 'reject' : 'removeTrack' }), key, ch.at, [op], { asset: op.asset, reason: op.reason });
       else if (op.type === 'relocate') addItem(groupFor('relocate', { kind: 'relocate' }), key, ch.at, [op]);
+      else if (op.type === 'importTrack') addItem(groupFor(`import:${op.crate ?? ''}`, { kind: 'import', crate: op.crate ?? null }), key, ch.at, [op]);
       else if (STRUCTURE.includes(op.type)) {
         const kind = op.type === 'moveCrate' && op.reorder ? 'reorderCrate' : op.type;
         addItem(groupFor(kind, { kind }), key, ch.at, [op]);
@@ -137,6 +138,8 @@ function itemText(g, it, trackLabel) {
       const text = _n(removed.length, 'Keep {keeper}, remove {n} copy', 'Keep {keeper}, remove {n} copies', { keeper: keeper != null ? trackLabel(keeper) : '?' });
       return trashed ? `${text}${_n(trashed, ' ({n} file to the Trash)', ' ({n} files to the Trash)')}` : text;
     }
+    case 'import':
+      return it.ops[0].path.slice(it.ops[0].path.lastIndexOf('/') + 1);
     case 'missing': {
       const relocate = it.ops.find((o) => o.type === 'relocate');
       return relocate ? _('{track}: relocated to {path}', { track: trackLabel(it.asset), path: relocate.path }) : _('{track}: merged into the record that has the file', { track: trackLabel(it.asset) });
@@ -170,6 +173,13 @@ function groupTitle(g, items, eff) {
       return { title: _n(n, 'Missing files: fixed {n} song', 'Missing files: fixed {n} songs') };
     case 'relocate':
       return { title: _n(n, 'Relocated {n} file', 'Relocated {n} files') };
+    case 'import':
+      return {
+        title: g.crate != null && eff.crates.has(g.crate)
+          ? _n(n, 'Add {n} song to Serato, into {crate}', 'Add {n} songs to Serato, into {crate}', { crate: path(g.crate) })
+          : _n(n, 'Add {n} song to Serato (no crate)', 'Add {n} songs to Serato (no crate)'),
+        meta: _('Serato analyses them after the plan is applied'),
+      };
     default: {
       if (n === 1) return { title: items[0].text };
       const titles = {

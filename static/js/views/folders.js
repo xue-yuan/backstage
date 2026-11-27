@@ -6,6 +6,7 @@ import { BAR, buildReport, byName, HINT, LABEL, STATUSES } from '../folderReport
 import { dirOf, effectivePath, isClassified } from '../model.js';
 import { player } from '../player.js';
 import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
+import { addToSerato, dontAdd, importable } from '../importSongs.js';
 import { noteMark, noteMenuItem } from '../notes.js';
 import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
@@ -377,8 +378,9 @@ export function createFoldersView({ navigate }) {
             h('strong', {}, _('Screen before importing: {done} / {total} screened', { done: screened.toLocaleString(), total: pool.toLocaleString() })),
             _(' (keep {kept}, reject {rejected})', { kept: t.kept.toLocaleString(), rejected: t.rejected.toLocaleString() }),
             h('br'),
-            h('span', { class: 'muted' }, _('Click a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. When done, move the rejects to the Trash, then drag this folder into a crate under Inbox in Serato.')),
+            h('span', { class: 'muted' }, _('Click a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. When done, move the rejects to the Trash, then add the rest to Serato (button on the right, or drag this folder into a crate under Inbox in Serato).')),
           ),
+          addButton(node),
         ),
       );
     }
@@ -691,6 +693,7 @@ export function createFoldersView({ navigate }) {
           title,
           f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null,
           f.inSerato ? h('span', { class: 'tag tag-warn', title: inSeratoTip(f) }, _('Already in Serato')) : null,
+          plannedTag(f),
         ),
         h('div', { class: 'trow-sub' }, sub),
       ),
@@ -820,9 +823,45 @@ export function createFoldersView({ navigate }) {
     contextMenu(e, [
       navigate ? { label: _('Go to Sort →'), action: () => sortHere(node) } : null,
       node.children.length ? { label: expanded.has(node.key) ? _('Collapse') : _('Expand'), action: () => toggle(node.key) } : null,
+      ...folderImportItems(node),
       'sep',
       !node.ghost ? { label: _('Show in Finder'), action: () => reveal(node.path) } : null,
     ]);
+  }
+
+  // ---------- adding to Serato ----------
+  const allFiles = (node) => [...node.files, ...node.children.flatMap(allFiles)];
+  const folderName = (node) => node.path.slice(node.path.lastIndexOf('/') + 1);
+
+  function plannedTag(f) {
+    const imp = f.status === 'notImported' ? store.planned(f.path) : null;
+    if (!imp) return null;
+    const where = imp.crate != null && store.eff.crates.has(imp.crate) ? store.eff.pathOf(imp.crate) : _('the library, no crate');
+    return h('span', { class: 'tag tag-new', title: _('In the plan: added to Serato when the plan is applied ({where})', { where }) }, _('Adding to Serato'));
+  }
+
+  function addButton(node) {
+    const files = (includeSub ? allFiles(node) : node.files).filter(importable);
+    const todo = files.filter((f) => !store.planned(f.path));
+    const planned = files.length - todo.length;
+    if (!files.length) return null;
+    return h(
+      'div',
+      { class: 'fnote-actions' },
+      todo.length ? h('button', { class: 'btn btn-sm btn-primary', onclick: () => addToSerato(todo, { folderName: folderName(node) }) }, _n(todo.length, 'Add {n} song to Serato…', 'Add {n} songs to Serato…')) : null,
+      planned ? h('span', { class: 'muted small' }, _n(planned, '{n} in the plan', '{n} in the plan')) : null,
+    );
+  }
+
+  function folderImportItems(node) {
+    if (node.ghost) return [];
+    const files = allFiles(node).filter(importable);
+    const todo = files.filter((f) => !store.planned(f.path));
+    const planned = files.filter((f) => store.planned(f.path));
+    return [
+      todo.length ? { label: _n(todo.length, 'Add {n} new song to Serato…', 'Add {n} new songs to Serato…'), action: () => addToSerato(todo, { folderName: folderName(node) }) } : null,
+      planned.length ? { label: _n(planned.length, 'Do not add the {n} planned song', 'Do not add the {n} planned songs'), action: () => dontAdd(planned.map((f) => f.path)) } : null,
+    ];
   }
 
   function fileMenu(e, f) {
@@ -836,6 +875,11 @@ export function createFoldersView({ navigate }) {
       f.status !== 'missing' ? { label: f.status === 'rejected' ? _('Undo reject') : _('Reject'), hint: 'X', danger: f.status !== 'rejected', action: () => markReject(f) } : null,
       canKeep ? { label: f.kept ? _('Undo keep') : _('Keep'), hint: 'V', action: () => markKeep(f) } : null,
       'sep',
+      importable(f)
+        ? store.planned(f.path)
+          ? { label: _('Do not add to Serato'), action: () => dontAdd([f.path]) }
+          : { label: _('Add to Serato…'), action: () => addToSerato([f], { folderName: f.path.split('/').slice(-2, -1)[0] }) }
+        : null,
       f.status !== 'missing' ? { label: _('Show in Finder'), action: () => reveal(f.path) } : null,
       f.status !== 'missing' && spectrumAvailable() ? { label: _('Spectrum'), action: () => showSpectrum({ path: f.path, title: f.assetId != null ? store.trackLabel(f.assetId) : stripExt(f.name), quality: f.quality }) } : null,
       f.assetId != null && store.base.tracks.has(f.assetId) ? noteMenuItem({ track: store.base.tracks.get(f.assetId) }) : noteMenuItem({ path: f.path }),

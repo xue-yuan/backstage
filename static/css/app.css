@@ -693,3 +693,10 @@ span.note-tag { cursor: default; }
 @media (max-width: 1100px) {
   .tab { padding: 7px 7px; }
 }
+
+/* ---------- adding songs to Serato ---------- */
+.fnote-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.modal-import .import-folder { margin: 0 0 10px; }
+.modal-import .import-skip { margin: 4px 0 2px; }
+.modal-import .section-label { margin-top: 12px; }
+.import-pending { color: var(--ok); margin-top: 2px; }

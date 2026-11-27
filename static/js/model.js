@@ -21,7 +21,7 @@ function push(map, key, value) {
 const sameName = (a, b) => a.localeCompare(b, undefined, { sensitivity: 'accent' }) === 0;
 
 // Plan ops that Apply to Serato can write (see serato_crates/apply.py).
-export const APPLY_SUPPORTED = new Set(['createCrate', 'renameCrate', 'moveCrate', 'deleteCrate', 'mergeCrate', 'add', 'remove', 'relocate', 'removeTrack']);
+export const APPLY_SUPPORTED = new Set(['createCrate', 'renameCrate', 'moveCrate', 'deleteCrate', 'mergeCrate', 'add', 'remove', 'relocate', 'removeTrack', 'importTrack']);
 
 // ---------- Effective state ----------
 export function applyPlan(base, changes) {
@@ -32,6 +32,11 @@ export function applyPlan(base, changes) {
   const removedTracks = new Map();
   const rejectedTracks = new Set(); // removed because the user does not want the song: file goes to the Trash too
   const relocated = new Map();
+  // Files the plan adds to Serato (importTrack): pathKey -> { id, path, crate }. They have no Serato id
+  // until the plan is applied, so they are kept apart from members (crate contents of Serato songs).
+  const imports = new Map();
+  let seratoPaths = null;
+  const inSerato = (k) => (seratoPaths ||= new Set([...base.tracks.values()].map((t) => pathKey(t.path)))).has(k);
   const issues = [];
   let maxOrder = Math.max(0, ...[...crates.values()].map((c) => c.order || 0));
 
@@ -58,6 +63,7 @@ export function applyPlan(base, changes) {
     for (const child of childrenOf(id)) deleteCrate(child.id);
     crates.delete(id);
     members.delete(id);
+    for (const imp of imports.values()) if (imp.crate === id) imp.crate = null; // still added, just not in a crate (as Apply does)
   };
 
   const mergeInto = (from, into) => {
@@ -65,6 +71,7 @@ export function applyPlan(base, changes) {
     const have = new Set(target);
     for (const a of members.get(from) || []) if (!have.has(a)) target.push(a);
     crates.get(into).status.merged = true;
+    for (const imp of imports.values()) if (imp.crate === from) imp.crate = into;
     for (const child of childrenOf(from)) {
       const clash = childrenOf(into).find((c) => sameName(c.name, child.name));
       if (clash) mergeInto(child.id, clash.id);
@@ -124,6 +131,14 @@ export function applyPlan(base, changes) {
         if (c.status.originalParent === c.parent) delete c.status.originalParent;
         return null;
       }
+      case 'importTrack': {
+        const k = pathKey(op.path);
+        if (inSerato(k)) return _('Already in Serato');
+        if (imports.has(k)) return _('Already in the plan');
+        if (op.crate != null && !crates.has(op.crate)) return _('The crate no longer exists');
+        imports.set(k, { id: op.id, path: op.path, crate: op.crate ?? null });
+        return null;
+      }
       case 'deleteCrate': {
         if (!crates.has(op.crate)) return _('The crate no longer exists');
         deleteCrate(op.crate);
@@ -179,7 +194,7 @@ export function applyPlan(base, changes) {
     return p;
   };
 
-  return { base, crates, members, children, cratesOf, removedTracks, rejectedTracks, relocated, issues, pathOf, rootId: base.rootId };
+  return { base, crates, members, children, cratesOf, removedTracks, rejectedTracks, relocated, imports, issues, pathOf, rootId: base.rootId };
 }
 
 export function liveTracks(eff) {

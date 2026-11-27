@@ -521,6 +521,10 @@ export function createStructureView({ navigate } = {}) {
         { class: 'crate-title' },
         h('h2', {}, eff.pathOf(selected)),
         h('div', { class: 'muted small' }, `${_n(tracks.length, '{n} song', '{n} songs')} · ${_n(kids.length, '{n} child crate', '{n} child crates')}`, notes.length ? ` · ${_('{notes} (not in Serato yet)', { notes: notes.join(_(', ')) })}` : ''),
+        (() => {
+          const adding = [...eff.imports.values()].filter((i) => i.crate === selected).length;
+          return adding ? h('div', { class: 'small import-pending' }, _n(adding, '+ {n} song from disk is added when the plan is applied (see Folders)', '+ {n} songs from disk are added when the plan is applied (see Folders)')) : null;
+        })(),
       ),
       h(
         'div',

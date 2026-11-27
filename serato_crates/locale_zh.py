@@ -80,4 +80,7 @@ ZH = {
     "The file changed after it was read: {path}": "讀取之後檔案又被改過：{path}",
     "Already in Serato: {path}": "Serato 裡已經有這首：{path}",
     "Added {n} songs to the Serato Library (not analysed yet)": "加入 {n} 首歌到 Serato Library（還沒分析）",
+    "Song #{id} is only in the Serato Library; remove it from the library instead": "歌曲 #{id} 只在 Serato Library 裡，請改用「從曲庫移除」",
+    "Song #{id} would have been deleted, not only taken out of the library": "歌曲 #{id} 會被整個刪掉，而不只是移出曲庫，所以停止",
+    "macOS cannot read this file as audio: {path}": "macOS 無法把這個檔案當成音訊讀取：{path}",
 }
