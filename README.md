@@ -150,7 +150,7 @@ Supported actions:
 
 - Serato DJ 4 keeps its library in `~/Library/Application Support/Serato/Library/`: `master.sqlite`, with `root.sqlite` for the local drive. The legacy `~/Music/_Serato_` files are no longer read by Serato 4.
 - **Reading**: the app never opens Serato's live files for reading. Even a read-only SQLite connection writes to `-shm`. It copies the bytes of `master.sqlite` and its `-wal`, checks nothing changed while copying, and works on that snapshot. This is safe while Serato is open.
-- **Writing**: Serato is written only by "Apply to Serato" (Serato closed, rehearsed, backed up, verified) and by `tools/serato_move_paths.py`. The tool rewrites file paths after music folders were moved; it also requires Serato to be closed and only does a dry run without `--apply`.
+- **Writing**: Serato is written only by "Apply to Serato" (Serato closed, rehearsed, backed up, verified) and by `tools/serato_move_paths.py`. `tools/serato_import_poc.py` is a proof of concept that adds one song the way Serato's import does (title and file details only; Serato's analysis fills the rest), with the same safety steps; it only rehearses on a copy unless given `--apply`. The tool rewrites file paths after music folders were moved; it also requires Serato to be closed and only does a dry run without `--apply`.
 - **The server**: it listens on `127.0.0.1` only and checks the Host header. Writes must be JSON. Audio preview only serves files that are in the library or found by the folder scan.
 
 ## Limitations

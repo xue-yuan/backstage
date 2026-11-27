@@ -75,4 +75,9 @@ ZH = {
     "{level}: root.sqlite has a different crate order": "{level}：root.sqlite 的 crate 順序不一樣",
     "Crate order after applying differs from the plan: {problems}. Usually crates were added or moved in Serato after Backstage read the snapshot: press \"↻ Reload\" at the top right, check the plan, then apply again. Nothing was written.": "套用後 crate 的順序跟計畫不一樣：{problems}。通常是讀取快照之後又在 Serato 新增或移動了 crate：請按右上角「↻ 重新讀取」，檢查變更計畫後再套用一次。沒有寫入任何東西。",
     "The crates are in the planned order ({n} levels)": "crate 順序跟計畫一樣（{n} 層）",
+    "Only files on this Mac's own drive can be added: {path}": "只能加入這台 Mac 內建硬碟上的檔案：{path}",
+    "File not found: {path}": "找不到檔案：{path}",
+    "The file changed after it was read: {path}": "讀取之後檔案又被改過：{path}",
+    "Already in Serato: {path}": "Serato 裡已經有這首：{path}",
+    "Added {n} songs to the Serato Library (not analysed yet)": "加入 {n} 首歌到 Serato Library（還沒分析）",
 }

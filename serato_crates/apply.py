@@ -24,8 +24,19 @@ How Serato 4 stores the local drive's library
   triggers only exist while Serato runs, so we delete those rows ourselves. The file on disk is
   not touched here; the server moves it to the Trash after a successful commit when asked to.
 
+- Adding a song (importTrack, proof of concept) writes what Serato's own import writes, verified by
+  diffing the files before and after Serato imported single files and folders: a db1.asset row
+  (stamped with the revision), its db1.space_asset in the Serato Library space, the master.asset row
+  (external_id = the db1 id, location 1) and its master space_asset. Every column we do not set gets
+  the schema default, which is exactly what Serato stores ('' for text, 0 for flags, -1 key_value).
+  Only what describes the file is filled (name, size, bit rate, sample rate, length from afinfo,
+  dates) plus the title; artist, BPM, key, beatgrid and waveform come from Serato's own analysis
+  (analysis_flags 0 = not analysed). master's asset triggers call two functions that only exist
+  inside Serato, so apply_changes() registers equivalents (serato_str_norm, serato_key_type).
+  Both files have a unique index on the path, so a song can never be added twice.
+
 Supported plan ops: createCrate, renameCrate, moveCrate, deleteCrate, mergeCrate, add, remove,
-relocate, removeTrack.
+relocate, removeTrack, importTrack.
 
 Before committing we run integrity and foreign-key checks, check that master and root mirror
 each other, and check that every crate's contents equal what the app expected. If anything
@@ -35,10 +46,12 @@ fails, nothing is written.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from .i18n import tr, trn
@@ -49,7 +62,39 @@ LOCAL = 1  # location id of the local drive (root.sqlite)
 # 202 = Serato DJ Pro 4.0.x. A newer Serato migrates the files on launch; we refuse to write until
 # the new schema has been checked, because the triggers and tables we rely on may have changed.
 KNOWN_SCHEMAS = {202}
-SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate", "removeTrack"}
+SUPPORTED = {"createCrate", "renameCrate", "moveCrate", "deleteCrate", "mergeCrate", "add", "remove", "relocate", "removeTrack", "importTrack"}
+
+# Serato fills some master.asset columns with functions that exist only inside Serato DJ (called by the
+# after_asset_insert / after_asset_update triggers). To insert songs we register equivalents by the same name.
+
+
+def serato_str_norm(value):
+    """Serato's search text: decomposed, accents and modifier marks dropped, lower case. Equal to
+    Serato's for 99.998 % of the 409,260 values in a real library (the rest: some Thai / Khmer marks,
+    々, ·); Serato recomputes it with its own function whenever it updates the song, e.g. on analysis."""
+    if value is None:
+        return None
+    return "".join(c for c in unicodedata.normalize("NFD", str(value)) if unicodedata.category(c) not in ("Mn", "Sk", "Lm")).lower()
+
+
+_CAMELOT_MINOR = ["G#", "D#", "A#", "F", "C", "G", "D", "A", "E", "B", "F#", "C#"]  # 1A..12A
+_CAMELOT_MAJOR = ["B", "F#", "C#", "G#", "D#", "A#", "F", "C", "G", "D", "A", "E"]  # 1B..12B
+_SHARP = {"Ab": "G#", "Eb": "D#", "Bb": "A#", "Gb": "F#", "Db": "C#"}
+
+
+def serato_key_type(value) -> int:
+    """Serato's key number: Camelot 1A-12A -> 0-11, 1B-12B -> 12-23 ("Em" = 9A = 8); -1 if unknown."""
+    s = str(value or "").strip()
+    m = re.fullmatch(r"(1[0-2]|[1-9])([ABab])", s)
+    if m:
+        return int(m.group(1)) - 1 + (12 if m.group(2) in "Bb" else 0)
+    m = re.fullmatch(r"([A-Ga-g])([#b]?)(m|min|minor)?", s)
+    if not m:
+        return -1
+    note = m.group(1).upper() + m.group(2)
+    note = _SHARP.get(note, note)
+    table = _CAMELOT_MINOR if m.group(3) else _CAMELOT_MAJOR
+    return table.index(note) + (0 if m.group(3) else 12) if note in table else -1
 NOTIFY_TABLES = (
     "updated_container",
     "moved_container",
@@ -162,6 +207,7 @@ class _Writer:
         self.now = int(time.time())
         self.new_ids: dict[str, int] = {}  # plan's "new-…" ids -> master container ids
         self.removed: list[dict] = []  # songs removed by removeTrack: {asset, path, deleteFile}
+        self.imported: dict[str, int] = {}  # importTrack: plan id (or path) -> new master asset id
         # Serato's cached asset lists ("All...", search results): anonymous_table_N with an asset_id column.
         self.list_caches = [
             t
@@ -339,6 +385,47 @@ class _Writer:
             (aid, lc, msa, rca, m_order, self.now),
         )
 
+    def import_track(self, op: dict) -> None:
+        """Add a file to the local Serato Library like Serato's import, minus what its analysis fills in."""
+        path = str(op["path"])
+        if not path.startswith("/") or path.startswith("/Volumes/"):
+            raise ApplyError(tr("Only files on this Mac's own drive can be added: {path}", path=path))
+        try:
+            st = os.stat(path)
+        except OSError:
+            raise ApplyError(tr("File not found: {path}", path=path)) from None
+        if st.st_size != int(op["fileSize"]) or int(st.st_mtime) != int(op["mtime"]):
+            raise ApplyError(tr("The file changed after it was read: {path}", path=path))
+        pid = path[1:]
+        if (
+            self._one("SELECT id FROM db1.asset WHERE portable_id = ? COLLATE NOCASE", (pid,)) is not None
+            or self._one("SELECT id FROM main.asset WHERE location_id = ? AND portable_id = ? COLLATE NOCASE", (LOCAL, pid)) is not None
+        ):
+            raise ApplyError(tr("Already in Serato: {path}", path=path))
+        base = os.path.basename(path)
+        values = {
+            "portable_id": pid,
+            "file_name": base,
+            "file_size": st.st_size,
+            "file_bit_rate": float(op["bitRate"]) if op.get("bitRate") else None,
+            "file_sample_rate": float(op["sampleRate"]) if op.get("sampleRate") else None,
+            "type": "audio",
+            "format": os.path.splitext(base)[1].lower().lstrip("."),
+            "name": str(op.get("name") or os.path.splitext(base)[0]),
+            "length_ms": int(op["lengthMs"]) if op.get("lengthMs") else None,
+            "time_added": self.now,
+            "time_modified": self.now,  # Serato's import stores the import time here, not the file's date
+        }
+        cols, args = ", ".join(values), list(values.values())
+        marks = ", ".join("?" * len(values))
+        rasset = self.con.execute(f"INSERT INTO db1.asset (revision, {cols}) VALUES (?, {marks})", (self.rev, *args)).lastrowid
+        self.con.execute("INSERT INTO db1.space_asset (asset_id, space_id) VALUES (?, ?)", (rasset, self.rspace))
+        mid = self.con.execute(f"INSERT INTO main.asset (external_id, location_id, {cols}) VALUES (?, ?, {marks})", (rasset, LOCAL, *args)).lastrowid
+        self.con.execute("INSERT INTO main.space_asset (asset_id, space_id) VALUES (?, ?)", (mid, self.mspace))
+        self.imported[str(op.get("id") or path)] = mid
+        if op.get("crate") is not None:
+            self._add(self.crate(op["crate"]), mid)
+
     def remove(self, op: dict) -> None:
         mid, aid = self.crate(op["crate"]), int(op["asset"])
         _, msa, rsa = self.asset(aid)
@@ -385,6 +472,7 @@ class _Writer:
             "remove": self.remove,
             "relocate": self.relocate,
             "removeTrack": self.remove_track,
+            "importTrack": self.import_track,
         }[kind](op)
 
     # -- verification --
@@ -497,6 +585,8 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
     con = sqlite3.connect(master, isolation_level=None)
     try:
         con.execute("PRAGMA foreign_keys = ON")
+        con.create_function("serato_str_norm", 1, serato_str_norm, deterministic=True)
+        con.create_function("serato_raw_key_string_to_key_type", 1, serato_key_type, deterministic=True)
         con.execute("ATTACH DATABASE ? AS db1", (str(root),))
         versions = {schema: con.execute(f"PRAGMA {schema}.user_version").fetchone()[0] for schema in ("main", "db1")}
         if not set(versions.values()) <= KNOWN_SCHEMAS:
@@ -577,7 +667,9 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         else:
             con.execute("COMMIT")
             con.execute("PRAGMA main.wal_checkpoint(TRUNCATE)")  # leave the files as a cleanly closed Serato would
-        return {"ok": True, "applied": applied, "checks": checks, "newIds": w.new_ids, "removed": w.removed, "dryRun": dry_run}
+        if w.imported:
+            checks.append(trn(len(w.imported), "Added {n} song to the Serato Library (not analysed yet)", "Added {n} songs to the Serato Library (not analysed yet)"))
+        return {"ok": True, "applied": applied, "checks": checks, "newIds": w.new_ids, "removed": w.removed, "imported": w.imported, "dryRun": dry_run}
     except Exception:
         if con.in_transaction:
             con.execute("ROLLBACK")
