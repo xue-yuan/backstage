@@ -4,6 +4,8 @@ Cratify is a Mac app for organising a Serato DJ 4 library. It shows which music 
 
 The interface is available in English and Traditional Chinese.
 
+Website: https://xue-yuan.github.io/cratify/ · Download: [GitHub Releases](https://github.com/xue-yuan/cratify/releases/latest)
+
 Cratify is an independent project and is not affiliated with Serato. It writes to Serato DJ's library database; read the [Disclaimer](#disclaimer) before using it.
 
 ## Install
@@ -23,6 +25,10 @@ Steps:
 3. On first launch, Cratify asks which folders contain DJ music (see [Music folders](#music-folders)).
 
 Serato DJ can stay open while Cratify is in use. Quit it only before "Apply to Serato".
+
+## Website
+
+The product page is `docs/index.html` (plain HTML, no build step), published with GitHub Pages from the `docs` folder of `main`. Update the version and install steps there with each release.
 
 ## Building the Mac app
 
