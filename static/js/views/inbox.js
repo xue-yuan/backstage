@@ -35,7 +35,7 @@ export function createInboxView({ navigate } = {}) {
   const crateHead = h('div', { class: 'section-label row-between' });
   const crateFilterInput = h('input', {
     class: 'input input-sm source-filter',
-    placeholder: _('Filter crates…'),
+    placeholder: _('common.filterCrates'),
     oninput: (e) => {
       crateFilter = e.target.value;
       renderCrateList();
@@ -62,21 +62,21 @@ export function createInboxView({ navigate } = {}) {
       {
         class: 'btn btn-ghost btn-block',
         onclick: async () => {
-          const id = await pickCrateDialog({ title: _('Choose a crate to sort'), allowCreate: false });
+          const id = await pickCrateDialog({ title: _('sort.chooseCrate'), allowCreate: false });
           if (id != null) setSource({ kind: 'crate', id });
         },
       },
-      _('Pick another crate…'),
+      _('sort.pickAnotherCrate'),
     ),
   );
   const listTitle = h('div', { class: 'list-title' });
   const progress = h('div', { class: 'progress' }, h('div', { class: 'progress-fill' }));
   const progressText = h('span', { class: 'muted small' });
-  const nextBtn = h('button', { class: 'btn btn-sm', title: _('Next crate with songs left (N)'), onclick: () => goNextCrate() }, _('Next crate →'));
+  const nextBtn = h('button', { class: 'btn btn-sm', title: _('sort.nextCrateButton'), onclick: () => goNextCrate() }, _('sort.nextCrate'));
   const cleanOutBtn = h('button', { class: 'btn btn-sm', onclick: () => cleanOut() });
   const filterInput = h('input', {
     class: 'input input-sm',
-    placeholder: _('Filter by title, artist, genre…'),
+    placeholder: _('sort.filterPlaceholder'),
     oninput: (e) => {
       filter = e.target.value;
       renderList();
@@ -96,18 +96,18 @@ export function createInboxView({ navigate } = {}) {
         renderList();
       },
     },
-    h('option', { value: 'added' }, _('Newest first')),
-    h('option', { value: 'order' }, _('Crate order')),
+    h('option', { value: 'added' }, _('sort.newestFirst')),
+    h('option', { value: 'order' }, _('sort.crateOrder')),
     h('option', { value: 'bpm' }, 'BPM'),
-    h('option', { value: 'artist' }, _('Artist')),
-    h('option', { value: 'title' }, _('Title')),
+    h('option', { value: 'artist' }, _('sort.artist')),
+    h('option', { value: 'title' }, _('sort.title')),
   );
   sortSelect.value = sort;
   const showSelect = h(
     'select',
     {
       class: 'input input-sm',
-      title: _('Songs to show'),
+      title: _('sort.listFilter'),
       onchange: (e) => {
         show = e.target.value;
         prefs.set('inbox.show', show);
@@ -115,9 +115,9 @@ export function createInboxView({ navigate } = {}) {
         renderList();
       },
     },
-    h('option', { value: 'all' }, _('All songs')),
-    h('option', { value: 'todo' }, _('Not sorted yet')),
-    h('option', { value: 'done' }, _('Sorted only')),
+    h('option', { value: 'all' }, _('sort.allSongs')),
+    h('option', { value: 'todo' }, _('sort.notSorted')),
+    h('option', { value: 'done' }, _('sort.sortedOnly')),
   );
   showSelect.value = show;
 
@@ -131,11 +131,11 @@ export function createInboxView({ navigate } = {}) {
       'div',
       { class: 'trow trow-inbox trow-head' },
       h('span'),
-      h('span', {}, _('Title / artist')),
+      h('span', {}, _('common.titleArtist')),
       h('span', { class: 'num' }, 'BPM'),
       h('span', {}, 'Key'),
-      h('span', {}, _('Format')),
-      h('span', {}, _('Genre')),
+      h('span', {}, _('common.format')),
+      h('span', {}, _('common.genre')),
       h('span', { class: 'num' }, 'Crates'),
     ),
     vlist.el,
@@ -147,7 +147,7 @@ export function createInboxView({ navigate } = {}) {
   const suggestEl = h('div', { class: 'detail-section' });
   const picker = createCratePicker({
     allowCreate: true,
-    placeholder: _('Add to another crate… (/). Type "Parent / New name" to create one'),
+    placeholder: _('sort.otherCratePlaceholder'),
     activeIds: () => new Set(store.eff.cratesOf.get(selectedId) || []),
     onPick: (id) => toggleCrate(id, { forceAdd: true }),
   });
@@ -159,7 +159,7 @@ export function createInboxView({ navigate } = {}) {
       else prefs.set('inbox.moveOut', (moveOut = e.target.checked));
     },
   });
-  const moveOutRow = h('label', { class: 'check' }, moveOutBox, _('Remove from the source crate when adding'));
+  const moveOutRow = h('label', { class: 'check' }, moveOutBox, _('common.leaveSource'));
   const optionsEl = h(
     'div',
     { class: 'detail-section options' },
@@ -174,11 +174,11 @@ export function createInboxView({ navigate } = {}) {
           prefs.set('inbox.autoAdvance', autoAdvance);
         },
       }),
-      _('Go to the next song after adding (playback continues)'),
+      _('sort.autoAdvance'),
     ),
     moveOutRow,
-    h('div', { class: 'muted small' }, _('X: reject this song (added to the plan; the song is removed and its file moved to the Trash when the plan is applied)')),
-    h('div', { class: 'muted small' }, _('⇧X: remove from the Serato library only and keep the file (samples, demo tracks, files of other apps)')),
+    h('div', { class: 'muted small' }, _('sort.rejectHint')),
+    h('div', { class: 'muted small' }, _('sort.removeKeepHint')),
   );
   const detailEl = h(
     'aside',
@@ -187,7 +187,7 @@ export function createInboxView({ navigate } = {}) {
     currentEl,
     pinnedEl,
     suggestEl,
-    h('div', { class: 'detail-section' }, h('div', { class: 'section-label' }, _('Add to another crate')), picker.el),
+    h('div', { class: 'detail-section' }, h('div', { class: 'section-label' }, _('sort.addAnotherCrate')), picker.el),
     optionsEl,
   );
 
@@ -299,7 +299,7 @@ export function createInboxView({ navigate } = {}) {
   function goNextCrate() {
     const n = nextCrate();
     if (!n) {
-      toast(_('All unsorted crates are done'));
+      toast(_('sort.allDone'));
       return;
     }
     setSource({ kind: 'crate', id: n.id });
@@ -316,7 +316,7 @@ export function createInboxView({ navigate } = {}) {
   const leftCount = (left, total) =>
     h(
       'span',
-      { class: `count ${!left && total ? 'count-done' : ''}`, title: _('{left} of {total} left', { left: left.toLocaleString(), total: total.toLocaleString() }) },
+      { class: `count ${!left && total ? 'count-done' : ''}`, title: _('sort.remaining', { left: left.toLocaleString(), total: total.toLocaleString() }) },
       left || !total ? left.toLocaleString() : '✓',
     );
 
@@ -335,15 +335,15 @@ export function createInboxView({ navigate } = {}) {
   function renderSources() {
     clear(
       sourcesTop,
-      h('div', { class: 'section-label' }, _('Source')),
-      sourceItem({ kind: 'uncategorized' }, _('In no crate')),
-      sourceItem({ kind: 'recent', days: 7 }, _('Added in the last {n} days', { n: 7 })),
-      sourceItem({ kind: 'recent', days: 30 }, _('Added in the last {n} days', { n: 30 })),
+      h('div', { class: 'section-label' }, _('sort.source')),
+      sourceItem({ kind: 'uncategorized' }, _('common.inNoCrate')),
+      sourceItem({ kind: 'recent', days: 7 }, _('common.recentlyAdded', { n: 7 })),
+      sourceItem({ kind: 'recent', days: 30 }, _('common.recentlyAdded', { n: 30 })),
       source.kind === 'folder'
-        ? [h('div', { class: 'section-label' }, _('Sort from a folder')), sourceItem(source, baseName(source.path), { sub: fmt.shortPath(source.path).replace(/\/[^/]*$/, '') })]
+        ? [h('div', { class: 'section-label' }, _('sort.sortFromFolder')), sourceItem(source, baseName(source.path), { sub: fmt.shortPath(source.path).replace(/\/[^/]*$/, '') })]
         : null,
       navigate
-        ? h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('folders') }, source.kind === 'folder' ? _('Pick another folder…') : _('Pick from folders…'))
+        ? h('button', { class: 'btn btn-ghost btn-block', onclick: () => navigate('folders') }, source.kind === 'folder' ? _('sort.pickAnotherFolder') : _('sort.pickFromFolders'))
         : null,
     );
     renderCrateList();
@@ -355,8 +355,8 @@ export function createInboxView({ navigate } = {}) {
     const next = nextCrate(tree);
     clear(
       crateHead,
-      _('Sort from a crate'),
-      h('button', { class: 'btn btn-ghost btn-xs', disabled: !next, title: _('Next crate with songs left (N)'), onclick: () => goNextCrate() }, _('Next →')),
+      _('common.sortFromCrate'),
+      h('button', { class: 'btn btn-ghost btn-xs', disabled: !next, title: _('sort.nextCrateButton'), onclick: () => goNextCrate() }, _('sort.next')),
     );
     const all = crateOrder(tree);
     crateFilterInput.hidden = all.length < 8 && !crateFilter;
@@ -414,7 +414,7 @@ export function createInboxView({ navigate } = {}) {
                 renderCrateList();
               },
             },
-            h('span', { class: 'source-label' }, h('span', { class: 'source-chev' }, h('span', { class: `chev ${open ? 'is-open' : ''}` })), _n(done.length, '{n} crate done', '{n} crates done')),
+            h('span', { class: 'source-label' }, h('span', { class: 'source-chev' }, h('span', { class: `chev ${open ? 'is-open' : ''}` })), _n(done.length, 'sort.cratesDone')),
           ),
           open ? done.map((n) => node(n, depth)) : null,
         );
@@ -428,7 +428,7 @@ export function createInboxView({ navigate } = {}) {
       const hits = all.filter((n) => words.every((w) => norm(eff.pathOf(n.id)).includes(w)));
       body = hits.length
         ? hits.map((n) => sourceItem({ kind: 'crate', id: n.id }, eff.pathOf(n.id)))
-        : h('div', { class: 'muted small source-empty' }, _('No matching crate'));
+        : h('div', { class: 'muted small source-empty' }, _('common.noMatchingCrate'));
     } else {
       body = level(tree, 'root', 0);
     }
@@ -466,15 +466,15 @@ export function createInboxView({ navigate } = {}) {
 
     const title =
       source.kind === 'uncategorized'
-        ? _('Songs in no crate')
+        ? _('sort.songsInNoCrate')
         : source.kind === 'recent'
-          ? _('Added in the last {n} days', { n: source.days })
+          ? _('common.recentlyAdded', { n: source.days })
           : source.kind === 'folder'
-            ? _('Folder: {name}', { name: baseName(source.path) })
+            ? _('sort.folderTitle', { name: baseName(source.path) })
             : eff.pathOf(source.id);
     clear(listTitle, h('h2', {}, title));
     progress.firstChild.style.width = all.length ? `${(doneCount / all.length) * 100}%` : '0%';
-    progressText.textContent = _('Sorted {done} / {total}', { done: doneCount, total: all.length });
+    progressText.textContent = _('sort.progress', { done: doneCount, total: all.length });
     moveOutRow.hidden = source.kind !== 'crate';
     moveOutBox.checked = moveOutOn();
 
@@ -484,14 +484,14 @@ export function createInboxView({ navigate } = {}) {
     nextBtn.className = `btn btn-sm ${finished ? 'btn-primary' : ''}`;
     const stale = staleInSource();
     cleanOutBtn.hidden = !stale.length;
-    cleanOutBtn.textContent = _n(stale.length, 'Remove {n} sorted song from this crate', 'Remove {n} sorted songs from this crate');
-    cleanOutBtn.title = _('These songs are already in a sorting crate but are still in this unsorted one. They are removed from this crate only (added to the plan).');
+    cleanOutBtn.textContent = _n(stale.length, 'common.removeSorted');
+    cleanOutBtn.title = _('sort.removeSortedHint');
 
     const empty = filter
-      ? h('div', { class: 'empty' }, _('No songs match the filter'))
+      ? h('div', { class: 'empty' }, _('sort.noSongsMatchFilter'))
       : show === 'done' && all.length
-        ? h('div', { class: 'empty' }, _('Nothing sorted here yet'))
-        : h('div', { class: 'empty' }, h('p', {}, _('No songs left')), hasNext ? h('button', { class: 'btn btn-primary', onclick: () => goNextCrate() }, _('Next crate →')) : null);
+        ? h('div', { class: 'empty' }, _('sort.noneSorted'))
+        : h('div', { class: 'empty' }, h('p', {}, _('sort.noSongsLeft')), hasNext ? h('button', { class: 'btn btn-primary', onclick: () => goNextCrate() }, _('sort.nextCrate')) : null);
     vlist.setItems(items, empty);
   }
 
@@ -510,7 +510,7 @@ export function createInboxView({ navigate } = {}) {
     if (!ids.length) return;
     const crate = store.eff.pathOf(crateId);
     store.commit(
-      _n(ids.length, 'Removed {n} sorted song from {crate}', 'Removed {n} sorted songs from {crate}', { crate }),
+      _n(ids.length, 'sort.removedSorted', { crate }),
       ids.map((a) => store.opRemove(crateId, a)),
     );
   }
@@ -530,7 +530,7 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'trow-main' },
-        h('div', { class: 'trow-title' }, noteMark({ track: t }), t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
+        h('div', { class: 'trow-title' }, noteMark({ track: t }), t.title || t.fileName, !t.exists ? h('span', { class: 'tag tag-danger' }, _('common.missingFile')) : null),
         h('div', { class: 'trow-sub' }, t.artist || '—'),
       ),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
@@ -555,7 +555,7 @@ export function createInboxView({ navigate } = {}) {
     const eff = store.eff;
     detailEl.classList.toggle('is-empty', !t);
     if (!t) {
-      clear(infoEl, h('div', { class: 'empty' }, _('Pick a song to start sorting')));
+      clear(infoEl, h('div', { class: 'empty' }, _('sort.pickSong')));
       clear(currentEl);
       clear(pinnedEl);
       clear(suggestEl);
@@ -566,30 +566,30 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'detail-head' },
-        (playBtn = h('button', { class: 'play-big', title: _('Play / pause (Space)'), onclick: () => player.toggle(t) }, player.isCurrent(`t${t.id}`) && player.playing ? '❚❚' : '▶')),
-        h('div', {}, h('h3', {}, t.title || t.fileName), h('div', { class: 'muted' }, [t.artist, t.remixer && `Remix: ${t.remixer}`].filter(Boolean).join(' · ') || _('Unknown artist'))),
+        (playBtn = h('button', { class: 'play-big', title: _('common.playPauseSpace'), onclick: () => player.toggle(t) }, player.isCurrent(`t${t.id}`) && player.playing ? '❚❚' : '▶')),
+        h('div', {}, h('h3', {}, t.title || t.fileName), h('div', { class: 'muted' }, [t.artist, t.remixer && `Remix: ${t.remixer}`].filter(Boolean).join(' · ') || _('sort.unknownArtist'))),
       ),
       h(
         'dl',
         { class: 'meta' },
         meta('BPM', fmt.bpm(t.bpm)),
         meta('Key', t.key || '–'),
-        meta(_('Length'), fmt.duration(t.lengthMs)),
-        meta(_('Format'), qualityBadge(store.trackQuality(t))),
-        meta(_('Genre'), t.genre || '–'),
-        meta(_('Added'), fmt.date(t.addedAt)),
-        meta(_('Plays'), t.plays ? _n(t.plays, '{n} time', '{n} times') : _('Never played')),
-        meta(_('Album'), t.album || '–'),
+        meta(_('sort.length'), fmt.duration(t.lengthMs)),
+        meta(_('common.format'), qualityBadge(store.trackQuality(t))),
+        meta(_('common.genre'), t.genre || '–'),
+        meta(_('sort.added'), fmt.date(t.addedAt)),
+        meta(_('sort.plays'), t.plays ? _n(t.plays, 'sort.times') : _('sort.neverPlayed')),
+        meta(_('sort.album'), t.album || '–'),
       ),
       h(
         'div',
         { class: 'path-row' },
         h('div', { class: 'path', title: t.path }, fmt.shortPath(t.path)),
         t.exists && spectrumAvailable()
-          ? h('button', { class: 'btn btn-ghost btn-xs', title: _('Show where the sound stops (reveals transcodes such as fake 320k)'), onclick: () => openSpectrum(t) }, _('Spectrum'))
+          ? h('button', { class: 'btn btn-ghost btn-xs', title: _('common.spectrumHint'), onclick: () => openSpectrum(t) }, _('common.spectrum'))
           : null,
       ),
-      !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is missing. Relocate it in Cleanup.')) : null,
+      !t.exists ? h('div', { class: 'notice notice-danger' }, _('sort.fileMissing')) : null,
       detailNotes(t),
     );
 
@@ -597,7 +597,7 @@ export function createInboxView({ navigate } = {}) {
     const gained = new Set(addedInPlan(eff, t.id));
     clear(
       currentEl,
-      h('div', { class: 'section-label' }, _n(crates.length, 'Currently in {n} crate', 'Currently in {n} crates')),
+      h('div', { class: 'section-label' }, _n(crates.length, 'sort.currentlyInCrates')),
       crates.length
         ? h(
             'div',
@@ -605,13 +605,13 @@ export function createInboxView({ navigate } = {}) {
             crates.map((c) =>
               h(
                 'span',
-                { class: `chip ${gained.has(c) ? 'chip-new' : ''}`, title: gained.has(c) ? _('Newly added (not in Serato yet)') : '' },
+                { class: `chip ${gained.has(c) ? 'chip-new' : ''}`, title: gained.has(c) ? _('sort.newlyAddedHint') : '' },
                 eff.pathOf(c),
-                h('button', { class: 'chip-x', title: _('Remove from this crate'), onclick: () => toggleCrate(c) }, '×'),
+                h('button', { class: 'chip-x', title: _('common.removeFromThisCrate'), onclick: () => toggleCrate(c) }, '×'),
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, _('Not in any crate yet')),
+        : h('div', { class: 'muted small' }, _('sort.noCrates')),
     );
 
     pinned = pinned.filter((id) => eff.crates.has(id));
@@ -621,8 +621,8 @@ export function createInboxView({ navigate } = {}) {
       h(
         'div',
         { class: 'section-label row-between' },
-        _('Pinned crates (keys 1–9)'),
-        pinned.length < 9 ? h('button', { class: 'btn btn-ghost btn-xs', onclick: addPin }, _('+ Pin')) : null,
+        _('sort.pinnedTitle'),
+        pinned.length < 9 ? h('button', { class: 'btn btn-ghost btn-xs', onclick: addPin }, _('common.pinButton')) : null,
       ),
       pinned.length
         ? h(
@@ -636,7 +636,7 @@ export function createInboxView({ navigate } = {}) {
                 h('span', { class: 'target-name' }, eff.pathOf(id)),
                 h('button', {
                   class: 'target-unpin',
-                  title: _('Unpin'),
+                  title: _('sort.unpin'),
                   onclick: (e) => {
                     e.stopPropagation();
                     pinned.splice(i, 1);
@@ -647,13 +647,13 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, _('Pin frequently used crates here to add songs with the number keys.')),
+        : h('div', { class: 'muted small' }, _('sort.pinHint')),
     );
 
     suggestions = suggestCrates(eff, store.profiles, t, { exclude: new Set(inboxCrateIds()) });
     clear(
       suggestEl,
-      h('div', { class: 'section-label' }, _('Suggestions (Shift + number)')),
+      h('div', { class: 'section-label' }, _('sort.suggestionsTitle')),
       suggestions.length
         ? h(
             'div',
@@ -663,11 +663,11 @@ export function createInboxView({ navigate } = {}) {
                 'div',
                 { class: 'target target-suggest', onclick: () => toggleCrate(s.id, { forceAdd: true }) },
                 h('kbd', {}, `⇧${i + 1}`),
-                h('span', { class: 'target-name' }, eff.pathOf(s.id), h('span', { class: 'target-why' }, s.reasons.join(_(' · ')))),
+                h('span', { class: 'target-name' }, eff.pathOf(s.id), h('span', { class: 'target-why' }, s.reasons.join(_('sep.dot')))),
                 !pinned.includes(s.id) && pinned.length < 9
                   ? h('button', {
                       class: 'target-unpin',
-                      title: _('Pin'),
+                      title: _('sort.pin'),
                       onclick: (e) => {
                         e.stopPropagation();
                         pinned.push(s.id);
@@ -679,7 +679,7 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, _('No suggestions (the song has no genre, BPM or similar information)')),
+        : h('div', { class: 'muted small' }, _('sort.noSuggestions')),
     );
   }
 
@@ -688,7 +688,7 @@ export function createInboxView({ navigate } = {}) {
   }
 
   async function addPin() {
-    const id = await pickCrateDialog({ title: _('Pin a crate'), exclude: new Set(pinned) });
+    const id = await pickCrateDialog({ title: _('sort.pinCrate'), exclude: new Set(pinned) });
     if (id == null) return;
     pinned.push(id);
     prefs.set('inbox.pinned', pinned);
@@ -702,8 +702,8 @@ export function createInboxView({ navigate } = {}) {
       'div',
       { class: 'detail-notes' },
       notes.slice(0, 3).map((n) => h('div', { class: 'note-mini', ondblclick: () => noteDialog({ track: t }) }, noteText(n.text), h('div', { class: 'muted small' }, when(n.created)))),
-      notes.length > 3 ? h('a', { class: 'small', href: '#notes' }, _n(notes.length - 3, '{n} more in Notes →', '{n} more in Notes →')) : null,
-      h('button', { class: 'btn btn-ghost btn-xs detail-note-add', title: 'M', onclick: () => noteDialog({ track: t }) }, notes.length ? _('+ Add a note') : _('+ Note about this song')),
+      notes.length > 3 ? h('a', { class: 'small', href: '#notes' }, _n(notes.length - 3, 'common.moreInNotes')) : null,
+      h('button', { class: 'btn btn-ghost btn-xs detail-note-add', title: 'M', onclick: () => noteDialog({ track: t }) }, notes.length ? _('sort.addNote') : _('sort.noteAboutSong')),
     );
   }
 
@@ -716,38 +716,38 @@ export function createInboxView({ navigate } = {}) {
     const crates = eff.cratesOf.get(t.id) || [];
     const name = t.title || t.fileName;
     contextMenu(e, [
-      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(t) },
-      { label: _('Play from the start'), hint: 'Q', action: () => player.play(t, { at: 0 }) },
+      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('common.pause') : _('common.play'), hint: _('common.space'), action: () => player.toggle(t) },
+      { label: _('common.playFromStart'), hint: 'Q', action: () => player.play(t, { at: 0 }) },
       'sep',
       {
-        label: _('Add to a crate…'),
+        label: _('sort.addToCrateMenu'),
         hint: '/',
         action: async () => {
-          const id = await pickCrateDialog({ title: _('Add "{track}" to…', { track: name }), exclude: new Set(crates) });
+          const id = await pickCrateDialog({ title: _('sort.addTrackTitle', { track: name }), exclude: new Set(crates) });
           if (id != null) toggleCrate(id, { forceAdd: true });
         },
       },
-      ...crates.slice(0, 6).map((c) => ({ label: _('Remove from {crate}', { crate: eff.pathOf(c) }), action: () => toggleCrate(c) })),
+      ...crates.slice(0, 6).map((c) => ({ label: _('sort.removeFromCrate', { crate: eff.pathOf(c) }), action: () => toggleCrate(c) })),
       'sep',
-      { label: _('Reject'), hint: 'X', danger: true, action: () => rejectSelected() },
-      { label: _('Remove from the library, keep the file'), hint: '⇧X', action: () => rejectSelected({ keepFile: true }) },
+      { label: _('common.reject'), hint: 'X', danger: true, action: () => rejectSelected() },
+      { label: _('common.removeKeepFile'), hint: '⇧X', action: () => rejectSelected({ keepFile: true }) },
       'sep',
       noteMenuItem({ track: t, hint: 'M' }),
-      spectrumAvailable() ? { label: _('Spectrum'), disabled: !t.exists, action: () => openSpectrum(t) } : null,
-      { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(eff, t)) },
+      spectrumAvailable() ? { label: _('common.spectrum'), disabled: !t.exists, action: () => openSpectrum(t) } : null,
+      { label: _('common.showInFinder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(eff, t)) },
     ]);
   }
 
   function crateNodeMenu(e, n) {
     const stale = staleIn(n.id);
     contextMenu(e, [
-      n.total ? { label: _('Sort this crate'), action: () => setSource({ kind: 'crate', id: n.id }) } : null,
-      stale.length ? { label: _n(stale.length, 'Remove {n} sorted song from this crate', 'Remove {n} sorted songs from this crate'), action: () => cleanOut(n.id) } : null,
-      n.children.length ? { label: collapsed.has(n.id) ? _('Expand') : _('Collapse'), action: () => toggleCollapsed(n.id) } : null,
+      n.total ? { label: _('sort.sortCrate'), action: () => setSource({ kind: 'crate', id: n.id }) } : null,
+      stale.length ? { label: _n(stale.length, 'common.removeSorted'), action: () => cleanOut(n.id) } : null,
+      n.children.length ? { label: collapsed.has(n.id) ? _('common.expand') : _('common.collapse'), action: () => toggleCollapsed(n.id) } : null,
       'sep',
       navigate
         ? {
-            label: _('Open in Crates'),
+            label: _('sort.openInCrates'),
             action: () => {
               prefs.set('tree.selected', n.id);
               navigate('structure');
@@ -766,11 +766,11 @@ export function createInboxView({ navigate } = {}) {
     const crate = eff.pathOf(crateId);
     const inIt = (eff.members.get(crateId) || []).includes(t.id);
     if (inIt && !forceAdd) {
-      const label = _('"{name}" removed from {crate}', { name, crate });
+      const label = _('sort.removedFrom', { name, crate });
       if (addedInPlan(eff, t.id).includes(crateId)) {
         // Added earlier in this plan: take that back instead of staging an add and a remove.
         const reverted = store.revertAdd(crateId, t.id);
-        if (reverted.length) toast(label, { action: () => store.commit(_('"{name}" → {crate}', { name, crate }), reverted, { silent: true }) });
+        if (reverted.length) toast(label, { action: () => store.commit(_('sort.addedTo', { name, crate }), reverted, { silent: true }) });
         return;
       }
       store.commit(label, [store.opRemove(crateId, t.id)]);
@@ -783,7 +783,7 @@ export function createInboxView({ navigate } = {}) {
     const ops = [add];
     const leaveSource = moveOutOn() && source.kind === 'crate' && source.id !== crateId && (eff.members.get(source.id) || []).includes(t.id);
     if (leaveSource) ops.push(store.opRemove(source.id, t.id));
-    const change = store.commit(`${_('"{name}" → {crate}', { name, crate })}${leaveSource ? _(' (removed from the source)') : ''}`, ops);
+    const change = store.commit(`${_('sort.addedTo', { name, crate })}${leaveSource ? _('sort.removedFromSource') : ''}`, ops);
     if (change && autoAdvance) advance();
     if (change) celebrate(leftBefore);
   }
@@ -793,7 +793,7 @@ export function createInboxView({ navigate } = {}) {
     if (source.kind !== 'crate' || !leftBefore || leftIn(source)) return;
     const next = nextCrate();
     const crate = store.eff.pathOf(source.id);
-    toast(_('All of {crate} is sorted', { crate }), next ? { action: () => goNextCrate(), actionLabel: _('Next: {crate}', { crate: store.eff.crates.get(next.id).name }), timeout: 10000 } : {});
+    toast(_('sort.allSorted', { crate }), next ? { action: () => goNextCrate(), actionLabel: _('sort.nextCrateNamed', { crate: store.eff.crates.get(next.id).name }), timeout: 10000 } : {});
   }
 
   function advance() {
@@ -813,7 +813,7 @@ export function createInboxView({ navigate } = {}) {
     const leftBefore = source.kind === 'crate' ? leftIn(source) : 0;
     const name = t.title || t.fileName;
     const ops = keepFile ? [store.opRemoveTrack(t.id, '')] : [store.opReject(t.id)];
-    if (!store.commit(keepFile ? _('Remove from the Serato library (file kept): {track}', { track: name }) : _('Reject: {track}', { track: name }), ops)) return;
+    if (!store.commit(keepFile ? _('op.removeTrack', { track: name }) : _('common.rejectTrack', { track: name }), ops)) return;
     if (next) {
       select(next.id);
       if (wasPlaying) player.play(next);
@@ -837,7 +837,7 @@ export function createInboxView({ navigate } = {}) {
 
   return {
     el,
-    title: _('Sort'),
+    title: _('tab.sort'),
     update: renderAll,
     onKey(e) {
       const t = selected();

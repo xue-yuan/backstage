@@ -74,7 +74,7 @@ export function createOverviewView({ navigate }) {
   function render() {
     const eff = store.eff;
     const r = ensureReport();
-    const waiting = r ? null : scanError ? _('Scan failed: {error}', { error: scanError }) : _('Scanning…');
+    const waiting = r ? null : scanError ? _('common.scanFailed', { error: scanError }) : _('common.scanning');
     const songs = liveTracks(eff).length;
     const crates = eff.crates.size;
     const snap = store.base?.snapshot;
@@ -101,32 +101,32 @@ export function createOverviewView({ navigate }) {
     const serato =
       watch.seratoRunning == null
         ? null
-        : h('span', { class: `ov-serato ${watch.seratoRunning ? 'is-open' : 'is-closed'}` }, watch.seratoRunning ? _('● Serato DJ is open') : _('○ Serato DJ is closed'));
+        : h('span', { class: `ov-serato ${watch.seratoRunning ? 'is-open' : 'is-closed'}` }, watch.seratoRunning ? _('overview.seratoOpen') : _('overview.seratoClosed'));
 
     clear(
       el,
       h(
         'div',
         { class: 'ov-head' },
-        h('h2', {}, _('Overview')),
+        h('h2', {}, _('tab.overview')),
         h(
           'div',
           { class: 'muted small' },
-          [_n(songs, '{n} song in Serato', '{n} songs in Serato'), _n(crates, '{n} crate', '{n} crates'), snap ? _('Snapshot {time}', { time: fmt.time(new Date(snap.takenAt).getTime()) }) : null]
+          [_n(songs, 'overview.songCount'), _n(crates, 'overview.crateCount'), snap ? _('common.snapshot', { time: fmt.time(new Date(snap.takenAt).getTime()) }) : null]
             .filter(Boolean)
             .join(' · '),
         ),
         serato,
       ),
 
-      h('div', { class: 'section-label' }, _('To do')),
+      h('div', { class: 'section-label' }, _('overview.toDo')),
       h(
         'div',
         { class: 'ov-grid' },
         card({
           num: unsorted,
-          label: _('songs in Serato to sort'),
-          sub: loose ? _n(loose, '{n} of them is in no crate', '{n} of them are in no crate') : null,
+          label: _('overview.toSort'),
+          sub: loose ? _n(loose, 'overview.inNoCrate') : null,
           tone: 'unsorted',
           onClick: () => navigate('inbox'),
         }),
@@ -135,58 +135,58 @@ export function createOverviewView({ navigate }) {
             ? toScreen.map(({ node, left, done, pool }) =>
                 card({
                   num: left,
-                  label: _('files to screen in {folder}', { folder: node.name }),
-                  sub: done ? _('{done} / {total} screened', { done: done.toLocaleString(), total: pool.toLocaleString() }) : _('not imported into Serato yet'),
+                  label: _('overview.toScreenIn', { folder: node.name }),
+                  sub: done ? _('overview.screened', { done: done.toLocaleString(), total: pool.toLocaleString() }) : _('overview.notImported'),
                   tone: 'notImported',
                   onClick: () => openFolder(node.key),
                 }),
               )
-            : [card({ num: 0, label: _('files to screen'), sub: _('Every file on disk is in Serato or screened'), onClick: () => navigate('folders') })]
-          : [card({ num: '…', label: _('files to screen'), sub: waiting, onClick: () => navigate('folders') })]),
+            : [card({ num: 0, label: _('overview.toScreen'), sub: _('overview.allScreened'), onClick: () => navigate('folders') })]
+          : [card({ num: '…', label: _('overview.toScreen'), sub: waiting, onClick: () => navigate('folders') })]),
         h(
           'div',
           { class: `ov-card ov-plan ${nOps ? 'is-accent' : 'is-zero'}` },
           h('div', { class: 'ov-num num' }, nOps.toLocaleString()),
-          h('div', { class: 'ov-label' }, _n(nOps, 'action not yet written to Serato', 'actions not yet written to Serato')),
-          h('div', { class: 'ov-sub muted small' }, nChanges ? _n(nChanges, 'from {n} change', 'from {n} changes') : _('The plan is empty')),
+          h('div', { class: 'ov-label' }, _n(nOps, 'overview.pendingActions')),
+          h('div', { class: 'ov-sub muted small' }, nChanges ? _n(nChanges, 'overview.fromChanges') : _('overview.planEmpty')),
           h(
             'div',
             { class: 'ov-actions' },
-            h('button', { class: 'btn btn-sm', onclick: () => navigate('plan') }, _('Open plan')),
+            h('button', { class: 'btn btn-sm', onclick: () => navigate('plan') }, _('overview.openPlan')),
             nOps
               ? watch.seratoRunning
-                ? h('span', { class: 'muted small' }, _('Quit Serato DJ to apply'))
-                : h('button', { class: 'btn btn-sm btn-primary', onclick: () => openApplyDialog() }, _('Apply to Serato…'))
+                ? h('span', { class: 'muted small' }, _('overview.quitToApply'))
+                : h('button', { class: 'btn btn-sm btn-primary', onclick: () => openApplyDialog() }, _('common.applyToSeratoMenu'))
               : null,
           ),
         ),
       ),
 
-      h('div', { class: 'section-label' }, _('Library health')),
+      h('div', { class: 'section-label' }, _('overview.libraryHealth')),
       h(
         'div',
         { class: 'ov-grid' },
-        card({ num: missing, label: _('songs whose file is missing'), tone: 'missing', onClick: () => openCleanup('missing') }),
-        card({ num: dupes, label: _('groups of duplicate songs'), tone: 'warn', onClick: () => openCleanup('dupes') }),
-        card({ num: empty, label: _('empty crates'), onClick: () => openCleanup('empty') }),
+        card({ num: missing, label: _('overview.missingFiles'), tone: 'missing', onClick: () => openCleanup('missing') }),
+        card({ num: dupes, label: _('overview.duplicateGroups'), tone: 'warn', onClick: () => openCleanup('dupes') }),
+        card({ num: empty, label: _('overview.emptyCrates'), onClick: () => openCleanup('empty') }),
         card({
           num: low,
-          label: _('low-quality files'),
-          sub: unreadable ? _n(unreadable, '{n} file macOS cannot open', '{n} files macOS cannot open') : null,
+          label: _('overview.lowQualityFiles'),
+          sub: unreadable ? _n(unreadable, 'overview.unreadable') : null,
           tone: 'missing',
-          title: store.audioProgress?.running ? _('Still reading file formats…') : undefined,
+          title: store.audioProgress?.running ? _('overview.readingFormats') : undefined,
           onClick: () => (rootKey ? openFolder(rootKey, { lowOnly: true }) : navigate('folders')),
         }),
         spec?.available === false
           ? null
           : card({
               num: store.suspects().filter((x) => !x.genuine).length,
-              label: _('suspected transcodes (fake 320k, fake lossless)'),
+              label: _('overview.suspects'),
               sub: spec?.running
-                ? _('Checking for transcodes… {done} / {total}', { done: spec.done.toLocaleString(), total: spec.total.toLocaleString() })
+                ? _('common.checkingForTranscodes', { done: spec.done.toLocaleString(), total: spec.total.toLocaleString() })
                 : spec?.pending
-                  ? _n(spec.pending, '{n} new file not checked yet', '{n} new files not checked yet')
-                  : _('Automatic estimate; check the spectrum before deleting'),
+                  ? _n(spec.pending, 'overview.unchecked')
+                  : _('overview.suspectsHint'),
               tone: 'warn',
               onClick: () => navigate('quality'),
             }),
@@ -195,5 +195,5 @@ export function createOverviewView({ navigate }) {
   }
 
   render();
-  return { el, title: _('Overview'), update: render, onKey: () => false, destroy: offWatch };
+  return { el, title: _('tab.overview'), update: render, onKey: () => false, destroy: offWatch };
 }

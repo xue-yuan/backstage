@@ -26,7 +26,7 @@ def file_details(path: str) -> dict:
     sample = re.search(r"Data format:\s+\d+ ch,\s+([\d.]+) Hz", out)
     length = re.search(r"estimated duration: ([\d.]+) sec", out)
     if not sample or not length:
-        raise ValueError(tr("macOS cannot read this file as audio: {path}", path=path))
+        raise ValueError(tr("file.notAudio", path=path))
     st = os.stat(path)
     return {
         "fileSize": st.st_size,

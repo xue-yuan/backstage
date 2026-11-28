@@ -23,7 +23,7 @@ def load_library(snapshot: Path) -> dict:
     try:
         space = con.execute("SELECT id FROM space WHERE name = ?", (LIBRARY_SPACE,)).fetchone()
         if space is None:
-            raise RuntimeError(tr("The snapshot has no Serato Library"))
+            raise RuntimeError(tr("snapshot.noLibrary"))
         space_id = space["id"]
         root = con.execute(
             "SELECT id FROM container WHERE space_id = ? AND type = 0", (space_id,)

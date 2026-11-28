@@ -15,6 +15,8 @@ if [ "$version" != "$cargo_version" ]; then
   exit 1
 fi
 
+uv run --no-project tools/check_i18n.py
+
 mkdir -p dist
 notes=dist/release-notes.md
 # The lines from "## <version>" up to the next "## " heading.

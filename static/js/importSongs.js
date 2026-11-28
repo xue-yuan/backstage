@@ -23,7 +23,7 @@ function inboxId() {
 export async function addToSerato(files, { folderName } = {}) {
   const todo = files.filter((f) => !store.planned(f.path));
   if (!todo.length) {
-    toast(_('These songs are already in the plan'));
+    toast(_('import.alreadyPlanned'));
     return;
   }
   const lookalikes = todo.filter((f) => f.inSerato);
@@ -33,37 +33,37 @@ export async function addToSerato(files, { folderName } = {}) {
   const existing = inbox != null && folderName ? (eff.children.get(inbox) || []).find((id) => norm(eff.crates.get(id).name) === norm(folderName)) : null;
 
   const choice = await modal({
-    title: _n(todo.length, 'Add {n} song to Serato', 'Add {n} songs to Serato'),
+    title: _n(todo.length, 'import.title'),
     wide: true,
     className: 'modal-import',
     body: (close) => [
-      h('p', {}, _('The songs go into the plan. When it is applied (with Serato closed), Cratify adds them the same way Serato\'s import does. Then select them in Serato DJ and choose "Analyze Files" to read their tags and detect BPM, key, beatgrid and waveform.')),
+      h('p', {}, _('import.explanation')),
       lookalikes.length
         ? h(
             'label',
             { class: 'check import-skip' },
             h('input', { type: 'checkbox', checked: true, onchange: (e) => (skipLookalikes = e.target.checked) }),
-            _n(lookalikes.length, 'Skip {n} song that Serato appears to have already (same artist and title)', 'Skip {n} songs that Serato appears to have already (same artist and title)'),
+            _n(lookalikes.length, 'import.skipLookalikes'),
           )
         : null,
-      h('div', { class: 'section-label' }, _('Destination')),
+      h('div', { class: 'section-label' }, _('import.destination')),
       folderName && inbox != null
         ? h(
             'button',
             { class: 'btn btn-primary btn-block import-folder', onclick: () => close({ crate: existing ?? 'new-under-inbox' }) },
-            existing != null ? _('Into "Inbox / {name}"', { name: folderName }) : _('New crate "Inbox / {name}" (same as dragging the folder into Serato)', { name: folderName }),
+            existing != null ? _('import.intoInbox', { name: folderName }) : _('import.newInboxCrate', { name: folderName }),
           )
         : null,
-      createCratePicker({ inline: true, autofocus: !folderName, allowCreate: true, placeholder: _('Or choose another crate (type to search or create)'), onPick: (id) => close({ crate: id }) }).el,
-      h('button', { class: 'btn btn-block', onclick: () => close({ crate: null }) }, _('Only the library (no crate)')),
+      createCratePicker({ inline: true, autofocus: !folderName, allowCreate: true, placeholder: _('import.otherCrate'), onPick: (id) => close({ crate: id }) }).el,
+      h('button', { class: 'btn btn-block', onclick: () => close({ crate: null }) }, _('import.libraryOnly')),
     ],
-    actions: (close) => [h('button', { class: 'btn', onclick: () => close(undefined) }, _('Cancel'))],
+    actions: (close) => [h('button', { class: 'btn', onclick: () => close(undefined) }, _('common.cancel'))],
   });
   if (choice === undefined || choice === null) return; // cancelled (Esc gives null; "no crate" gives { crate: null })
 
   const add = skipLookalikes ? todo.filter((f) => !f.inSerato) : todo;
   if (!add.length) {
-    toast(_('Nothing added: Serato appears to have all of these songs already (untick "Skip" to add them anyway)'));
+    toast(_('import.allSkipped'));
     return;
   }
   const ops = [];
@@ -77,8 +77,8 @@ export async function addToSerato(files, { folderName } = {}) {
   }
   ops.push(...add.map((f) => store.opImport(f.path, crate, where)));
   const label = where
-    ? _n(add.length, 'Add {n} song to Serato → {crate}', 'Add {n} songs to Serato → {crate}', { crate: where })
-    : _n(add.length, 'Add {n} song to Serato', 'Add {n} songs to Serato');
+    ? _n(add.length, 'import.buttonInto', { crate: where })
+    : _n(add.length, 'import.title');
   store.commit(label, ops);
 }
 
@@ -86,5 +86,5 @@ export async function addToSerato(files, { folderName } = {}) {
 export function dontAdd(paths) {
   const keys = new Set(paths.map(pathKey));
   const n = store.revertOps((op) => op.type === 'importTrack' && keys.has(pathKey(op.path)));
-  if (n) toast(_n(n, '{n} song will not be added to Serato', '{n} songs will not be added to Serato'));
+  if (n) toast(_n(n, 'import.cancelled'));
 }

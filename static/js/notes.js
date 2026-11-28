@@ -48,15 +48,15 @@ export function playableSong(song) {
   const t = store.noteTrack(song);
   if (t) return t.exists ? t : null;
   if (!song?.path) return null;
-  return { playKey: `f${song.path}`, src: `/api/audio-file?path=${encodeURIComponent(song.path)}`, title: song.title, artist: song.artist || _('File not in Serato') };
+  return { playKey: `f${song.path}`, src: `/api/audio-file?path=${encodeURIComponent(song.path)}`, title: song.title, artist: song.artist || _('common.fileNotInSerato') };
 }
 
 /**
  * Pick a library song. Typing searches title / artist / genre / file name; empty shows the song that is
  * playing and the newest songs. Resolves to the track or null.
  */
-export function pickSong({ title = _('Link a song'), query = '' } = {}) {
-  const input = h('input', { class: 'input', value: query, placeholder: _('Search the library: title, artist…') });
+export function pickSong({ title = _('common.linkSong'), query = '' } = {}) {
+  const input = h('input', { class: 'input', value: query, placeholder: _('notes.songSearchPlaceholder') });
   const list = h('div', { class: 'song-pick' });
   let results = [];
   let at = 0;
@@ -81,10 +81,10 @@ export function pickSong({ title = _('Link a song'), query = '' } = {}) {
               'button',
               { class: 'song-pick-row', onclick: () => closeFn?.(t), onmousemove: () => i !== at && mark(i) },
               h('span', { class: 'song-pick-main' }, h('span', { class: 'ellipsis' }, t.title || t.fileName), h('span', { class: 'muted small ellipsis' }, t.artist || '')),
-              h('span', { class: 'muted small' }, t.id === playingId ? _('Playing') : [fmt.bpm(t.bpm), t.key].filter((x) => x && x !== '–').join(' · ')),
+              h('span', { class: 'muted small' }, t.id === playingId ? _('notes.playing') : [fmt.bpm(t.bpm), t.key].filter((x) => x && x !== '–').join(' · ')),
             ),
           )
-        : [h('div', { class: 'empty small' }, _('No matching songs'))]),
+        : [h('div', { class: 'empty small' }, _('notes.noMatchingSongs'))]),
     );
     mark(at);
   }
@@ -104,9 +104,9 @@ export function pickSong({ title = _('Link a song'), query = '' } = {}) {
     wide: true,
     body: (close) => {
       closeFn = close;
-      return [input, list, h('div', { class: 'muted small song-pick-hint' }, _('↑ ↓ to choose, Enter to link'))];
+      return [input, list, h('div', { class: 'muted small song-pick-hint' }, _('notes.songSearchHint'))];
     },
-    actions: (close) => [h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel'))],
+    actions: (close) => [h('button', { class: 'btn', onclick: () => close(null) }, _('common.cancel'))],
     onKey: (e, close) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -125,30 +125,30 @@ export function pickSong({ title = _('Link a song'), query = '' } = {}) {
 export function noteDialog({ track = null, path = null } = {}) {
   const song = store.songRef(track, path);
   const earlier = track ? store.notesFor(track) : store.notesForPath(path);
-  const input = h('textarea', { class: 'input note-input', rows: 4, placeholder: _('Note about this song. #tags are supported, e.g. #opener #transition') });
+  const input = h('textarea', { class: 'input note-input', rows: 4, placeholder: _('notes.songNotePlaceholder') });
   const save = (close) => {
     const text = input.value.trim();
     if (!text) return close(null);
     store.addNote(text, song);
-    toast(_('Note saved'));
+    toast(_('common.noteSaved'));
     close(true);
   };
   const done = modal({
-    title: _('Note: {title}', { title: song.title }),
+    title: _('notes.dialogTitle', { title: song.title }),
     className: 'modal-note',
     body: (close) => [
       earlier.length
         ? h(
             'div',
             { class: 'note-history' },
-            h('div', { class: 'section-label' }, _n(earlier.length, '{n} earlier note', '{n} earlier notes')),
+            h('div', { class: 'section-label' }, _n(earlier.length, 'notes.earlierNotes')),
             earlier.slice(0, 5).map((n) => h('div', { class: 'note-mini' }, noteText(n.text), h('div', { class: 'muted small' }, when(n.updated)))),
           )
         : null,
       input,
-      h('p', { class: 'muted small note-dialog-hint' }, _('⌘↵ saves.'), ' ', h('a', { href: '#notes', onclick: () => close(null) }, _('All notes are in Notes →'))),
+      h('p', { class: 'muted small note-dialog-hint' }, _('notes.saveHint'), ' ', h('a', { href: '#notes', onclick: () => close(null) }, _('notes.allNotesLink'))),
     ],
-    actions: (close) => [h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel')), h('button', { class: 'btn btn-primary', onclick: () => save(close) }, _('Save note'))],
+    actions: (close) => [h('button', { class: 'btn', onclick: () => close(null) }, _('common.cancel')), h('button', { class: 'btn btn-primary', onclick: () => save(close) }, _('common.saveNote'))],
     onKey: (e, close) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
@@ -169,14 +169,14 @@ export function noteMark({ track = null, path = null } = {}) {
   if (!notes.length) return null;
   const clip = (s) => (s.length > 160 ? `${s.slice(0, 160)}…` : s);
   const tip = notes.slice(0, 3).map((n) => `${when(n.created)}\n${clip(n.text)}`);
-  if (notes.length > 3) tip.push(_n(notes.length - 3, '{n} more in Notes →', '{n} more in Notes →'));
+  if (notes.length > 3) tip.push(_n(notes.length - 3, 'common.moreInNotes'));
   const stop = (e) => e.stopPropagation(); // the row's own click / double-click (select, play) stays out of it
   return h(
     'button',
     {
       class: 'note-mark',
       title: tip.join('\n\n'),
-      'aria-label': _n(notes.length, '{n} note', '{n} notes'),
+      'aria-label': _n(notes.length, 'notes.count'),
       onclick: (e) => (stop(e), noteDialog({ track, path })),
       ondblclick: stop,
       onmousedown: stop,
@@ -188,5 +188,5 @@ export function noteMark({ track = null, path = null } = {}) {
 /** Context-menu item for a song: "Add a note…" or "Notes (2)…". */
 export function noteMenuItem({ track = null, path = null, hint } = {}) {
   const n = (track ? store.notesFor(track) : store.notesForPath(path)).length;
-  return { label: n ? _('Add a note ({n} so far)…', { n }) : _('Add a note…'), hint, action: () => noteDialog({ track, path }) };
+  return { label: n ? _('notes.addNoteCount', { n }) : _('common.addNote'), hint, action: () => noteDialog({ track, path }) };
 }

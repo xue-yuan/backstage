@@ -122,7 +122,7 @@ class AppState:
 
     def write_screen(self, screen: dict) -> None:
         if not all(isinstance(screen.get(k), list) for k in ("reject", "keep")):
-            raise ValueError(tr("invalid screen data"))
+            raise ValueError(tr("request.invalidScreen"))
         tmp = self.screen_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps({"reject": screen["reject"], "keep": screen["keep"]}, ensure_ascii=False))
         os.replace(tmp, self.screen_path)
@@ -140,7 +140,7 @@ class AppState:
     def write_notes(self, body: dict) -> None:
         notes = body.get("notes") if isinstance(body, dict) else None
         if not isinstance(notes, list) or not all(isinstance(n, dict) and isinstance(n.get("id"), str) and isinstance(n.get("text"), str) for n in notes):
-            raise ValueError(tr("invalid notes data"))
+            raise ValueError(tr("request.invalidNotes"))
         if self.notes_path.exists():
             shutil.copy2(self.notes_path, self.data_dir / "notes.prev.json")  # the version before the last save, in case of a mistake
         tmp = self.notes_path.with_suffix(".json.tmp")
@@ -160,7 +160,7 @@ class AppState:
     def write_rules(self, rules: dict) -> None:
         overrides = rules.get("overrides")
         if not isinstance(overrides, dict) or any(v not in ("count", "skip") for v in overrides.values()):
-            raise ValueError(tr("invalid rules data"))
+            raise ValueError(tr("request.invalidRules"))
         tmp = self.rules_path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps({"overrides": overrides, "saved": True}, ensure_ascii=False))
         os.replace(tmp, self.rules_path)
@@ -180,13 +180,13 @@ class AppState:
 
     def apply(self, changes: list, expected: dict, expected_order: dict | None = None) -> dict:
         if not self.apply_lock.acquire(blocking=False):
-            raise ApplyError(tr("Already applying"))
+            raise ApplyError(tr("server.alreadyApplying"))
         try:
             if serato_running():
-                raise ApplyError(tr("Serato DJ is open. Quit it before applying"))
+                raise ApplyError(tr("server.seratoOpen"))
             busy = files_in_use(SERATO_LIBRARY)
             if busy:
-                raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
+                raise ApplyError(tr("server.databaseInUse", files=", ".join(busy)))
             # 1) Rehearse on a private copy: any problem stops here, before Serato is touched.
             rehearsal = self.data_dir / "apply-rehearsal"
             shutil.rmtree(rehearsal, ignore_errors=True)
@@ -217,10 +217,10 @@ class AppState:
     def restore_serato(self, backup_dir: str) -> dict:
         target = Path(backup_dir).resolve()
         if not target.is_relative_to(SERATO_BACKUPS.resolve()):
-            raise ApplyError(tr("Only Cratify backups can be restored"))
+            raise ApplyError(tr("server.notABackup"))
         busy = files_in_use(SERATO_LIBRARY)
         if busy:
-            raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
+            raise ApplyError(tr("server.databaseInUse", files=", ".join(busy)))
         restore_serato(SERATO_LIBRARY, target)
         self.ensure_library(refresh=True)
         return {"ok": True, "restoredFrom": str(target)}
@@ -238,11 +238,11 @@ class AppState:
         refused: list[dict] = []
         for p in dict.fromkeys(str(x) for x in paths):
             if p not in scanned:
-                refused.append({"path": p, "ok": False, "error": tr("Not a scanned audio file")})
+                refused.append({"path": p, "ok": False, "error": tr("server.notScanned")})
             elif path_key(p) in serato:
-                refused.append({"path": p, "ok": False, "error": tr("This file is in Serato; it is handled when the plan is applied")})
+                refused.append({"path": p, "ok": False, "error": tr("server.inSerato")})
             elif not os.path.isfile(p):
-                refused.append({"path": p, "ok": False, "error": tr("The file no longer exists")})
+                refused.append({"path": p, "ok": False, "error": tr("server.fileGone")})
             else:
                 sizes[p] = os.path.getsize(p)
                 todo.append(p)
@@ -367,7 +367,7 @@ class AppState:
             is_dir = path in self.folder_dirs
             is_file = path in self.folder_files or path in self.track_paths.values()
         if not (is_dir or is_file) or not os.path.exists(path):
-            raise ValueError(tr("Only scanned folders and files can be opened"))
+            raise ValueError(tr("server.openScannedOnly"))
         cmd = ["open", "-a", "Finder", path] if is_dir else ["open", "-R", path]
         subprocess.run(cmd, check=False, timeout=10)
 
@@ -410,7 +410,7 @@ def make_handler(state: AppState, port: int):
             try:
                 size = os.path.getsize(path)
             except OSError:
-                return self._error(HTTPStatus.NOT_FOUND, tr("File not found"))
+                return self._error(HTTPStatus.NOT_FOUND, tr("server.fileNotFound"))
             start, end, status = 0, size - 1, HTTPStatus.OK
             rng = self.headers.get("Range")
             if rng:
@@ -458,7 +458,7 @@ def make_handler(state: AppState, port: int):
 
         def _send_audio(self, path: str | None):
             if not path:
-                return self._error(HTTPStatus.NOT_FOUND, tr("Not a file in the library"))
+                return self._error(HTTPStatus.NOT_FOUND, tr("server.notInLibrary"))
             ext = os.path.splitext(path)[1].lower()
             self._send_file(path, AUDIO_TYPES.get(ext, "application/octet-stream"))
 
@@ -518,7 +518,7 @@ def make_handler(state: AppState, port: int):
                 if p == "/api/spectrogram":
                     wanted = parse_qs(url.query).get("path", [""])[0]
                     if not state.can_read(wanted) or not os.path.isfile(wanted):
-                        return self._error(HTTPStatus.NOT_FOUND, tr("Not a file in the library"))
+                        return self._error(HTTPStatus.NOT_FOUND, tr("server.notInLibrary"))
                     try:
                         png = state.spectrum.spectrogram(wanted)
                     except (ValueError, OSError, subprocess.TimeoutExpired) as e:
@@ -556,7 +556,7 @@ def make_handler(state: AppState, port: int):
                 if self.path == "/api/apply":
                     order = body.get("expectedOrder")
                     if not isinstance(body.get("changes"), list) or not isinstance(body.get("expected"), dict) or not isinstance(order, (dict, type(None))):
-                        raise ValueError(tr("invalid apply data"))
+                        raise ValueError(tr("request.invalidApply"))
                     try:
                         return self._json(state.apply(body["changes"], body["expected"], order))
                     except ApplyError as e:
@@ -568,11 +568,11 @@ def make_handler(state: AppState, port: int):
                         return self._json({"ok": False, "error": str(e)})
                 if self.path == "/api/trash":
                     if not isinstance(body.get("paths"), list):
-                        raise ValueError(tr("invalid paths"))
+                        raise ValueError(tr("request.invalidPaths"))
                     return self._json(state.trash(body["paths"]))
                 if self.path == "/api/untrash":
                     if not isinstance(body.get("paths"), list):
-                        raise ValueError(tr("invalid paths"))
+                        raise ValueError(tr("request.invalidPaths"))
                     return self._json(state.untrash(body["paths"]))
                 if self.path == "/api/reveal":
                     state.reveal(str(body.get("path", "")))
@@ -590,7 +590,7 @@ def make_handler(state: AppState, port: int):
                 body = self._read_json()
                 if self.path == "/api/plan":
                     if not isinstance(body, dict) or not isinstance(body.get("changes"), list):
-                        raise ValueError(tr("invalid plan data"))
+                        raise ValueError(tr("request.invalidPlan"))
                     state.write_plan(body)
                     return self._json({"ok": True})
                 if self.path == "/api/screen":

@@ -79,14 +79,14 @@ audio.addEventListener('pause', notify);
 audio.addEventListener('ended', notify);
 audio.addEventListener('timeupdate', () => updateProgress());
 audio.addEventListener('error', () => {
-  if (current) current.error = _('Cannot play: the format is not supported or the file is missing');
+  if (current) current.error = _('player.cannotPlay');
   notify();
 });
 
 let els = {};
 export function mountPlayerBar(host) {
   bar = host;
-  els.btn = h('button', { class: 'player-btn', title: _('Play / pause (Space)'), onclick: () => player.toggle() });
+  els.btn = h('button', { class: 'player-btn', title: _('common.playPauseSpace'), onclick: () => player.toggle() });
   els.title = h('div', { class: 'player-title' });
   els.time = h('div', { class: 'player-time' });
   els.fill = h('div', { class: 'player-fill' });
@@ -107,7 +107,7 @@ export function mountPlayerBar(host) {
     max: 1,
     step: 0.01,
     class: 'player-volume',
-    title: _('Volume'),
+    title: _('player.volume'),
     oninput: (e) => (audio.volume = Number(e.target.value)),
   });
   vol.value = String(audio.volume);
@@ -115,13 +115,13 @@ export function mountPlayerBar(host) {
     'select',
     {
       class: 'input input-sm player-start',
-      title: _('Start point for new previews (Q jumps to the beginning)'),
+      title: _('player.startPoint'),
       onchange: (e) => {
         prefs.set('player.startAt', (startAt = Number(e.target.value)));
         e.target.blur(); // give the keyboard shortcuts back
       },
     },
-    START_CHOICES.map((f) => h('option', { value: String(f) }, f ? _('Start at {pct}%', { pct: Math.round(f * 100) }) : _('Start at the beginning'))),
+    START_CHOICES.map((f) => h('option', { value: String(f) }, f ? _('player.startAt', { pct: Math.round(f * 100) }) : _('player.startAtBeginning'))),
   );
   start.value = String(START_CHOICES.includes(startAt) ? startAt : 0.3);
   host.append(els.btn, els.title, els.track, els.time, start, vol);
@@ -133,7 +133,7 @@ function renderBar() {
   els.btn.textContent = player.playing ? '❚❚' : '▶';
   els.btn.disabled = !current;
   if (!current) {
-    clear(els.title, h('span', { class: 'muted' }, _('Select a song and press Space to preview')));
+    clear(els.title, h('span', { class: 'muted' }, _('player.idleHint')));
   } else {
     // clear() skips null children; the native replaceChildren() would render them as "null".
     clear(

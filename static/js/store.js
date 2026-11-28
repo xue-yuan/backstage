@@ -130,7 +130,7 @@ class Store {
     this.ruleOverrides = overrides;
     this._rules = null;
     this.notify();
-    api.saveRules({ overrides }).catch((e) => toast(_('Could not save the unsorted settings: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 }));
+    api.saveRules({ overrides }).catch((e) => toast(_('store.saveRulesFailed', { error: e.message }), { tone: 'danger', timeout: 8000 }));
   }
 
   // ---- real codec / bit rate per file (read with afinfo on the server, cached there) ----
@@ -180,7 +180,7 @@ class Store {
     } catch (e) {
       this.spectrumProgress = { ...this.spectrumProgress, stopping: false };
       this.notify();
-      toast(_('Could not stop the check: {error}', { error: e.message }), { tone: 'danger' });
+      toast(_('store.stopCheckFailed', { error: e.message }), { tone: 'danger' });
     }
   }
   async followSpectrum() {
@@ -286,11 +286,11 @@ class Store {
     if (at < 0) return;
     const note = this.notes[at];
     this.setNotes(this.notes.filter((n) => n.id !== id));
-    toast(_('Note deleted'), { action: () => this.setNotes([...this.notes.slice(0, at), note, ...this.notes.slice(at)]), timeout: 6000 });
+    toast(_('store.noteDeleted'), { action: () => this.setNotes([...this.notes.slice(0, at), note, ...this.notes.slice(at)]), timeout: 6000 });
   }
   setNotes(notes) {
     if (this.notesError) {
-      toast(_('Notes could not be read ({error}); saving is disabled to avoid overwriting them. Reload the page to try again.', { error: this.notesError }), { tone: 'danger', timeout: 8000 });
+      toast(_('common.notesReadFailed', { error: this.notesError }), { tone: 'danger', timeout: 8000 });
       return;
     }
     this.notes = notes;
@@ -298,7 +298,7 @@ class Store {
     // Saved right away (no debounce), one request after another so the last state always wins.
     const snapshot = notes;
     this._notesSave = (this._notesSave || Promise.resolve()).then(() =>
-      api.saveNotes(snapshot).catch((e) => toast(_('Could not save the notes: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 })),
+      api.saveNotes(snapshot).catch((e) => toast(_('store.saveNotesFailed', { error: e.message }), { tone: 'danger', timeout: 8000 })),
     );
   }
 
@@ -360,7 +360,7 @@ class Store {
       try {
         await api.saveScreen({ reject: [...this.screen.reject], keep: [...this.screen.keep] });
       } catch (e) {
-        toast(_('Could not save the screening marks: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
+        toast(_('store.saveScreenFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
       }
     }, 250);
   }
@@ -411,7 +411,7 @@ class Store {
       // Reject edits that cannot be applied cleanly (e.g. name clash).
       this.plan.changes.pop();
       this.recompute();
-      toast(_('Cannot apply: {error}', { error: newIssues[0].message }), { tone: 'danger' });
+      toast(_('store.cannotApply', { error: newIssues[0].message }), { tone: 'danger' });
       return null;
     }
     this.persist();
@@ -485,7 +485,7 @@ class Store {
       try {
         await api.savePlan({ ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt });
       } catch (e) {
-        toast(_('Could not save the plan: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
+        toast(_('store.savePlanFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
       }
     }, 250);
   }
@@ -502,46 +502,46 @@ class Store {
 
   // ---- op builders ----
   opAdd(crate, asset) {
-    return { type: 'add', crate, asset, text: _('Add to "{crate}": {track}', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
+    return { type: 'add', crate, asset, text: _('op.addToCrate', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
   }
   opRemove(crate, asset) {
-    return { type: 'remove', crate, asset, text: _('Remove from "{crate}": {track}', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
+    return { type: 'remove', crate, asset, text: _('op.removeFromCrate', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
   }
   opCreate(name, parent) {
     const id = newCrateId();
     const text =
       parent === this.eff.rootId
-        ? _('Create crate "{name}" at the top level', { name })
-        : _('Create crate "{name}" under "{parent}"', { name, parent: this.crateLabel(parent) });
+        ? _('op.createCrateTop', { name })
+        : _('op.createCrateUnder', { name, parent: this.crateLabel(parent) });
     return { type: 'createCrate', id, name, parent, text };
   }
   opRename(crate, name) {
-    return { type: 'renameCrate', crate, name, text: _('Rename "{crate}" → "{name}"', { crate: this.crateLabel(crate), name }) };
+    return { type: 'renameCrate', crate, name, text: _('op.renameCrate', { crate: this.crateLabel(crate), name }) };
   }
   /** before: undefined = last (the original move), a sibling id = just before it, null = last of that level. */
   opMove(crate, parent, before) {
     if (before === undefined) {
       const text =
         parent === this.eff.rootId
-          ? _('Move "{crate}" to the top level', { crate: this.crateLabel(crate) })
-          : _('Move "{crate}" under "{parent}"', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
+          ? _('op.moveCrateTop', { crate: this.crateLabel(crate) })
+          : _('op.moveCrateUnder', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
       return { type: 'moveCrate', crate, parent, text };
     }
     const reorder = this.eff.crates.get(crate)?.parent === parent;
-    const level = parent === this.eff.rootId ? _('the top level') : _('the crate "{name}"', { name: this.crateLabel(parent) });
+    const level = parent === this.eff.rootId ? _('store.levelTop') : _('store.levelCrate', { name: this.crateLabel(parent) });
     const text = reorder
       ? before != null
-        ? _('Reorder: "{crate}" before "{before}"', { crate: this.crateLabel(crate), before: this.eff.crates.get(before)?.name ?? '' })
-        : _('Reorder: "{crate}" to the end of {level}', { crate: this.crateLabel(crate), level })
+        ? _('op.reorderBefore', { crate: this.crateLabel(crate), before: this.eff.crates.get(before)?.name ?? '' })
+        : _('op.reorderEnd', { crate: this.crateLabel(crate), level })
       : before != null
-        ? _('Move "{crate}" into {level}, before "{before}"', { crate: this.crateLabel(crate), level, before: this.eff.crates.get(before)?.name ?? '' })
-        : _('Move "{crate}" to the end of {level}', { crate: this.crateLabel(crate), level });
+        ? _('op.moveBefore', { crate: this.crateLabel(crate), level, before: this.eff.crates.get(before)?.name ?? '' })
+        : _('op.moveEnd', { crate: this.crateLabel(crate), level });
     return { type: 'moveCrate', crate, parent, before, reorder, text };
   }
   /** Add a file on disk to the Serato library (optionally into a crate). Serato analyses it later. */
   opImport(path, crate = null, crateName = null) {
     const file = baseName(path);
-    const text = crate != null ? _('Add to Serato: {file} → {crate}', { file, crate: crateName ?? this.crateLabel(crate) }) : _('Add to Serato: {file}', { file });
+    const text = crate != null ? _('op.importInto', { file, crate: crateName ?? this.crateLabel(crate) }) : _('op.import', { file });
     return { type: 'importTrack', id: `imp-${uid()}`, path, crate, text };
   }
   /** Is this file already planned to be added to Serato? */
@@ -549,16 +549,16 @@ class Store {
     return this.eff.imports.get(pathKey(path)) ?? null;
   }
   opDelete(crate) {
-    return { type: 'deleteCrate', crate, text: _('Delete crate "{crate}"', { crate: this.crateLabel(crate) }) };
+    return { type: 'deleteCrate', crate, text: _('op.deleteCrate', { crate: this.crateLabel(crate) }) };
   }
   opMerge(from, into) {
-    return { type: 'mergeCrate', from, into, text: _('Merge "{from}" into "{into}"', { from: this.crateLabel(from), into: this.crateLabel(into) }) };
+    return { type: 'mergeCrate', from, into, text: _('op.mergeCrate', { from: this.crateLabel(from), into: this.crateLabel(into) }) };
   }
   /** deleteFile: also move the file to the Trash once the removal is written to Serato. */
   opRemoveTrack(asset, reason, { deleteFile = false } = {}) {
     const track = this.trackLabel(asset);
-    const main = deleteFile ? _('Remove from the Serato library and move the file to the Trash: {track}', { track }) : _('Remove from the Serato library (file kept): {track}', { track });
-    const op = { type: 'removeTrack', asset, reason, text: `${main}${reason ? _(' ({reason})', { reason }) : ''}` };
+    const main = deleteFile ? _('op.removeAndTrash', { track }) : _('op.removeTrack', { track });
+    const op = { type: 'removeTrack', asset, reason, text: `${main}${reason ? _('sep.reason', { reason }) : ''}` };
     if (deleteFile) op.deleteFile = true;
     return op;
   }
@@ -580,10 +580,10 @@ class Store {
     return touched;
   }
   opReject(asset) {
-    return { type: 'removeTrack', asset, reason: _('Reject'), deleteFile: true, text: _('Reject (remove from Serato, move the file to the Trash): {track}', { track: this.trackLabel(asset) }) };
+    return { type: 'removeTrack', asset, reason: _('common.reject'), deleteFile: true, text: _('op.rejectTrack', { track: this.trackLabel(asset) }) };
   }
   opRelocate(asset, path) {
-    return { type: 'relocate', asset, path, text: _('Relocate file: {track} → {path}', { track: this.trackLabel(asset), path }) };
+    return { type: 'relocate', asset, path, text: _('op.relocate', { track: this.trackLabel(asset), path }) };
   }
 }
 

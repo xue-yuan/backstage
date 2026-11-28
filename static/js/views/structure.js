@@ -25,7 +25,7 @@ export function createStructureView({ navigate } = {}) {
   // ---------- layout ----------
   const treeFilterInput = h('input', {
     class: 'input input-sm',
-    placeholder: _('Filter crates…'),
+    placeholder: _('common.filterCrates'),
     oninput: (e) => {
       treeFilter = e.target.value;
       renderTree();
@@ -36,7 +36,7 @@ export function createStructureView({ navigate } = {}) {
     },
   });
   const treeEl = h('div', { class: 'tree', onmousedown: () => (focusArea = 'tree') });
-  const rootDrop = h('div', { class: 'tree-rootdrop' }, _('Drop here to move to the top level'));
+  const rootDrop = h('div', { class: 'tree-rootdrop' }, _('crates.dropToTop'));
   wireDrop(rootDrop, () => store.eff.rootId);
   const treePanel = h(
     'aside',
@@ -45,12 +45,12 @@ export function createStructureView({ navigate } = {}) {
       'div',
       { class: 'toolbar' },
       treeFilterInput,
-      h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, _('+ New crate')),
-      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted, and consolidate into Inbox') }, _('Unsorted…')),
+      h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, _('crates.addNew')),
+      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('crates.unsortedButtonTitle') }, _('common.unsortedButton')),
     ),
     rootDrop,
     treeEl,
-    h('div', { class: 'tree-hint muted small' }, _('Drag crates to rearrange them. Drag songs onto a crate to add them; hold ⌥ to move them')),
+    h('div', { class: 'tree-hint muted small' }, _('crates.dragHint')),
   );
 
   const headEl = h('div', { class: 'panel-head crate-head' });
@@ -62,7 +62,7 @@ export function createStructureView({ navigate } = {}) {
     { class: 'panel crate-detail' },
     headEl,
     selBar,
-    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, _('Title / artist')), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, _('Format')), h('span', {}, _('Genre')), h('span', { class: 'num' }, _('Other crates'))),
+    h('div', { class: 'trow trow-head trow-crate' }, h('span'), h('span', {}, _('common.titleArtist')), h('span', { class: 'num' }, 'BPM'), h('span', {}, 'Key'), h('span', {}, _('common.format')), h('span', {}, _('common.genre')), h('span', { class: 'num' }, _('crates.otherCrates'))),
     vlist.el,
   );
   const el = h('div', { class: 'view structure' }, treePanel, detail);
@@ -129,7 +129,7 @@ export function createStructureView({ navigate } = {}) {
       }
     };
     walk(eff.rootId, 0);
-    clear(treeEl, visible.map(({ id, depth }) => treeRow(id, depth, !!show)), !visible.length ? h('div', { class: 'empty' }, _('No crates match')) : null);
+    clear(treeEl, visible.map(({ id, depth }) => treeRow(id, depth, !!show)), !visible.length ? h('div', { class: 'empty' }, _('crates.noCratesMatch')) : null);
     if (reveal) treeEl.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     else treeEl.scrollTop = keep;
   }
@@ -172,12 +172,12 @@ export function createStructureView({ navigate } = {}) {
         kids.length ? h('span', { class: `chev ${open ? 'is-open' : ''}` }) : '',
       ),
       h('span', { class: 'tree-name' }, c.name),
-      st.created ? h('span', { class: 'tag tag-new' }, _('New')) : null,
-      st.originalName != null ? h('span', { class: 'tag tag-edit', title: _('Original name: {name}', { name: st.originalName }) }, _('Renamed')) : null,
-      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, _('Moved')) : st.reordered ? h('span', { class: 'tag tag-edit', title: _('New position in this level (added to the plan)') }, _('Reordered')) : null,
-      st.merged ? h('span', { class: 'tag tag-edit' }, _('Merged')) : null,
+      st.created ? h('span', { class: 'tag tag-new' }, _('crates.badgeNew')) : null,
+      st.originalName != null ? h('span', { class: 'tag tag-edit', title: _('crates.originalName', { name: st.originalName }) }, _('crates.badgeRenamed')) : null,
+      st.originalParent !== undefined ? h('span', { class: 'tag tag-edit' }, _('crates.badgeMoved')) : st.reordered ? h('span', { class: 'tag tag-edit', title: _('crates.reorderedHint') }, _('crates.badgeReordered')) : null,
+      st.merged ? h('span', { class: 'tag tag-edit' }, _('crates.badgeMerged')) : null,
       // Mark only the top-most unsorted crate; its sub-crates inherit it.
-      store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: _('Songs in this crate (and its child crates) count as unsorted') }, _('Unsorted crate')) : null,
+      store.rules.skip.has(id) && !store.rules.skip.has(c.parent) ? h('span', { class: 'tag tag-unsorted', title: _('crates.unsortedHint') }, _('common.unsortedCrate')) : null,
       h('span', { class: 'tree-count' }, count || ''),
     );
     wireDrop(row, () => id);
@@ -289,14 +289,14 @@ export function createStructureView({ navigate } = {}) {
   async function createCrate(parent) {
     const eff = store.eff;
     const name = await promptDialog({
-      title: parent === eff.rootId ? _('New crate') : _('New crate under "{parent}"', { parent: eff.pathOf(parent) }),
-      placeholder: _('Crate name'),
-      okText: _('Add crate'),
-      validate: (v) => (siblingNameTaken(parent, v) ? _('This level already has that name') : null),
+      title: parent === eff.rootId ? _('common.newCrate') : _('crates.newCrateUnder', { parent: eff.pathOf(parent) }),
+      placeholder: _('crates.crateName'),
+      okText: _('crates.addCrate'),
+      validate: (v) => (siblingNameTaken(parent, v) ? _('crates.nameTaken') : null),
     });
     if (!name) return;
     const op = store.opCreate(name, parent);
-    if (store.commit(_('Create crate "{path}"', { path: name }), [op])) {
+    if (store.commit(_('common.createCrate', { path: name }), [op])) {
       if (parent !== eff.rootId) expanded.add(parent);
       selectCrate(op.id);
     }
@@ -307,22 +307,22 @@ export function createStructureView({ navigate } = {}) {
     const c = eff.crates.get(id);
     if (!c) return;
     const name = await promptDialog({
-      title: _('Rename'),
+      title: _('common.rename'),
       value: c.name,
-      okText: _('Save name'),
-      validate: (v) => (v === c.name ? _('The name did not change') : siblingNameTaken(c.parent, v, id) ? _('This level already has that name') : null),
+      okText: _('crates.saveName'),
+      validate: (v) => (v === c.name ? _('crates.nameDidNotChange') : siblingNameTaken(c.parent, v, id) ? _('crates.nameTaken') : null),
     });
-    if (name) store.commit(_('Rename "{from}" to "{to}"', { from: c.name, to: name }), [store.opRename(id, name)]);
+    if (name) store.commit(_('crates.renameChange', { from: c.name, to: name }), [store.opRename(id, name)]);
   }
 
   function moveCrateTo(id, parent) {
     const eff = store.eff;
     const c = eff.crates.get(id);
     if (siblingNameTaken(parent, c.name, id)) {
-      toast(_('"{name}" already exists in the target. To merge, use "Merge into…"', { name: c.name }), { tone: 'danger' });
+      toast(_('crates.nameTakenUseMerge', { name: c.name }), { tone: 'danger' });
       return;
     }
-    if (store.commit(parent === eff.rootId ? _('Move "{name}" to the top level', { name: c.name }) : _('Move "{name}" to {parent}', { name: c.name, parent: eff.pathOf(parent) }), [store.opMove(id, parent)])) {
+    if (store.commit(parent === eff.rootId ? _('crates.moveTopChange', { name: c.name }) : _('crates.moveChange', { name: c.name, parent: eff.pathOf(parent) }), [store.opMove(id, parent)])) {
       if (parent !== eff.rootId) expanded.add(parent);
       saveExpanded();
       selectCrate(id);
@@ -335,7 +335,7 @@ export function createStructureView({ navigate } = {}) {
     const c = eff.crates.get(id);
     if (!c) return;
     if (parent !== c.parent && siblingNameTaken(parent, c.name, id)) {
-      toast(_('"{name}" already exists in the target. To merge, use "Merge into…"', { name: c.name }), { tone: 'danger' });
+      toast(_('crates.nameTakenUseMerge', { name: c.name }), { tone: 'danger' });
       return;
     }
     const op = store.opMove(id, parent, before);
@@ -344,7 +344,7 @@ export function createStructureView({ navigate } = {}) {
     if (op.reorder && prev?.type === 'moveCrate' && prev.reorder && prev.crate === id && prev.parent === parent) {
       store.undo(last.id);
       if (isAt(id, parent, before)) {
-        toast(_('"{name}" is back in its original position', { name: c.name }));
+        toast(_('crates.backInPlace', { name: c.name }));
         selectCrate(id);
         return;
       }
@@ -375,11 +375,11 @@ export function createStructureView({ navigate } = {}) {
     const eff = store.eff;
     const exclude = new Set(subtreeIds(eff, id));
     const target = await modal({
-      title: _('Move "{crate}" to…', { crate: eff.pathOf(id) }),
+      title: _('crates.moveDialogTitle', { crate: eff.pathOf(id) }),
       wide: true,
       body: (close) => [
-        h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, _('Move to the top level')),
-        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: _('Or choose a parent crate'), onPick: (t) => close(t) }).el,
+        h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, _('crates.moveToTopButton')),
+        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: _('crates.chooseParent'), onPick: (t) => close(t) }).el,
       ],
     });
     if (target != null) moveCrateTo(id, target);
@@ -387,9 +387,9 @@ export function createStructureView({ navigate } = {}) {
 
   async function mergeDialog(id) {
     const eff = store.eff;
-    const target = await pickCrateDialog({ title: _('Merge "{crate}" into… (its songs and child crates move over)', { crate: eff.pathOf(id) }), exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
+    const target = await pickCrateDialog({ title: _('crates.mergeDialogTitle', { crate: eff.pathOf(id) }), exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
     if (target == null) return;
-    if (store.commit(_('Merged "{from}" into "{into}"', { from: eff.pathOf(id), into: eff.pathOf(target) }), [store.opMerge(id, target)])) selectCrate(target);
+    if (store.commit(_('crates.mergeChange', { from: eff.pathOf(id), into: eff.pathOf(target) }), [store.opMerge(id, target)])) selectCrate(target);
   }
 
   async function deleteCrate(id) {
@@ -397,14 +397,14 @@ export function createStructureView({ navigate } = {}) {
     const ids = subtreeIds(eff, id);
     const nTracks = new Set(ids.flatMap((c) => eff.members.get(c) || [])).size;
     const ok = await confirmDialog({
-      title: _('Delete "{crate}"?', { crate: eff.pathOf(id) }),
-      message: `${ids.length > 1 ? _n(ids.length - 1, 'Includes {n} child crate. ', 'Includes {n} child crates. ') : ''}${_n(nTracks, '{n} song is removed from it (it stays in the library). The change goes into the plan and can be undone.', '{n} songs are removed from it (they stay in the library). The change goes into the plan and can be undone.')}`,
-      okText: _('Add to plan'),
+      title: _('crates.deleteConfirm', { crate: eff.pathOf(id) }),
+      message: `${ids.length > 1 ? _n(ids.length - 1, 'crates.includesChildCrates') : ''}${_n(nTracks, 'crates.deleteWarning')}`,
+      okText: _('common.addToPlan'),
       danger: true,
     });
     if (!ok) return;
     const parent = eff.crates.get(id).parent;
-    if (store.commit(_('Delete crate "{crate}"', { crate: eff.pathOf(id) }), [store.opDelete(id)])) {
+    if (store.commit(_('op.deleteCrate', { crate: eff.pathOf(id) }), [store.opDelete(id)])) {
       selected = store.eff.crates.has(parent) ? parent : null;
       renderAll();
     }
@@ -431,7 +431,7 @@ export function createStructureView({ navigate } = {}) {
     contextMenu(e, [
       navigate && songs
         ? {
-            label: _('Sort the songs in this crate'),
+            label: _('crates.sortThisCrate'),
             action: () => {
               prefs.set('inbox.source', { kind: 'crate', id });
               navigate('inbox');
@@ -439,33 +439,33 @@ export function createStructureView({ navigate } = {}) {
           }
         : null,
       'sep',
-      { label: _('Rename'), hint: 'F2', action: () => renameCrate(id) },
-      { label: _('New child crate'), hint: 'N', action: () => createCrate(id) },
-      { label: _('Move…'), action: () => moveDialog(id) },
+      { label: _('common.rename'), hint: 'F2', action: () => renameCrate(id) },
+      { label: _('common.newChildCrate'), hint: 'N', action: () => createCrate(id) },
+      { label: _('crates.moveMenu'), action: () => moveDialog(id) },
       ...(() => {
         const sibs = siblingsOf(id);
         const i = sibs.indexOf(id);
         const first = i <= 0;
         const last = i === sibs.length - 1;
         return [
-          { label: _('Move up'), hint: '⌥↑', disabled: first, action: () => nudge(id, -1) },
-          { label: _('Move down'), hint: '⌥↓', disabled: last, action: () => nudge(id, 1) },
-          { label: _('Move to the top of this level'), disabled: first, action: () => toEdge(id, true) },
-          { label: _('Move to the bottom of this level'), disabled: last, action: () => toEdge(id, false) },
+          { label: _('crates.moveUp'), hint: '⌥↑', disabled: first, action: () => nudge(id, -1) },
+          { label: _('crates.moveDown'), hint: '⌥↓', disabled: last, action: () => nudge(id, 1) },
+          { label: _('crates.moveToLevelTop'), disabled: first, action: () => toEdge(id, true) },
+          { label: _('crates.moveToLevelBottom'), disabled: last, action: () => toEdge(id, false) },
         ];
       })(),
-      { label: _('Merge into…'), action: () => mergeDialog(id) },
+      { label: _('crates.mergeMenu'), action: () => mergeDialog(id) },
       'sep',
       reason === 'inherited'
         ? null
         : {
-            label: reason != null ? _('Stop counting as unsorted') : _('Count as unsorted'),
+            label: reason != null ? _('crates.stopCountingAsUnsorted') : _('crates.countAsUnsorted'),
             action: () => store.setClassifyOverride(id, reason != null ? (auto ? 'count' : null) : auto ? null : 'skip'),
           },
-      kids ? { label: _('Expand all below'), action: () => expandAll(id, true) } : null,
-      kids ? { label: _('Collapse all below'), action: () => expandAll(id, false) } : null,
+      kids ? { label: _('crates.expandAllBelow'), action: () => expandAll(id, true) } : null,
+      kids ? { label: _('crates.collapseAllBelow'), action: () => expandAll(id, false) } : null,
       'sep',
-      { label: _('Delete…'), hint: 'Delete', danger: true, action: () => deleteCrate(id) },
+      { label: _('crates.deleteMenu'), hint: 'Delete', danger: true, action: () => deleteCrate(id) },
     ]);
   }
 
@@ -481,15 +481,15 @@ export function createStructureView({ navigate } = {}) {
     const n = selTracks.size;
     const crate = store.eff.pathOf(selected);
     contextMenu(e, [
-      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(t) },
-      { label: _('Show in Finder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(store.eff, t)) },
-      spectrumAvailable() ? { label: _('Spectrum'), disabled: !t.exists, action: () => showSpectrum({ path: effectivePath(store.eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) }) } : null,
+      { label: player.isCurrent(`t${t.id}`) && player.playing ? _('common.pause') : _('common.play'), hint: _('common.space'), action: () => player.toggle(t) },
+      { label: _('common.showInFinder'), disabled: !t.exists, action: () => revealInFinder(effectivePath(store.eff, t)) },
+      spectrumAvailable() ? { label: _('common.spectrum'), disabled: !t.exists, action: () => showSpectrum({ path: effectivePath(store.eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) }) } : null,
       noteMenuItem({ track: t }),
       'sep',
-      { label: n > 1 ? _n(n, 'Add {n} song to…', 'Add {n} songs to…') : _('Add to…'), action: () => tracksTo('copy') },
-      { label: n > 1 ? _n(n, 'Move {n} song to…', 'Move {n} songs to…') : _('Move to…'), action: () => tracksTo('move') },
+      { label: n > 1 ? _n(n, 'crates.addSongsMenu') : _('crates.addToMenu'), action: () => tracksTo('copy') },
+      { label: n > 1 ? _n(n, 'crates.moveSongsMenu') : _('crates.moveToMenu'), action: () => tracksTo('move') },
       'sep',
-      { label: _n(n, 'Remove {n} song from "{crate}"', 'Remove {n} songs from "{crate}"', { crate }), hint: 'Delete', danger: true, action: removeSelected },
+      { label: _n(n, 'crates.removeSongsFrom', { crate }), hint: 'Delete', danger: true, action: removeSelected },
     ]);
   }
 
@@ -498,7 +498,7 @@ export function createStructureView({ navigate } = {}) {
     const eff = store.eff;
     if (selected != null && !eff.crates.has(selected)) selected = null;
     if (selected == null) {
-      clear(headEl, h('div', { class: 'empty' }, _('Pick a crate on the left')));
+      clear(headEl, h('div', { class: 'empty' }, _('crates.pickCrateOnLeft')));
       clear(selBar);
       tracks = [];
       vlist.setItems([]);
@@ -511,34 +511,34 @@ export function createStructureView({ navigate } = {}) {
     for (const id of selTracks) if (!tracks.some((t) => t.id === id)) selTracks.delete(id);
 
     const notes = [];
-    if (st.created) notes.push(_('newly created'));
-    if (st.originalName != null) notes.push(_('originally "{name}"', { name: st.originalName }));
-    if (st.originalParent !== undefined) notes.push(_('originally in "{parent}"', { parent: st.originalParent === eff.rootId ? _('top level') : eff.pathOf(st.originalParent) }));
+    if (st.created) notes.push(_('crates.newlyCreated'));
+    if (st.originalName != null) notes.push(_('crates.originally', { name: st.originalName }));
+    if (st.originalParent !== undefined) notes.push(_('crates.originallyIn', { parent: st.originalParent === eff.rootId ? _('crates.topLevel') : eff.pathOf(st.originalParent) }));
     clear(
       headEl,
       h(
         'div',
         { class: 'crate-title' },
         h('h2', {}, eff.pathOf(selected)),
-        h('div', { class: 'muted small' }, `${_n(tracks.length, '{n} song', '{n} songs')} · ${_n(kids.length, '{n} child crate', '{n} child crates')}`, notes.length ? ` · ${_('{notes} (not in Serato yet)', { notes: notes.join(_(', ')) })}` : ''),
+        h('div', { class: 'muted small' }, `${_n(tracks.length, 'common.songs')} · ${_n(kids.length, 'common.childCrates')}`, notes.length ? ` · ${_('crates.pendingNotes', { notes: notes.join(_('sep.comma')) })}` : ''),
         (() => {
           const adding = [...eff.imports.values()].filter((i) => i.crate === selected).length;
-          return adding ? h('div', { class: 'small import-pending' }, _n(adding, '+ {n} song from disk is added when the plan is applied (see Folders)', '+ {n} songs from disk are added when the plan is applied (see Folders)')) : null;
+          return adding ? h('div', { class: 'small import-pending' }, _n(adding, 'crates.pendingImports')) : null;
         })(),
       ),
       h(
         'div',
         { class: 'toolbar' },
-        h('button', { class: 'btn btn-sm', onclick: () => renameCrate(selected), title: 'F2' }, _('Rename')),
-        h('button', { class: 'btn btn-sm', onclick: () => createCrate(selected), title: 'N' }, _('New child crate')),
-        h('button', { class: 'btn btn-sm', onclick: () => moveDialog(selected) }, _('Move…')),
-        h('button', { class: 'btn btn-sm', onclick: () => mergeDialog(selected) }, _('Merge into…')),
-        h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => deleteCrate(selected), title: 'Delete' }, _('Delete')),
+        h('button', { class: 'btn btn-sm', onclick: () => renameCrate(selected), title: 'F2' }, _('common.rename')),
+        h('button', { class: 'btn btn-sm', onclick: () => createCrate(selected), title: 'N' }, _('common.newChildCrate')),
+        h('button', { class: 'btn btn-sm', onclick: () => moveDialog(selected) }, _('crates.moveMenu')),
+        h('button', { class: 'btn btn-sm', onclick: () => mergeDialog(selected) }, _('crates.mergeMenu')),
+        h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => deleteCrate(selected), title: 'Delete' }, _('common.delete')),
         unsortedToggle(selected),
       ),
     );
     renderSelBar();
-    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? _('This crate holds only child crates') : _('Empty crate')));
+    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? _('crates.onlyChildCrates') : _('crates.emptyCrate')));
   }
 
   function unsortedToggle(id) {
@@ -546,12 +546,12 @@ export function createStructureView({ navigate } = {}) {
     if (reason === 'inherited') {
       let top = id;
       while (store.rules.skip.has(store.eff.crates.get(top)?.parent)) top = store.eff.crates.get(top).parent;
-      return h('span', { class: 'tag tag-unsorted', title: _('Because it is under "{crate}"', { crate: store.eff.pathOf(top) }) }, _('Unsorted (inherited)'));
+      return h('span', { class: 'tag tag-unsorted', title: _('crates.inheritedFrom', { crate: store.eff.pathOf(top) }) }, _('crates.unsortedInherited'));
     }
     const on = reason != null;
     return h(
       'label',
-      { class: 'check', title: _('Songs in this crate (and its child crates) count as unsorted') },
+      { class: 'check', title: _('crates.unsortedHint') },
       h('input', {
         type: 'checkbox',
         checked: on,
@@ -560,7 +560,7 @@ export function createStructureView({ navigate } = {}) {
           store.setClassifyOverride(id, e.target.checked ? (auto ? null : 'skip') : auto ? 'count' : null);
         },
       }),
-      _('Counts as unsorted'),
+      _('crates.countsAsUnsorted'),
     );
   }
 
@@ -570,13 +570,13 @@ export function createStructureView({ navigate } = {}) {
       selBar,
       n
         ? [
-            h('span', { class: 'muted' }, _n(n, '{n} song selected', '{n} songs selected')),
-            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('copy') }, _('Add to…')),
-            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('move') }, _('Move to…')),
-            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, _('Remove from this crate')),
-            h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, _('Deselect')),
+            h('span', { class: 'muted' }, _n(n, 'crates.songsSelected')),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('copy') }, _('crates.addToMenu')),
+            h('button', { class: 'btn btn-sm', onclick: () => tracksTo('move') }, _('crates.moveToMenu')),
+            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, _('common.removeFromThisCrate')),
+            h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, _('crates.deselect')),
           ]
-        : h('span', { class: 'muted small' }, _('Select songs (⇧ range, ⌘ multiple, ⌘A all) and drag them onto a crate')),
+        : h('span', { class: 'muted small' }, _('crates.selectHint')),
     );
   }
 
@@ -601,11 +601,11 @@ export function createStructureView({ navigate } = {}) {
           }
           dragging = { kind: 'tracks', ids: [...selTracks], from: selected };
           e.dataTransfer.effectAllowed = 'copyMove';
-          e.dataTransfer.setData('text/plain', _n(selTracks.size, '{n} song', '{n} songs'));
+          e.dataTransfer.setData('text/plain', _n(selTracks.size, 'common.songs'));
         },
         ondragend: () => (dragging = null),
       },
-      h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : isNew ? h('span', { class: 'dot dot-new', title: _('Newly added') }) : ''),
+      h('span', { class: 'trow-status' }, player.isCurrent(`t${t.id}`) ? (player.playing ? '♪' : '❚❚') : isNew ? h('span', { class: 'dot dot-new', title: _('crates.newlyAdded') }) : ''),
       h('div', { class: 'trow-main' }, h('div', { class: 'trow-title' }, noteMark({ track: t }), t.title || t.fileName), h('div', { class: 'trow-sub' }, t.artist || '—')),
       h('span', { class: 'num' }, fmt.bpm(t.bpm)),
       h('span', {}, t.key || '–'),
@@ -640,15 +640,15 @@ export function createStructureView({ navigate } = {}) {
     const ops = ids.filter((a) => !have.has(a)).map((a) => store.opAdd(target, a));
     if (moveFrom != null) ops.push(...ids.map((a) => store.opRemove(moveFrom, a)));
     if (!ops.length) {
-      toast(_('These songs are already in "{crate}"', { crate: eff.pathOf(target) }));
+      toast(_('crates.alreadyInCrate', { crate: eff.pathOf(target) }));
       return;
     }
-    store.commit(moveFrom != null ? _n(ids.length, 'Move {n} song to "{crate}"', 'Move {n} songs to "{crate}"', { crate: eff.pathOf(target) }) : _n(ids.length, 'Add {n} song to "{crate}"', 'Add {n} songs to "{crate}"', { crate: eff.pathOf(target) }), ops);
+    store.commit(moveFrom != null ? _n(ids.length, 'crates.moveSongsTo', { crate: eff.pathOf(target) }) : _n(ids.length, 'crates.addSongsTo', { crate: eff.pathOf(target) }), ops);
   }
 
   async function tracksTo(mode) {
     const ids = [...selTracks];
-    const target = await pickCrateDialog({ title: mode === 'move' ? _n(ids.length, 'Move {n} song to…', 'Move {n} songs to…') : _n(ids.length, 'Add {n} song to…', 'Add {n} songs to…'), exclude: new Set([selected]) });
+    const target = await pickCrateDialog({ title: mode === 'move' ? _n(ids.length, 'crates.moveSongsMenu') : _n(ids.length, 'crates.addSongsMenu'), exclude: new Set([selected]) });
     if (target == null) return;
     addTracksTo(ids, parseId(target), mode === 'move' ? selected : null);
     if (mode === 'move') selTracks.clear();
@@ -657,7 +657,7 @@ export function createStructureView({ navigate } = {}) {
   function removeSelected() {
     const ids = [...selTracks];
     selTracks.clear();
-    store.commit(_n(ids.length, 'Remove {n} song from "{crate}"', 'Remove {n} songs from "{crate}"', { crate: store.eff.pathOf(selected) }), ids.map((a) => store.opRemove(selected, a)));
+    store.commit(_n(ids.length, 'crates.removeSongsFrom', { crate: store.eff.pathOf(selected) }), ids.map((a) => store.opRemove(selected, a)));
   }
 
   function renderAll() {
@@ -673,7 +673,7 @@ export function createStructureView({ navigate } = {}) {
 
   return {
     el,
-    title: _('Crates'),
+    title: _('tab.crates'),
     update: renderAll,
     onKey(e) {
       if (focusArea === 'tracks') {

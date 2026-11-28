@@ -137,7 +137,7 @@ export class VirtualList {
 
 // ---------- Toasts ----------
 let toastHost;
-export function toast(message, { action, actionLabel = _('Undo'), tone = 'info', timeout = 4000 } = {}) {
+export function toast(message, { action, actionLabel = _('common.undo'), tone = 'info', timeout = 4000 } = {}) {
   toastHost ||= document.body.appendChild(h('div', { class: 'toast-host' }));
   const el = h(
     'div',
@@ -189,12 +189,12 @@ export function modal({ title, body, actions, onKey, wide = false, className = '
   });
 }
 
-export function confirmDialog({ title, message, okText = _('OK'), danger = false }) {
+export function confirmDialog({ title, message, okText = _('common.ok'), danger = false }) {
   return modal({
     title,
     body: h('p', {}, message),
     actions: (close) => [
-      h('button', { class: 'btn', onclick: () => close(false) }, _('Cancel')),
+      h('button', { class: 'btn', onclick: () => close(false) }, _('common.cancel')),
       h('button', { class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`, onclick: () => close(true) }, okText),
     ],
     onKey: (e, close) => {
@@ -206,12 +206,12 @@ export function confirmDialog({ title, message, okText = _('OK'), danger = false
   }).then((v) => v === true);
 }
 
-export function promptDialog({ title, value = '', placeholder = '', okText = _('OK'), validate }) {
+export function promptDialog({ title, value = '', placeholder = '', okText = _('common.ok'), validate }) {
   const input = h('input', { class: 'input', value, placeholder });
   const err = h('div', { class: 'field-error' });
   const submit = (close) => {
     const v = input.value.trim();
-    const problem = !v ? _('Please enter a name') : validate?.(v);
+    const problem = !v ? _('common.enterName') : validate?.(v);
     if (problem) {
       err.textContent = problem;
       return;
@@ -222,7 +222,7 @@ export function promptDialog({ title, value = '', placeholder = '', okText = _('
     title,
     body: [input, err],
     actions: (close) => [
-      h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel')),
+      h('button', { class: 'btn', onclick: () => close(null) }, _('common.cancel')),
       h('button', { class: 'btn btn-primary', onclick: () => submit(close) }, okText),
     ],
     onKey: (e, close) => {
@@ -325,6 +325,6 @@ export async function revealInFinder(path) {
     const res = await fetch('/api/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
   } catch (err) {
-    toast(_('Could not open: {error}', { error: err.message }), { tone: 'danger' });
+    toast(_('common.couldNotOpen', { error: err.message }), { tone: 'danger' });
   }
 }

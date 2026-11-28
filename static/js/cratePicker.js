@@ -11,7 +11,7 @@ import { _, _n } from './i18n.js';
  * @param {() => Set} [o.exclude]
  * @param {() => Set} [o.activeIds]  crates to mark as already containing the track
  */
-export function createCratePicker({ onPick, allowCreate = false, exclude, activeIds, placeholder = _('Search crates… (/)'), autofocus = false, inline = false }) {
+export function createCratePicker({ onPick, allowCreate = false, exclude, activeIds, placeholder = _('picker.searchCrates'), autofocus = false, inline = false }) {
   let results = [];
   let index = 0;
   const input = h('input', { class: 'input', placeholder, autocomplete: 'off', spellcheck: false });
@@ -61,12 +61,12 @@ export function createCratePicker({ onPick, allowCreate = false, exclude, active
             },
           },
           r.create
-            ? [h('span', { class: 'picker-plus' }, '+'), _('Create "{path}"', { path: r.path })]
+            ? [h('span', { class: 'picker-plus' }, '+'), _('picker.createNamed', { path: r.path })]
             : [active.has(r.id) ? h('span', { class: 'picker-check' }, '✓') : null, highlight(r.path)],
         ),
       ),
     );
-    if (!results.length && q) list.append(h('div', { class: 'picker-empty' }, allowCreate ? _('No match. Type "Parent / Name" to create it under a crate') : _('No matching crate')));
+    if (!results.length && q) list.append(h('div', { class: 'picker-empty' }, allowCreate ? _('picker.noMatchHint') : _('common.noMatchingCrate')));
     list.hidden = !show || (!results.length && !q);
     list.children[index]?.scrollIntoView({ block: 'nearest' });
   }
@@ -82,7 +82,7 @@ export function createCratePicker({ onPick, allowCreate = false, exclude, active
     if (!r) return;
     if (r.create) {
       const op = store.opCreate(r.name, r.parent);
-      const change = store.commit(_('Create crate "{path}"', { path: r.path }), [op], { silent: true });
+      const change = store.commit(_('common.createCrate', { path: r.path }), [op], { silent: true });
       if (!change) return;
       onPick(op.id, { created: true });
     } else {
@@ -137,7 +137,7 @@ export function pickCrateDialog({ title, exclude, allowCreate = true }) {
         autofocus: true,
         allowCreate,
         exclude: () => exclude || new Set(),
-        placeholder: _('Type a crate name or path, Enter to pick'),
+        placeholder: _('picker.placeholder'),
         onPick: (id) => close(id),
       }).el,
   });

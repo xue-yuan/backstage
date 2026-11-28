@@ -87,31 +87,31 @@ export function applyPlan(base, changes) {
   const apply = (op) => {
     switch (op.type) {
       case 'add': {
-        if (!members.has(op.crate)) return _('The crate no longer exists');
-        if (!base.tracks.has(op.asset) || removedTracks.has(op.asset)) return _('The song no longer exists');
+        if (!members.has(op.crate)) return _('model.crateGone');
+        if (!base.tracks.has(op.asset) || removedTracks.has(op.asset)) return _('model.songGone');
         const list = members.get(op.crate);
         if (!list.includes(op.asset)) list.push(op.asset);
         return null;
       }
       case 'remove': {
         const list = members.get(op.crate);
-        if (!list) return _('The crate no longer exists');
+        if (!list) return _('model.crateGone');
         const i = list.indexOf(op.asset);
         if (i >= 0) list.splice(i, 1);
         return null;
       }
       case 'createCrate': {
-        if (crates.has(op.id)) return _('The crate already exists');
-        if (!validParent(op.parent)) return _('The parent crate no longer exists');
-        if (nameTaken(op.parent, op.name)) return _('"{name}" already exists at this level', { name: op.name });
+        if (crates.has(op.id)) return _('model.crateExists');
+        if (!validParent(op.parent)) return _('model.parentCrateGone');
+        if (nameTaken(op.parent, op.name)) return _('model.nameTakenAtLevel', { name: op.name });
         crates.set(op.id, { id: op.id, parent: op.parent, name: op.name, order: ++maxOrder, status: { created: true } });
         members.set(op.id, []);
         return null;
       }
       case 'renameCrate': {
         const c = crates.get(op.crate);
-        if (!c) return _('The crate no longer exists');
-        if (nameTaken(c.parent, op.name, c.id)) return _('"{name}" already exists at this level', { name: op.name });
+        if (!c) return _('model.crateGone');
+        if (nameTaken(c.parent, op.name, c.id)) return _('model.nameTakenAtLevel', { name: op.name });
         if (!c.status.created && c.status.originalName == null) c.status.originalName = c.name;
         c.name = op.name;
         if (c.status.originalName === c.name) delete c.status.originalName;
@@ -119,10 +119,10 @@ export function applyPlan(base, changes) {
       }
       case 'moveCrate': {
         const c = crates.get(op.crate);
-        if (!c) return _('The crate no longer exists');
-        if (!validParent(op.parent)) return _('The target crate no longer exists');
-        if (op.parent === c.id || isDescendant(op.parent, c.id)) return _('Cannot move a crate into itself');
-        if (nameTaken(op.parent, c.name, c.id)) return _('"{name}" already exists in the target', { name: c.name });
+        if (!c) return _('model.crateGone');
+        if (!validParent(op.parent)) return _('model.targetCrateGone');
+        if (op.parent === c.id || isDescendant(op.parent, c.id)) return _('model.cannotMoveIntoItself');
+        if (nameTaken(op.parent, c.name, c.id)) return _('model.nameTakenInTarget', { name: c.name });
         if (!c.status.created && c.status.originalParent === undefined) c.status.originalParent = c.parent;
         // "before" (a sibling id, or null for last) places it; plans from before that always went last.
         c.order = 'before' in op ? orderBefore(op.parent, op.before, c.id) : ++maxOrder;
@@ -133,25 +133,25 @@ export function applyPlan(base, changes) {
       }
       case 'importTrack': {
         const k = pathKey(op.path);
-        if (inSerato(k)) return _('Already in Serato');
-        if (imports.has(k)) return _('Already in the plan');
-        if (op.crate != null && !crates.has(op.crate)) return _('The crate no longer exists');
+        if (inSerato(k)) return _('common.alreadyInSerato');
+        if (imports.has(k)) return _('model.alreadyPlanned');
+        if (op.crate != null && !crates.has(op.crate)) return _('model.crateGone');
         imports.set(k, { id: op.id, path: op.path, crate: op.crate ?? null });
         return null;
       }
       case 'deleteCrate': {
-        if (!crates.has(op.crate)) return _('The crate no longer exists');
+        if (!crates.has(op.crate)) return _('model.crateGone');
         deleteCrate(op.crate);
         return null;
       }
       case 'mergeCrate': {
-        if (!crates.has(op.from) || !crates.has(op.into)) return _('The crate no longer exists');
-        if (op.from === op.into || isDescendant(op.into, op.from)) return _('Cannot merge a crate into itself');
+        if (!crates.has(op.from) || !crates.has(op.into)) return _('model.crateGone');
+        if (op.from === op.into || isDescendant(op.into, op.from)) return _('model.cannotMergeIntoItself');
         mergeInto(op.from, op.into);
         return null;
       }
       case 'removeTrack': {
-        if (!base.tracks.has(op.asset)) return _('The song no longer exists');
+        if (!base.tracks.has(op.asset)) return _('model.songGone');
         removedTracks.set(op.asset, op.reason || '');
         if (op.deleteFile) rejectedTracks.add(op.asset);
         for (const list of members.values()) {
@@ -161,12 +161,12 @@ export function applyPlan(base, changes) {
         return null;
       }
       case 'relocate': {
-        if (!base.tracks.has(op.asset)) return _('The song no longer exists');
+        if (!base.tracks.has(op.asset)) return _('model.songGone');
         relocated.set(op.asset, op.path);
         return null;
       }
       default:
-        return _('Unknown action {type}', { type: op.type });
+        return _('model.unknownAction', { type: op.type });
     }
   };
 
@@ -188,7 +188,7 @@ export function applyPlan(base, changes) {
   const pathOf = (id) => {
     if (pathCache.has(id)) return pathCache.get(id);
     const c = crates.get(id);
-    if (!c) return _('(deleted)');
+    if (!c) return _('model.deleted');
     const p = c.parent === base.rootId || !crates.has(c.parent) ? c.name : `${pathOf(c.parent)} / ${c.name}`;
     pathCache.set(id, p);
     return p;
@@ -328,20 +328,20 @@ export function suggestCrates(eff, model, track, { limit = 5, exclude } = {}) {
       if (!m) continue;
       const s = m * Math.log(1 + model.n / (model.df.get(w) || 1));
       score += s;
-      if (!best || s > best.s) best = { s, text: inName ? _('Name matches "{word}"', { word: w }) : _('Genre/folder "{word}"', { word: w }) };
+      if (!best || s > best.s) best = { s, text: inName ? _('model.nameMatches', { word: w }) : _('model.genreFolder', { word: w }) };
     }
     const reasons = best ? [best.text] : [];
     const artistHits = artists.reduce((n, a) => n + (p.artists.get(a) || 0), 0);
     if (artistHits) {
       score += Math.min(3, artistHits) * 0.6;
-      reasons.push(_n(artistHits, '{n} song by the same artist', '{n} songs by the same artist'));
+      reasons.push(_n(artistHits, 'model.songsBySameArtist'));
     }
     // Crates named by a BPM range ("Open Format / 120-129 / All"): the song's BPM decides.
     const range = bpmRangeOf(eff, id);
     if (range) {
       if (!track.bpm || track.bpm < range.lo || track.bpm >= range.hi + 1) continue; // never suggest the wrong range
       score += norm(eff.crates.get(id).name) === 'all' ? 1.6 : 0.9;
-      reasons.unshift(_('BPM {bpm} in {lo}–{hi}', { bpm: Math.round(track.bpm * 10) / 10, lo: range.lo, hi: range.hi }));
+      reasons.unshift(_('model.bpmInRange', { bpm: Math.round(track.bpm * 10) / 10, lo: range.lo, hi: range.hi }));
     }
     if (!score) continue;
     if (track.bpm && p.bpmLo && p.bpmHi - p.bpmLo <= 35) {

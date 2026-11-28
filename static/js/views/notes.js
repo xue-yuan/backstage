@@ -10,9 +10,9 @@ import { clear, contextMenu, download, h, prefs, revealInFinder, toast } from '.
 import { _, _n } from '../i18n.js';
 
 const SCOPES = [
-  ['all', () => _('All')],
-  ['song', () => _('Linked to a song')],
-  ['free', () => _('No song linked')],
+  ['all', () => _('notes.all')],
+  ['song', () => _('notes.linkedSong')],
+  ['free', () => _('notes.noSongLinked')],
 ];
 
 export function createNotesView() {
@@ -26,7 +26,7 @@ export function createNotesView() {
   const composer = h('textarea', {
     class: 'input note-input',
     rows: 3,
-    placeholder: _('A note about a song, or a song to remember. #tags are supported, e.g. #opener #to-buy'),
+    placeholder: _('notes.notePlaceholder'),
     oninput: (e) => prefs.set('notes.draft', e.target.value),
     onkeydown: (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -57,7 +57,7 @@ export function createNotesView() {
             { class: 'chip note-song-chip', title: draftSong.path || '' },
             '♪ ',
             h('span', { class: 'ellipsis' }, songLabel(draftSong)),
-            h('button', { class: 'chip-x', title: _('Unlink'), onclick: () => setDraftSong(null) }, '×'),
+            h('button', { class: 'chip-x', title: _('notes.unlink'), onclick: () => setDraftSong(null) }, '×'),
           )
         : h(
             'button',
@@ -69,13 +69,13 @@ export function createNotesView() {
                 composer.focus();
               },
             },
-            _('Link a song…'),
+            _('common.linkSongMenu'),
           ),
       playingRef && !sameAsDraft
-        ? h('button', { class: 'btn btn-ghost btn-sm note-playing', title: _('Link the song that is playing'), onclick: () => (setDraftSong(playingRef), composer.focus()) }, _('♪ Playing: {title}', { title: playingRef.title }))
+        ? h('button', { class: 'btn btn-ghost btn-sm note-playing', title: _('notes.linkPlaying'), onclick: () => (setDraftSong(playingRef), composer.focus()) }, _('notes.nowPlaying', { title: playingRef.title }))
         : null,
       h('span', { class: 'muted small push-right' }, '⌘↵'),
-      h('button', { class: 'btn btn-primary btn-sm', onclick: saveDraft }, _('Save note')),
+      h('button', { class: 'btn btn-primary btn-sm', onclick: saveDraft }, _('common.saveNote')),
     );
   }
 
@@ -89,13 +89,13 @@ export function createNotesView() {
     composer.value = '';
     prefs.set('notes.draft', '');
     setDraftSong(null);
-    toast(_('Note saved'));
+    toast(_('common.noteSaved'));
   }
 
   // ---------- list ----------
   const searchInput = h('input', {
     class: 'input input-sm',
-    placeholder: _('Search notes and songs… (/)'),
+    placeholder: _('notes.searchPlaceholder'),
     oninput: (e) => {
       search = e.target.value;
       renderList();
@@ -111,7 +111,7 @@ export function createNotesView() {
   const listPanel = h(
     'section',
     { class: 'panel note-list-panel' },
-    h('div', { class: 'toolbar note-toolbar' }, searchInput, scopeEl, h('button', { class: 'btn btn-ghost btn-sm', title: _('Download all notes as a Markdown file'), onclick: exportNotes }, _('Export'))),
+    h('div', { class: 'toolbar note-toolbar' }, searchInput, scopeEl, h('button', { class: 'btn btn-ghost btn-sm', title: _('notes.exportHint'), onclick: exportNotes }, _('common.export'))),
     tagsEl,
     scrollEl,
   );
@@ -175,7 +175,7 @@ export function createNotesView() {
       clear(scrollEl, emptyIntro());
       return;
     }
-    clear(scrollEl, shown.length ? shown.map(card) : h('div', { class: 'empty' }, _('No notes match')));
+    clear(scrollEl, shown.length ? shown.map(card) : h('div', { class: 'empty' }, _('notes.noNotesMatch')));
   }
 
   function setTag(t) {
@@ -187,9 +187,9 @@ export function createNotesView() {
     return h(
       'div',
       { class: 'empty note-empty' },
-      h('p', {}, _('No notes yet.')),
-      h('p', { class: 'small' }, _('Notes can cover what a song works for, where to mix in or out, or a song to find. Add #tags to group them.')),
-      h('p', { class: 'small' }, _('Notes can also be added from the right-click menu of a song in Sort, Crates or Folders ("Add a note…"), or with M in Sort.')),
+      h('p', {}, _('notes.empty')),
+      h('p', { class: 'small' }, _('notes.emptyHint')),
+      h('p', { class: 'small' }, _('notes.contextMenuHint')),
     );
   }
 
@@ -203,10 +203,10 @@ export function createNotesView() {
       h(
         'div',
         { class: 'note-foot' },
-        h('span', { class: 'muted small', title: n.updated !== n.created ? _('Edited {time}', { time: when(n.updated) }) : '' }, when(n.created), n.updated !== n.created ? ` · ${_('edited')}` : ''),
-        n.song ? null : h('button', { class: 'btn btn-ghost btn-xs', onclick: () => linkSong(n) }, _('Link a song…')),
-        h('button', { class: 'btn btn-ghost btn-xs', onclick: () => startEdit(n) }, _('Edit')),
-        h('button', { class: 'btn btn-ghost btn-xs btn-danger-ghost', onclick: () => store.deleteNote(n.id) }, _('Delete')),
+        h('span', { class: 'muted small', title: n.updated !== n.created ? _('notes.editedAt', { time: when(n.updated) }) : '' }, when(n.created), n.updated !== n.created ? ` · ${_('notes.edited')}` : ''),
+        n.song ? null : h('button', { class: 'btn btn-ghost btn-xs', onclick: () => linkSong(n) }, _('common.linkSongMenu')),
+        h('button', { class: 'btn btn-ghost btn-xs', onclick: () => startEdit(n) }, _('notes.edit')),
+        h('button', { class: 'btn btn-ghost btn-xs btn-danger-ghost', onclick: () => store.deleteNote(n.id) }, _('common.delete')),
       ),
     );
   }
@@ -221,13 +221,13 @@ export function createNotesView() {
       'div',
       { class: 'note-song' },
       play
-        ? h('button', { class: 'icon-btn', dataset: { playKey: player.playId(play) }, title: _('Preview'), onclick: () => player.toggle(play) }, player.isCurrent(player.playId(play)) && player.playing ? '❚❚' : '▶')
+        ? h('button', { class: 'icon-btn', dataset: { playKey: player.playId(play) }, title: _('common.preview'), onclick: () => player.toggle(play) }, player.isCurrent(player.playId(play)) && player.playing ? '❚❚' : '▶')
         : null,
       h('span', { class: 'note-song-title ellipsis', title: t ? effectivePath(store.eff, t) : song.path || '' }, songLabel(song)),
       t ? qualityBadge(store.trackQuality(t), { compact: true }) : null,
       t
-        ? h('span', { class: 'muted small' }, rejected ? h('span', { class: 'tag tag-danger' }, _('Rejected')) : removed ? h('span', { class: 'tag tag-danger' }, _('Removed (in the plan)')) : crates ? _n(crates, 'In {n} crate', 'In {n} crates') : _('In no crate'))
-        : h('span', { class: 'tag tag-warn' }, _('Not in Serato')),
+        ? h('span', { class: 'muted small' }, rejected ? h('span', { class: 'tag tag-danger' }, _('common.rejected')) : removed ? h('span', { class: 'tag tag-danger' }, _('common.removedInPlan')) : crates ? _n(crates, 'common.inCrateCount') : _('common.inNoCrate'))
+        : h('span', { class: 'tag tag-warn' }, _('notes.notInSerato')),
     );
   }
 
@@ -240,9 +240,9 @@ export function createNotesView() {
       h(
         'div',
         { class: 'note-foot' },
-        h('span', { class: 'muted small' }, _('⌘↵ saves, Esc cancels')),
-        h('button', { class: 'btn btn-sm', onclick: () => endEdit(false) }, _('Cancel')),
-        h('button', { class: 'btn btn-primary btn-sm', onclick: () => endEdit(true) }, _('Save')),
+        h('span', { class: 'muted small' }, _('notes.editHint')),
+        h('button', { class: 'btn btn-sm', onclick: () => endEdit(false) }, _('common.cancel')),
+        h('button', { class: 'btn btn-primary btn-sm', onclick: () => endEdit(true) }, _('common.save')),
       ),
     );
   }
@@ -285,7 +285,7 @@ export function createNotesView() {
     // Prefill the search with the note's first line, so "Artist - Title" notes link with one Enter.
     // "(Extended Mix)", "[2024]" and #tags are left out: they rarely match how the library spells it.
     const first = n.text.split('\n')[0].replace(/#[\p{L}\p{N}_-]+|\([^)]*\)|\[[^\]]*\]/gu, '').trim();
-    const t = await pickSong({ title: n.song ? _('Change the song') : _('Link a song'), query: n.song ? '' : first.slice(0, 80) });
+    const t = await pickSong({ title: n.song ? _('notes.changeSong') : _('common.linkSong'), query: n.song ? '' : first.slice(0, 80) });
     if (t) store.updateNote(n.id, { song: store.songRef(t) });
   }
 
@@ -294,18 +294,18 @@ export function createNotesView() {
     const t = n.song ? store.noteTrack(n.song) : null;
     const path = t ? effectivePath(store.eff, t) : n.song?.path;
     contextMenu(e, [
-      play ? { label: player.isCurrent(player.playId(play)) && player.playing ? _('Pause') : _('Play'), action: () => player.toggle(play) } : null,
-      { label: _('Edit'), action: () => startEdit(n) },
-      { label: n.song ? _('Change the song…') : _('Link a song…'), action: () => linkSong(n) },
-      n.song ? { label: _('Unlink the song'), action: () => store.updateNote(n.id, { song: null }) } : null,
-      path ? { label: _('Show in Finder'), action: () => revealInFinder(path) } : null,
+      play ? { label: player.isCurrent(player.playId(play)) && player.playing ? _('common.pause') : _('common.play'), action: () => player.toggle(play) } : null,
+      { label: _('notes.edit'), action: () => startEdit(n) },
+      { label: n.song ? _('notes.changeSongMenu') : _('common.linkSongMenu'), action: () => linkSong(n) },
+      n.song ? { label: _('notes.unlinkSong'), action: () => store.updateNote(n.id, { song: null }) } : null,
+      path ? { label: _('common.showInFinder'), action: () => revealInFinder(path) } : null,
       'sep',
-      { label: _('Delete'), danger: true, action: () => store.deleteNote(n.id) },
+      { label: _('common.delete'), danger: true, action: () => store.deleteNote(n.id) },
     ]);
   }
 
   function exportNotes() {
-    const lines = [`# ${_('Notes')}`, ''];
+    const lines = [`# ${_('tab.notes')}`, ''];
     for (const n of [...store.notes].sort((a, b) => b.created - a.created)) {
       lines.push(`## ${when(n.created)}${n.song ? ` · ${songLabel(n.song)}` : ''}`, '', n.text, '');
     }
@@ -323,11 +323,11 @@ export function createNotesView() {
 
   renderComposeBar();
   renderList();
-  if (store.notesError) toast(_('Notes could not be read ({error}); saving is disabled to avoid overwriting them. Reload the page to try again.', { error: store.notesError }), { tone: 'danger', timeout: 8000 });
+  if (store.notesError) toast(_('common.notesReadFailed', { error: store.notesError }), { tone: 'danger', timeout: 8000 });
 
   return {
     el,
-    title: _('Notes'),
+    title: _('tab.notes'),
     update,
     onKey(e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return false;

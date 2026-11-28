@@ -7,17 +7,17 @@ import { clear, confirmDialog, fmt, h, modal, toast } from './ui.js';
 import { _, _n } from './i18n.js';
 
 const KIND = {
-  add: _('Add to crate'),
-  remove: _('Remove from crate'),
-  createCrate: _('New crate'),
-  renameCrate: _('Rename'),
-  moveCrate: _('Move crate'),
-  importTrack: _('Add to Serato'),
-  reorderCrate: _('Reorder crate'),
-  deleteCrate: _('Delete crate'),
-  mergeCrate: _('Merge crate'),
-  relocate: _('Relocate'),
-  removeTrack: _('Remove song / reject'),
+  add: _('common.addToCrate'),
+  remove: _('common.removeFromCrate'),
+  createCrate: _('common.newCrate'),
+  renameCrate: _('common.rename'),
+  moveCrate: _('common.moveCrate'),
+  importTrack: _('common.addToSerato'),
+  reorderCrate: _('common.reorderCrate'),
+  deleteCrate: _('common.deleteCrate'),
+  mergeCrate: _('common.mergeCrate'),
+  relocate: _('common.relocate'),
+  removeTrack: _('apply.removeSongReject'),
 };
 
 function split() {
@@ -33,7 +33,7 @@ function split() {
 
 function expectedTree(changes) {
   const eff = applyPlan(store.base, changes);
-  if (eff.issues.length) throw new Error(_('The plan has an action that no longer applies: {error}', { error: eff.issues[0].message }));
+  if (eff.issues.length) throw new Error(_('apply.issue', { error: eff.issues[0].message }));
   // Key crates by their path joined with U+0000 (cannot appear in a name), same as apply.py.
   const key = (id) => {
     const c = eff.crates.get(id);
@@ -64,9 +64,9 @@ function trashNote(trashed) {
     h(
       'span',
       {},
-      ok ? _n(ok, '✓ {n} rejected file was moved to the Trash.', '✓ {n} rejected files were moved to the Trash.') : '',
+      ok ? _n(ok, 'apply.trashedFiles') : '',
       failed.length
-        ? [h('br'), _n(failed.length, '{n} file was not moved (removed from Serato, but still in place):', '{n} files were not moved (removed from Serato, but still in place):'), h('ul', {}, failed.slice(0, 5).map((r) => h('li', {}, fmt.shortPath(r.path), _(': '), r.error)))]
+        ? [h('br'), _n(failed.length, 'apply.trashFailed'), h('ul', {}, failed.slice(0, 5).map((r) => h('li', {}, fmt.shortPath(r.path), _('sep.colon'), r.error)))]
         : null,
     ),
   );
@@ -100,42 +100,42 @@ export async function openApplyDialog() {
     const nOps = supported.reduce((n, ch) => n + ch.ops.length, 0);
     const nTrash = supported.reduce((n, ch) => n + ch.ops.filter((o) => o.type === 'removeTrack' && o.deleteFile).length, 0);
     if (phase === 'running') {
-      clear(bodyEl, h('div', { class: 'apply-progress' }, h('div', { class: 'mark-spin' }, '◐'), h('p', {}, _('Applying: test → back up → write → verify…')), h('p', { class: 'muted small' }, _('Do not open Serato DJ'))));
+      clear(bodyEl, h('div', { class: 'apply-progress' }, h('div', { class: 'mark-spin' }, '◐'), h('p', {}, _('apply.progress')), h('p', { class: 'muted small' }, _('apply.keepSeratoClosed'))));
       return;
     }
     if (phase === 'done') {
       clear(
         bodyEl,
-        h('div', { class: 'fnote fnote-ok' }, h('strong', {}, _n(result.applied, '✓ Written to Serato: {n} action', '✓ Written to Serato: {n} actions'))),
+        h('div', { class: 'fnote fnote-ok' }, h('strong', {}, _n(result.applied, 'apply.written'))),
         h('ul', { class: 'apply-checks' }, result.checks.map((x) => h('li', {}, '✓ ', x))),
         trashNote(result.trashed),
         Object.keys(result.imported || {}).length
           ? h(
               'div',
               { class: 'fnote fnote-warn' },
-              h('span', {}, _n(Object.keys(result.imported).length, '{n} song was added to Serato, not analysed yet. In Serato DJ, select it (for example its crate) and choose "Analyze Files": Serato then reads its tags and works out BPM, key, beatgrid and waveform.', '{n} songs were added to Serato and are not analysed yet. In Serato DJ, select them (for example through their crate) and choose "Analyze Files" to read their tags and detect BPM, key, beatgrid and waveform.')),
+              h('span', {}, _n(Object.keys(result.imported).length, 'apply.importedNote')),
             )
           : null,
-        h('p', { class: 'muted small' }, _('Database backup from before applying: '), h('code', {}, fmt.shortPath(result.backup))),
-        h('p', {}, _('Open Serato DJ and check the crates. If something is wrong, quit Serato and use "Restore the backup from before the last apply" in Plan.')),
-        h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onclick: () => closeFn?.() }, _('Done'))),
+        h('p', { class: 'muted small' }, _('apply.backupLocation'), h('code', {}, fmt.shortPath(result.backup))),
+        h('p', {}, _('apply.checkInSerato')),
+        h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onclick: () => closeFn?.() }, _('common.done'))),
       );
       return;
     }
     const blocked = !status || status.seratoRunning || status.inUse?.length;
     clear(
       bodyEl,
-      phase === 'failed' ? h('div', { class: 'fnote fnote-danger' }, h('span', {}, h('strong', {}, _('Nothing was applied; Serato is unchanged.')), h('br'), result?.error || '')) : null,
+      phase === 'failed' ? h('div', { class: 'fnote fnote-danger' }, h('span', {}, h('strong', {}, _('apply.nothingApplied')), h('br'), result?.error || '')) : null,
       nOps
         ? [
-            h('p', {}, _n(nOps, 'Changes to write to Serato ({n} action):', 'Changes to write to Serato ({n} actions):')),
+            h('p', {}, _n(nOps, 'apply.changesHeading')),
             h('div', { class: 'chips' }, Object.entries(c).map(([k, n]) => h('span', { class: 'chip' }, `${KIND[k] || k} ${n}`))),
           ]
-        : h('p', {}, _('The plan has nothing that can be applied.')),
+        : h('p', {}, _('apply.nothingToApply')),
       later.length
-        ? h('p', { class: 'muted small' }, _('Not supported yet; stays in the plan: {list}', { list: Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join(_(', ')) }))
+        ? h('p', { class: 'muted small' }, _('apply.unsupported', { list: Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join(_('sep.comma')) }))
         : null,
-      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, '{n} of them (a rejected song, or a duplicate merged with "Merge and Trash") also has its file moved to the Trash after a successful write. Other removed songs keep their files.', '{n} of them (rejected songs, or duplicates merged with "Merge and Trash") also have their files moved to the Trash after a successful write. Other removed songs keep their files.')) : null,
+      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, 'apply.trashNote')) : null,
       h(
         'div',
         { class: `fnote ${!status ? '' : blocked ? 'fnote-danger' : 'fnote-ok'}` },
@@ -143,28 +143,28 @@ export async function openApplyDialog() {
           'span',
           {},
           !status
-            ? _('Checking whether Serato DJ is running…')
+            ? _('apply.checkingSerato')
             : status.seratoRunning
-              ? _('Serato DJ is open. Quit it first. ({list})', { list: (status.seratoProcesses || []).join(_(', ')) })
+              ? _('apply.seratoOpen', { list: (status.seratoProcesses || []).join(_('sep.comma')) })
               : status.inUse?.length
-                ? _('Another program is using the Serato database: {list}', { list: status.inUse.map(fmt.shortPath).join(_(', ')) })
-                : _('✓ Serato DJ is closed'),
+                ? _('apply.databaseInUse', { list: status.inUse.map(fmt.shortPath).join(_('sep.comma')) })
+                : _('apply.seratoClosed'),
         ),
-        h('button', { class: 'btn btn-sm', onclick: refresh }, _('Check again')),
+        h('button', { class: 'btn btn-sm', onclick: refresh }, _('apply.checkAgain')),
       ),
       h(
         'ol',
         { class: 'apply-steps muted small' },
-        h('li', {}, _('Test the changes on a copy of the Serato database; stop at any problem')),
-        h('li', {}, [_('Back up the Serato database to '), h('code', {}, fmt.shortPath(status?.backupsDir || '~/Cratify Backups'))]),
-        h('li', {}, _('Write, then verify database integrity, that master and root match, and that every crate holds the expected songs')),
-        h('li', {}, _('If any check fails, nothing is written')),
+        h('li', {}, _('apply.stepTest')),
+        h('li', {}, [_('apply.stepBackup'), h('code', {}, fmt.shortPath(status?.backupsDir || '~/Cratify Backups'))]),
+        h('li', {}, _('apply.stepVerify')),
+        h('li', {}, _('apply.allOrNothing')),
       ),
       h(
         'div',
         { class: 'modal-actions' },
-        h('button', { class: 'btn', onclick: () => closeFn?.() }, _('Cancel')),
-        h('button', { class: 'btn btn-primary', disabled: blocked || !nOps, onclick: run }, _n(nOps, 'Apply to Serato ({n} action)', 'Apply to Serato ({n} actions)')),
+        h('button', { class: 'btn', onclick: () => closeFn?.() }, _('common.cancel')),
+        h('button', { class: 'btn btn-primary', disabled: blocked || !nOps, onclick: run }, _n(nOps, 'apply.applyButton')),
       ),
     );
   };
@@ -211,7 +211,7 @@ export async function openApplyDialog() {
   render();
   refresh();
   return modal({
-    title: _('Apply to Serato'),
+    title: _('common.applyToSerato'),
     wide: true,
     body: (close) => {
       closeFn = close;
@@ -222,19 +222,19 @@ export async function openApplyDialog() {
 
 export async function restoreLastBackup(backup) {
   const ok = await confirmDialog({
-    title: _('Restore the backup from before the last apply?'),
-    message: _('This replaces Serato\'s current database with {path}. Changes made in Serato since the apply (crates, analysis, play history) are also undone. Quit Serato DJ first.', { path: fmt.shortPath(backup) }),
-    okText: _('Restore'),
+    title: _('apply.restoreConfirm'),
+    message: _('apply.restoreWarning', { path: fmt.shortPath(backup) }),
+    okText: _('common.restore'),
     danger: true,
   });
   if (!ok) return false;
   const res = await api2.restore(backup);
   if (!res.ok) {
-    toast(_('Not restored: {error}', { error: res.error }), { tone: 'danger', timeout: 10000 });
+    toast(_('apply.restoreFailed', { error: res.error }), { tone: 'danger', timeout: 10000 });
     return false;
   }
   await store.refreshSnapshot();
-  toast(_('Serato database restored. Open Serato DJ to check it'));
+  toast(_('apply.restored'));
   return true;
 }
 

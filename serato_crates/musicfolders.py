@@ -34,23 +34,23 @@ def save(data_dir: Path, folders: list[Path]) -> None:
 def clean(values) -> list[Path]:
     """Check folders sent by the page: full paths of existing folders (~ allowed), no repeats, none inside another."""
     if not isinstance(values, list) or not values:
-        raise ValueError(tr("Choose at least one music folder"))
+        raise ValueError(tr("folderSettings.noneChosen"))
     found: set[Path] = set()
     for value in values:
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(tr("invalid folder"))
+            raise ValueError(tr("folderSettings.invalid"))
         p = Path(os.path.normpath(os.path.expanduser(value.strip())))
         if not p.is_absolute():
-            raise ValueError(tr("Not a full path: {path}", path=value))
+            raise ValueError(tr("folderSettings.notFullPath", path=value))
         if not p.is_dir():
-            raise ValueError(tr("Folder not found: {path}", path=value))
+            raise ValueError(tr("folderSettings.folderMissing", path=value))
         found.add(p)
     kept: list[Path] = []
     for p in sorted(found, key=lambda p: (len(p.parts), str(p))):
         if not any(p.is_relative_to(k) for k in kept):  # a folder inside another one is scanned already
             kept.append(p)
     if len(kept) > MAX_FOLDERS:
-        raise ValueError(tr("No more than {n} music folders", n=MAX_FOLDERS))
+        raise ValueError(tr("folderSettings.tooMany", n=MAX_FOLDERS))
     return sorted(kept, key=str)
 
 
@@ -108,7 +108,7 @@ def relocate_roots(folders: list[Path], home: Path | None = None) -> list[Path]:
 
 def choose_folder() -> str | None:
     """Ask with the macOS folder dialog (osascript, so no extra permission). None when cancelled."""
-    prompt = tr("Choose a folder that contains DJ music")
+    prompt = tr("folderSettings.choosePrompt")
     quoted = '"' + prompt.replace("\\", "\\\\").replace('"', '\\"') + '"'
     script = f"POSIX path of (choose folder with prompt {quoted} default location (path to music folder))"
     try:

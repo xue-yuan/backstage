@@ -60,20 +60,20 @@ export function createCleanupView({ navigate }) {
       );
     clear(
       tabsEl,
-      seg('missing', _('Missing files'), missingOpen),
-      seg('dupes', _('Duplicates'), dupes),
-      seg('empty', _('Empty crates'), empty),
+      seg('missing', _('common.missingFiles'), missingOpen),
+      seg('dupes', _('common.duplicates'), dupes),
+      seg('empty', _('common.emptyCrates'), empty),
       h(
         'button',
         {
           class: 'seg',
-          title: _('Open in Sort'),
+          title: _('cleanup.openInSort'),
           onclick: () => {
             prefs.set('inbox.source', { kind: 'uncategorized' });
             navigate('inbox');
           },
         },
-        _('In no crate'),
+        _('common.inNoCrate'),
         h('span', { class: 'count' }, uncategorized),
         ' →',
       ),
@@ -83,7 +83,7 @@ export function createCleanupView({ navigate }) {
   function playBtn(key, track) {
     return h(
       'button',
-      { class: 'icon-btn', dataset: { playKey: key }, title: _('Preview'), onclick: () => player.toggle(track) },
+      { class: 'icon-btn', dataset: { playKey: key }, title: _('common.preview'), onclick: () => player.toggle(track) },
       player.isCurrent(key) && player.playing ? '❚❚' : '▶',
     );
   }
@@ -116,18 +116,18 @@ export function createCleanupView({ navigate }) {
       h(
         'p',
         {},
-        _n(list.length, '{n} song in the Serato library is missing on disk. Files with the same name in the music folders or ~/Music are listed as candidates.', '{n} songs in the Serato library are missing on disk. Files with the same name in the music folders or ~/Music are listed as candidates.'),
-        _('If a candidate file already has its own record in Serato (usually because the folder was moved and imported again), this song\'s crates are merged into that record.'),
+        _n(list.length, 'cleanup.missingIntro'),
+        _('cleanup.mergeExplanation'),
       ),
-      scanning ? h('p', { class: 'muted' }, _('Scanning…')) : null,
-      scanError ? h('p', { class: 'notice notice-danger' }, _('Scan failed: {error}', { error: scanError })) : null,
+      scanning ? h('p', { class: 'muted' }, _('common.scanning')) : null,
+      scanError ? h('p', { class: 'notice notice-danger' }, _('common.scanFailed', { error: scanError })) : null,
       candidates
         ? h(
             'div',
             { class: 'toolbar' },
-            h('button', { class: 'btn btn-primary', disabled: !single.length, onclick: () => resolveAll(single) }, _n(single.length, 'Apply all unique candidates ({n} song)', 'Apply all unique candidates ({n} songs)')),
-            h('button', { class: 'btn', disabled: !none.length, onclick: () => removeAll(none) }, _n(none.length, 'Remove those without a candidate ({n} song)', 'Remove those without a candidate ({n} songs)')),
-            h('button', { class: 'btn btn-ghost', onclick: scan }, _('Scan again')),
+            h('button', { class: 'btn btn-primary', disabled: !single.length, onclick: () => resolveAll(single) }, _n(single.length, 'cleanup.applyAllUnique')),
+            h('button', { class: 'btn', disabled: !none.length, onclick: () => removeAll(none) }, _n(none.length, 'cleanup.removeWithoutCandidate')),
+            h('button', { class: 'btn btn-ghost', onclick: scan }, _('cleanup.scanAgain')),
           )
         : null,
     );
@@ -146,12 +146,12 @@ export function createCleanupView({ navigate }) {
         body = h(
           'div',
           { class: 'staged' },
-          h('span', { class: 'tag tag-ok' }, _('In the plan')),
-          relocatedTo ? ` ${_('moved to {path}', { path: fmt.shortPath(relocatedTo) })}` : ` ${_('removed from the library ({reason})', { reason: eff.removedTracks.get(t.id) || _('Missing file') })}`,
+          h('span', { class: 'tag tag-ok' }, _('cleanup.inPlan')),
+          relocatedTo ? ` ${_('cleanup.movedTo', { path: fmt.shortPath(relocatedTo) })}` : ` ${_('cleanup.removedFromLibrary', { reason: eff.removedTracks.get(t.id) || _('common.missingFile') })}`,
           h('button', {
             class: 'btn btn-ghost btn-xs',
             onclick: () => store.revertOps((op) => op.missing === t.id || ((op.type === 'relocate' || op.type === 'removeTrack') && op.asset === t.id)),
-          }, _('Cancel')),
+          }, _('common.cancel')),
         );
       } else {
         body = h(
@@ -174,15 +174,15 @@ export function createCleanupView({ navigate }) {
                         render();
                       },
                     }),
-                    playBtn(`f${c.path}`, { playKey: `f${c.path}`, src: `/api/audio-file?path=${encodeURIComponent(c.path)}`, title: t.title || t.fileName, artist: _('Candidate file') }),
+                    playBtn(`f${c.path}`, { playKey: `f${c.path}`, src: `/api/audio-file?path=${encodeURIComponent(c.path)}`, title: t.title || t.fileName, artist: _('cleanup.candidateFile') }),
                     h('span', { class: 'cand-path', title: c.path }, fmt.shortPath(c.path)),
-                    libraryTrackAt(c.path) != null ? h('span', { class: 'tag tag-edit', title: _('This file already has another record in Serato') }, _('In library')) : null,
+                    libraryTrackAt(c.path) != null ? h('span', { class: 'tag tag-edit', title: _('cleanup.hasOtherRecord') }, _('cleanup.inLibrary')) : null,
                     h('span', { class: 'muted small' }, `${fmt.size(c.size)} · ${fmt.date(c.modifiedAt)}`),
                   ),
                 ),
               )
             : candidates
-              ? h('div', { class: 'muted small' }, _('No file with the same name'))
+              ? h('div', { class: 'muted small' }, _('cleanup.noCandidate'))
               : null,
           h(
             'div',
@@ -191,10 +191,10 @@ export function createCleanupView({ navigate }) {
               ? h(
                   'button',
                   { class: 'btn btn-sm btn-primary', onclick: () => resolve(t, pick) },
-                  libraryTrackAt(pick) != null ? _('Merge into that record') : _('Use this location'),
+                  libraryTrackAt(pick) != null ? _('cleanup.mergeIntoRecord') : _('cleanup.useLocation'),
                 )
               : null,
-            h('button', { class: 'btn btn-sm', onclick: () => store.commit(_('Remove from library: {track}', { track: t.title || t.fileName }), [store.opRemoveTrack(t.id, _('Missing file'))]) }, _('Remove from library')),
+            h('button', { class: 'btn btn-sm', onclick: () => store.commit(_('cleanup.removeTrackChange', { track: t.title || t.fileName }), [store.opRemoveTrack(t.id, _('common.missingFile'))]) }, _('cleanup.removeFromLibrary')),
           ),
         );
       }
@@ -205,7 +205,7 @@ export function createCleanupView({ navigate }) {
           'div',
           { class: 'card-head' },
           h('div', {}, h('strong', {}, t.title || t.fileName), h('span', { class: 'muted' }, t.artist ? ` · ${t.artist}` : '')),
-          h('span', { class: 'muted small' }, crates.length ? _n(crates.length, 'In {n} crate', 'In {n} crates') : _('In no crate')),
+          h('span', { class: 'muted small' }, crates.length ? _n(crates.length, 'common.inCrateCount') : _('common.inNoCrate')),
         ),
         h('div', { class: 'path path-missing', title: t.path }, fmt.shortPath(t.path)),
         body,
@@ -236,23 +236,23 @@ export function createCleanupView({ navigate }) {
     const eff = store.eff;
     const have = new Set(eff.cratesOf.get(existing) || []);
     const ops = (eff.cratesOf.get(t.id) || []).filter((c) => !have.has(c)).map((c) => ({ ...store.opAdd(c, existing), missing: t.id }));
-    ops.push({ ...store.opRemoveTrack(t.id, _('Merged into another record of the same file')), missing: t.id });
+    ops.push({ ...store.opRemoveTrack(t.id, _('cleanup.mergedNote')), missing: t.id });
     return ops;
   }
   function resolve(t, path) {
     const merge = libraryTrackAt(path) != null;
-    store.commit(merge ? _('Merge into existing record: {track}', { track: t.title || t.fileName }) : _('Relocate: {track}', { track: t.title || t.fileName }), resolveOps(t, path));
+    store.commit(merge ? _('cleanup.mergeChange', { track: t.title || t.fileName }) : _('cleanup.relocateChange', { track: t.title || t.fileName }), resolveOps(t, path));
   }
   function resolveAll(list) {
-    store.commit(_n(list.length, 'Fix {n} missing song (merge or relocate)', 'Fix {n} missing songs (merge or relocate)'), list.flatMap((t) => resolveOps(t, candidates[t.id][0].path)));
+    store.commit(_n(list.length, 'cleanup.fixMissingChange'), list.flatMap((t) => resolveOps(t, candidates[t.id][0].path)));
   }
   async function removeAll(list) {
     const ok = await confirmDialog({
-      title: _n(list.length, 'Remove {n} missing song?', 'Remove {n} missing songs?'),
-      message: _('The songs are removed from the Serato library; no files are deleted. The change goes into the plan and can be undone.'),
-      okText: _('Add to plan'),
+      title: _n(list.length, 'cleanup.removeMissingConfirm'),
+      message: _('cleanup.removeMissingWarning'),
+      okText: _('common.addToPlan'),
     });
-    if (ok) store.commit(_n(list.length, 'Remove {n} missing song', 'Remove {n} missing songs'), list.map((t) => store.opRemoveTrack(t.id, _('Missing file'))));
+    if (ok) store.commit(_n(list.length, 'cleanup.removeMissing'), list.map((t) => store.opRemoveTrack(t.id, _('common.missingFile'))));
   }
 
   // ---------- duplicates ----------
@@ -281,9 +281,9 @@ export function createCleanupView({ navigate }) {
       h(
         'p',
         {},
-        _('Duplicates are matched by artist and title. Choose the copy to keep: the crates of the others are merged into it, and the others are removed from the library (their files are not deleted).'),
+        _('cleanup.duplicatesIntro'),
         ' ',
-        _('"Merge and Trash" also moves the other files to the Trash after applying, so they are not imported again by mistake.'),
+        _('cleanup.mergeAndTrashNote'),
       ),
       h(
         'div',
@@ -300,7 +300,7 @@ export function createCleanupView({ navigate }) {
               render();
             },
           }),
-          _('Only songs within 2 s of each other in length (excludes versions such as Extended / Radio)'),
+          _('cleanup.sameLengthOnly'),
         ),
         h(
           'label',
@@ -314,7 +314,7 @@ export function createCleanupView({ navigate }) {
               render();
             },
           }),
-          _('Only groups whose copies differ in quality'),
+          _('cleanup.qualityDiffersOnly'),
         ),
         dismissed.size
           ? h('button', {
@@ -324,17 +324,17 @@ export function createCleanupView({ navigate }) {
                 prefs.set('dupes.dismissed', []);
                 render();
               },
-            }, _n(dismissed.size, 'Show {n} dismissed group', 'Show {n} dismissed groups'))
+            }, _n(dismissed.size, 'cleanup.showDismissedGroups'))
           : null,
       ),
       sameVersion.length > 1
         ? h(
             'div',
             { class: 'toolbar' },
-            h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length) }, _n(sameVersion.length, 'Merge all {n} group (keep the selected copy)', 'Merge all {n} groups (keep the selected copies)')),
-            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length, { trash: true }) }, _('Merge all and Trash the other files')),
+            h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length) }, _n(sameVersion.length, 'cleanup.mergeAllGroups')),
+            h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length, { trash: true }) }, _('cleanup.mergeAllAndTrash')),
             groups.length > sameVersion.length
-              ? h('span', { class: 'muted small' }, _n(groups.length - sameVersion.length, '{n} group differs in length by more than 2 s and is skipped', '{n} groups differ in length by more than 2 s and are skipped'))
+              ? h('span', { class: 'muted small' }, _n(groups.length - sameVersion.length, 'cleanup.lengthSkipped'))
               : null,
           )
         : null,
@@ -350,10 +350,10 @@ export function createCleanupView({ navigate }) {
         h(
           'div',
           { class: 'staged' },
-          h('span', { class: 'tag tag-ok' }, _('In the plan')),
-          ` ${_n(removed.length, 'keep {keeper}, remove {n} duplicate', 'keep {keeper}, remove {n} duplicates', { keeper: keeper ? _('{title} ({quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }) : '' })}`,
-          nTrash ? h('span', { class: 'tag tag-danger' }, _n(nTrash, '{n} file to the Trash', '{n} files to the Trash')) : null,
-          h('button', { class: 'btn btn-ghost btn-xs', onclick: () => store.revertOps((op) => op.group === key) }, _('Cancel')),
+          h('span', { class: 'tag tag-ok' }, _('cleanup.inPlan')),
+          ` ${_n(removed.length, 'cleanup.groupSummary', { keeper: keeper ? _('cleanup.keeperLabel', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }) : '' })}`,
+          nTrash ? h('span', { class: 'tag tag-danger' }, _n(nTrash, 'cleanup.filesToTrash')) : null,
+          h('button', { class: 'btn btn-ghost btn-xs', onclick: () => store.revertOps((op) => op.group === key) }, _('common.cancel')),
         ),
       );
     });
@@ -371,7 +371,7 @@ export function createCleanupView({ navigate }) {
           'div',
           { class: 'card-head' },
           h('div', {}, h('strong', {}, first.title || first.fileName), h('span', { class: 'muted' }, first.artist ? ` · ${first.artist}` : ''), ` (${g.tracks.length})`),
-          g.spreadMs > 2000 ? h('span', { class: 'tag tag-warn', title: _('Different lengths; possibly different versions') }, _('{s} s apart', { s: Math.round(g.spreadMs / 1000) })) : null,
+          g.spreadMs > 2000 ? h('span', { class: 'tag tag-warn', title: _('cleanup.lengthsDiffer') }, _('cleanup.lengthGap', { s: Math.round(g.spreadMs / 1000) })) : null,
         ),
         h(
           'div',
@@ -391,21 +391,21 @@ export function createCleanupView({ navigate }) {
                 },
               }),
               playBtn(`t${t.id}`, t),
-              h('span', { class: 'dupe-fmt' }, qualityBadge(store.trackQuality(t), { compact: true }), best != null && scoreOf(t) === best ? h('span', { class: 'tag tag-ok' }, _('Best quality')) : null),
+              h('span', { class: 'dupe-fmt' }, qualityBadge(store.trackQuality(t), { compact: true }), best != null && scoreOf(t) === best ? h('span', { class: 'tag tag-ok' }, _('cleanup.bestQuality')) : null),
               h('span', { class: 'num' }, fmt.duration(t.lengthMs)),
               h('span', { class: 'num' }, fmt.bpm(t.bpm)),
               h('span', {}, t.key || '–'),
-              h('span', { class: 'dupe-path', title: t.path }, fmt.shortPath(t.path), !t.exists ? h('span', { class: 'tag tag-danger' }, _('Missing file')) : null),
-              h('span', { class: 'muted small', title: crates.map((c) => eff.pathOf(c)).join('\n') }, _('{crates} crates · {plays} plays', { crates: crates.length, plays: t.plays })),
+              h('span', { class: 'dupe-path', title: t.path }, fmt.shortPath(t.path), !t.exists ? h('span', { class: 'tag tag-danger' }, _('common.missingFile')) : null),
+              h('span', { class: 'muted small', title: crates.map((c) => eff.pathOf(c)).join('\n') }, _('cleanup.cratesAndPlays', { crates: crates.length, plays: t.plays })),
               spectrumAvailable() && t.exists
                 ? h('button', {
                     class: 'btn btn-ghost btn-xs',
-                    title: _('Show where the sound stops (reveals transcodes such as fake 320k)'),
+                    title: _('common.spectrumHint'),
                     onclick: (e) => {
                       e.preventDefault(); // inside the row's label: do not pick this copy
                       showSpectrum({ path: effectivePath(eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) });
                     },
-                  }, _('Spectrum'))
+                  }, _('common.spectrum'))
                 : h('span'),
             );
           }),
@@ -413,16 +413,16 @@ export function createCleanupView({ navigate }) {
         h(
           'div',
           { class: 'row-actions' },
-          h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeDupes(g, keep) }, _('Keep the selected one, merge the others')),
+          h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeDupes(g, keep) }, _('cleanup.mergeGroup')),
           trashable.length
             ? h(
                 'button',
                 {
                   class: 'btn btn-sm btn-danger-ghost',
-                  title: `${_('These files go to the Trash after a successful apply (restorable):')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
+                  title: `${_('cleanup.trashListTitle')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
                   onclick: () => mergeDupes(g, keep, { trash: true }),
                 },
-                _n(trashable.length, 'Merge and Trash the other file', 'Merge and Trash the other {n} files'),
+                _n(trashable.length, 'cleanup.mergeAndTrashOthers'),
               )
             : null,
           h('button', {
@@ -432,11 +432,11 @@ export function createCleanupView({ navigate }) {
               prefs.set('dupes.dismissed', [...dismissed]);
               render();
             },
-          }, _('Not duplicates')),
+          }, _('cleanup.notDuplicates')),
         ),
       );
     });
-    return [head, h('div', { class: 'cards' }, stagedCards, cards.length ? cards : h('div', { class: 'empty' }, _('No duplicates')))];
+    return [head, h('div', { class: 'cards' }, stagedCards, cards.length ? cards : h('div', { class: 'empty' }, _('cleanup.noDuplicates')))];
   }
 
   /** pathKey -> ids of live tracks using that file (memoised per plan/snapshot version). */
@@ -494,18 +494,18 @@ export function createCleanupView({ navigate }) {
           ops.push({ ...store.opAdd(c, keepId), group: g.key, keeper: keepId });
         }
       }
-      ops.push({ ...store.opRemoveTrack(t.id, _('Duplicate'), { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
+      ops.push({ ...store.opRemoveTrack(t.id, _('cleanup.duplicate'), { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
     }
     return { ops, trashed: toTrash.size };
   }
 
-  const withTrash = (label, n) => (n ? `${label}${_n(n, ', {n} file to the Trash', ', {n} files to the Trash')}` : label);
+  const withTrash = (label, n) => (n ? `${label}${_n(n, 'cleanup.filesToTrashSuffix')}` : label);
 
   function mergeDupes(g, keepId, { trash = false } = {}) {
     const { ops, trashed } = dupeOps(g, keepId, { trash });
     if (!ops.length) return;
     const keeper = store.base.tracks.get(keepId);
-    store.commit(withTrash(_('Merge duplicates: {title} (keep {quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }), trashed), ops);
+    store.commit(withTrash(_('cleanup.mergeDuplicatesChange', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }), trashed), ops);
   }
 
   // Merge every listed group at once, each keeping its selected copy. One change in the plan; each
@@ -518,17 +518,17 @@ export function createCleanupView({ navigate }) {
     const trashed = parts.reduce((n, p) => n + p.trashed, 0);
     if (!ops.length) return;
     const ok = await confirmDialog({
-      title: _n(list.length, 'Merge {n} duplicate group?', 'Merge {n} duplicate groups?'),
+      title: _n(list.length, 'cleanup.mergeGroupsConfirm'),
       message: [
-        _n(removed, '{n} copy is removed from the library; its crates move to the kept copy.', '{n} copies are removed from the library; their crates move to the kept copies.'),
-        trashed ? _n(trashed, '{n} file is moved to the Trash after applying (restorable).', '{n} files are moved to the Trash after applying (restorable).') : null,
-        skipped ? _n(skipped, '{n} group whose lengths differ by more than 2 s is skipped.', '{n} groups whose lengths differ by more than 2 s are skipped.') : null,
-        _('The changes go into the plan and can be undone there.'),
+        _n(removed, 'cleanup.mergeRemovesCopies'),
+        trashed ? _n(trashed, 'cleanup.mergeTrashesFiles') : null,
+        skipped ? _n(skipped, 'cleanup.mergeSkipsGroups') : null,
+        _('cleanup.mergeUndoNote'),
       ].filter(Boolean).join(' '),
-      okText: trash ? _('Merge and Trash') : _('Merge all'),
+      okText: trash ? _('cleanup.mergeAndTrash') : _('cleanup.mergeAll'),
       danger: trash,
     });
-    if (ok) store.commit(withTrash(_n(list.length, 'Merge {n} duplicate group', 'Merge {n} duplicate groups'), trashed), ops);
+    if (ok) store.commit(withTrash(_n(list.length, 'cleanup.mergeGroupsChange'), trashed), ops);
   }
 
   // ---------- empty crates ----------
@@ -539,7 +539,7 @@ export function createCleanupView({ navigate }) {
     const head = h(
       'div',
       { class: 'cleanup-intro' },
-      h('p', {}, _('Crates with no songs and no child crates. Select the ones to delete; placeholder crates can stay.')),
+      h('p', {}, _('cleanup.emptyIntro')),
       h(
         'div',
         { class: 'toolbar' },
@@ -550,8 +550,8 @@ export function createCleanupView({ navigate }) {
             else list.forEach((id) => emptySelected.add(id));
             render();
           },
-        }, emptySelected.size === list.length && list.length ? _('Select none') : _('Select all')),
-        h('button', { class: 'btn btn-sm btn-danger', disabled: !emptySelected.size, onclick: deleteSelected }, _('Delete selected ({n})', { n: emptySelected.size })),
+        }, emptySelected.size === list.length && list.length ? _('cleanup.selectNone') : _('cleanup.selectAll')),
+        h('button', { class: 'btn btn-sm btn-danger', disabled: !emptySelected.size, onclick: deleteSelected }, _('cleanup.deleteSelected', { n: emptySelected.size })),
       ),
     );
     const rows = list.map((id) =>
@@ -568,16 +568,16 @@ export function createCleanupView({ navigate }) {
           },
         }),
         h('span', { class: 'grow' }, eff.pathOf(id)),
-        eff.crates.get(id).status?.created ? h('span', { class: 'tag tag-new' }, _('Created')) : null,
+        eff.crates.get(id).status?.created ? h('span', { class: 'tag tag-new' }, _('cleanup.created')) : null,
       ),
     );
-    return [head, h('div', { class: 'list' }, rows.length ? rows : h('div', { class: 'empty' }, _('No empty crates')))];
+    return [head, h('div', { class: 'list' }, rows.length ? rows : h('div', { class: 'empty' }, _('cleanup.noEmptyCrates')))];
   }
 
   function deleteSelected() {
     const ids = [...emptySelected];
     emptySelected.clear();
-    store.commit(_n(ids.length, 'Delete {n} empty crate', 'Delete {n} empty crates'), ids.map((id) => store.opDelete(id)));
+    store.commit(_n(ids.length, 'cleanup.deleteEmptyCrates'), ids.map((id) => store.opDelete(id)));
   }
 
   function render() {
@@ -591,7 +591,7 @@ export function createCleanupView({ navigate }) {
   render();
   return {
     el,
-    title: _('Cleanup'),
+    title: _('tab.cleanup'),
     update: render,
     onKey(e) {
       if (e.key === ' ') {

@@ -48,9 +48,9 @@ async function poll() {
     for (const fn of listeners) fn();
     const n = pendingApplyOps();
     if (was === true && !s.seratoRunning && n) {
-      toast(_n(n, 'Serato DJ is closed. {n} change can be applied now', 'Serato DJ is closed. {n} changes can be applied now'), {
+      toast(_n(n, 'watch.seratoClosed'), {
         action: () => openApplyDialog(),
-        actionLabel: _('Apply…'),
+        actionLabel: _('watch.applyButton'),
         timeout: 20000,
       });
     }
@@ -71,8 +71,8 @@ async function poll() {
     const issues = store.eff.issues.length;
     toast(
       issues
-        ? _n(issues, 'Snapshot updated. {n} plan action no longer applies; see Plan', 'Snapshot updated. {n} plan actions no longer apply; see Plan')
-        : _("Serato's library changed and was reloaded"),
+        ? _n(issues, 'common.snapshotUpdatedIssues')
+        : _('watch.libraryReloaded'),
       { tone: issues ? 'danger' : 'info' },
     );
   } catch {

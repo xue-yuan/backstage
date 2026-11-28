@@ -10,9 +10,9 @@ import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList }
 import { _, _n } from '../i18n.js';
 
 const SPEEDS = [
-  ['saver', () => _('Power saving (1 file at a time)')],
-  ['normal', () => _('Normal (3 at a time)')],
-  ['fast', () => _('Fast (6 at a time)')],
+  ['saver', () => _('quality.speedSlow')],
+  ['normal', () => _('quality.speedNormal')],
+  ['fast', () => _('quality.speedFast')],
 ];
 
 export function createQualityView({ navigate } = {}) {
@@ -29,7 +29,7 @@ export function createQualityView({ navigate } = {}) {
   const statusEl = h('section', { class: 'panel qc-status' });
   const filterInput = h('input', {
     class: 'input input-sm',
-    placeholder: _('Filter by title, artist, folder…'),
+    placeholder: _('quality.filterPlaceholder'),
     oninput: (e) => {
       filter = e.target.value;
       renderList();
@@ -49,10 +49,10 @@ export function createQualityView({ navigate } = {}) {
         renderList();
       },
     },
-    h('option', { value: 'all' }, _('All suspects')),
-    h('option', { value: '128' }, _('Looks like 128k')),
-    h('option', { value: 'mid' }, _('Looks like 160–256k')),
-    h('option', { value: 'lossless' }, _('Fake lossless')),
+    h('option', { value: 'all' }, _('quality.allSuspects')),
+    h('option', { value: '128' }, _('quality.kind128')),
+    h('option', { value: 'mid' }, _('quality.kindMid')),
+    h('option', { value: 'lossless' }, _('quality.fakeLossless')),
   );
   const folderSelect = h('select', {
     class: 'input input-sm qc-folder',
@@ -87,18 +87,18 @@ export function createQualityView({ navigate } = {}) {
       filterInput,
       kindSelect,
       folderSelect,
-      check(_('Only songs in Serato'), () => inSeratoOnly, (v) => (inSeratoOnly = v)),
-      check(_('Show files marked genuine'), () => showGenuine, (v) => (showGenuine = v)),
+      check(_('quality.inSeratoOnly'), () => inSeratoOnly, (v) => (inSeratoOnly = v)),
+      check(_('quality.showGenuine'), () => showGenuine, (v) => (showGenuine = v)),
     ),
     countEl,
     h(
       'div',
       { class: 'trow trow-quality trow-head' },
       h('span'),
-      h('span', {}, _('Title / artist')),
-      h('span', {}, _('Format')),
-      h('span', { class: 'num', title: _('Where the sound stops') }, _('Cut-off')),
-      h('span', {}, _('Looks like')),
+      h('span', {}, _('common.titleArtist')),
+      h('span', {}, _('common.format')),
+      h('span', { class: 'num', title: _('quality.cutoffHint') }, _('quality.cutOff')),
+      h('span', {}, _('quality.looksLike')),
       h('span', {}, 'Serato'),
       h('span'),
     ),
@@ -113,8 +113,8 @@ export function createQualityView({ navigate } = {}) {
     if (s && s.available === false) {
       clear(
         statusEl,
-        h('h2', {}, _('Quality check')),
-        h('div', { class: 'notice notice-warn' }, _('This check requires ffmpeg. Run "brew install ffmpeg" in Terminal, then reopen Cratify.')),
+        h('h2', {}, _('quality.title')),
+        h('div', { class: 'notice notice-warn' }, _('quality.needsFfmpeg')),
       );
       return;
     }
@@ -125,14 +125,14 @@ export function createQualityView({ navigate } = {}) {
     const doneHere = s?.done - (s?.startDone ?? 0); // files finished since this page started watching
     if (running && doneHere > 3 && s.startedAt) {
       const left = ((Date.now() - s.startedAt) / doneHere) * (s.total - s.done);
-      eta = left > 90000 ? _('about {n} min left', { n: Math.round(left / 60000) }) : _('less than 2 min left');
+      eta = left > 90000 ? _('quality.minutesLeft', { n: Math.round(left / 60000) }) : _('quality.almostDone');
     }
     const speedSelect = h(
       'select',
       {
         class: 'input input-sm',
         disabled: running,
-        title: _('Number of files analysed at the same time. All speeds run at background priority and do not affect Serato.'),
+        title: _('quality.speedHint'),
         onchange: (e) => {
           prefs.set('quality.speed', (speed = e.target.value));
           e.target.blur();
@@ -149,15 +149,15 @@ export function createQualityView({ navigate } = {}) {
         h(
           'div',
           {},
-          h('h2', {}, _('Quality check')),
-          h('p', { class: 'muted small' }, _('Finds transcodes such as fake 320k and fake lossless. To save power, it runs only when started. Checked files are remembered, so each run checks only new or changed files.')),
+          h('h2', {}, _('quality.title')),
+          h('p', { class: 'muted small' }, _('quality.intro')),
         ),
         h(
           'div',
           { class: 'qc-stats' },
-          stat(checked.toLocaleString(), _('checked')),
-          stat(pending == null ? '…' : pending.toLocaleString(), _('new, not checked yet'), pending ? 'is-todo' : ''),
-          stat(suspects.toLocaleString(), _('suspect'), suspects ? 'is-warn' : ''),
+          stat(checked.toLocaleString(), _('quality.checked')),
+          stat(pending == null ? '…' : pending.toLocaleString(), _('quality.unchecked'), pending ? 'is-todo' : ''),
+          stat(suspects.toLocaleString(), _('quality.suspect'), suspects ? 'is-warn' : ''),
         ),
       ),
       running
@@ -165,8 +165,8 @@ export function createQualityView({ navigate } = {}) {
             'div',
             { class: 'qc-run' },
             h('div', { class: 'progress' }, h('div', { class: 'progress-fill', style: { width: `${s.total ? (s.done / s.total) * 100 : 0}%` } })),
-            h('span', { class: 'muted small' }, _('Checking {done} / {total}', { done: s.done.toLocaleString(), total: s.total.toLocaleString() }), eta ? ` · ${eta}` : ''),
-            h('button', { class: 'btn btn-sm', disabled: !!s.stopping, onclick: () => store.stopSpectrum() }, s.stopping ? _('Stopping…') : _('Stop')),
+            h('span', { class: 'muted small' }, _('quality.progress', { done: s.done.toLocaleString(), total: s.total.toLocaleString() }), eta ? ` · ${eta}` : ''),
+            h('button', { class: 'btn btn-sm', disabled: !!s.stopping, onclick: () => store.stopSpectrum() }, s.stopping ? _('quality.stopping') : _('quality.stop')),
           )
         : h(
             'div',
@@ -176,12 +176,12 @@ export function createQualityView({ navigate } = {}) {
               ? h(
                   'button',
                   { class: 'btn btn-primary', onclick: () => store.runSpectrum(speed).catch((e) => toast(e.message, { tone: 'danger' })) },
-                  _n(pending, 'Check {n} new file', 'Check {n} new files'),
+                  _n(pending, 'quality.checkNewFiles'),
                 )
-              : h('span', { class: 'qc-done' }, _('Everything is checked ✓')),
-            s?.lastRun ? h('span', { class: 'muted small' }, _('Last check: {time}', { time: `${fmt.date(s.lastRun)} ${fmt.time(s.lastRun * 1000)}` })) : null,
+              : h('span', { class: 'qc-done' }, _('quality.allChecked')),
+            s?.lastRun ? h('span', { class: 'muted small' }, _('quality.lastCheck', { time: `${fmt.date(s.lastRun)} ${fmt.time(s.lastRun * 1000)}` })) : null,
           ),
-      h('div', { class: 'muted small qc-note' }, _('"Suspect" is an automatic estimate. Check the spectrum and listen before deleting anything; mark files that are fine as genuine (F).')),
+      h('div', { class: 'muted small qc-note' }, _('quality.disclaimer')),
     );
   }
 
@@ -196,7 +196,7 @@ export function createQualityView({ navigate } = {}) {
     for (const r of visible) perDir.set(r.dir, (perDir.get(r.dir) || 0) + 1);
     const dirs = [...perDir].sort((a, b) => b[1] - a[1]);
     if (folder && !perDir.has(folder)) folder = '';
-    clear(folderSelect, h('option', { value: '' }, _('All folders')), dirs.map(([d, n]) => h('option', { value: d }, `${fmt.shortPath(d)} (${n})`)));
+    clear(folderSelect, h('option', { value: '' }, _('quality.allFolders')), dirs.map(([d, n]) => h('option', { value: d }, `${fmt.shortPath(d)} (${n})`)));
     folderSelect.value = folder;
 
     items = visible
@@ -212,12 +212,12 @@ export function createQualityView({ navigate } = {}) {
       .sort((a, b) => a.dir.localeCompare(b.dir) || a.path.localeCompare(b.path));
     if (!items.some((r) => r.key === selectedKey)) selectedKey = items[0]?.key ?? null;
 
-    countEl.textContent = all.length ? _('{shown} of {total} suspect files', { shown: items.length.toLocaleString(), total: visible.length.toLocaleString() }) : '';
+    countEl.textContent = all.length ? _('quality.shownCount', { shown: items.length.toLocaleString(), total: visible.length.toLocaleString() }) : '';
     const empty = !store.spectrum.size
-      ? _('No files checked yet. Press the button above to start.')
+      ? _('quality.nothingChecked')
       : visible.length
-        ? _('No files match the filters')
-        : _('No suspect files');
+        ? _('quality.noMatches')
+        : _('quality.noSuspectFiles');
     vlist.setItems(items, h('div', { class: 'empty' }, empty));
     renderStatus(all.filter((r) => !r.genuine).length);
   }
@@ -245,15 +245,15 @@ export function createQualityView({ navigate } = {}) {
           { class: 'trow-title', title: r.path },
           noteMark(t ? { track: t } : { path: r.path }),
           t ? t.title || t.fileName : r.path.slice(r.path.lastIndexOf('/') + 1),
-          r.genuine ? h('span', { class: 'tag tag-ok' }, _('Marked genuine')) : null,
-          rejected ? h('span', { class: 'tag tag-danger' }, _('Rejected')) : removed ? h('span', { class: 'tag tag-danger' }, _('Removed (in the plan)')) : null,
+          r.genuine ? h('span', { class: 'tag tag-ok' }, _('quality.markedGenuine')) : null,
+          rejected ? h('span', { class: 'tag tag-danger' }, _('common.rejected')) : removed ? h('span', { class: 'tag tag-danger' }, _('common.removedInPlan')) : null,
         ),
         h('div', { class: 'trow-sub' }, [t?.artist, fmt.shortPath(r.dir)].filter(Boolean).join(' · ')),
       ),
       h('span', {}, qualityBadge(r.genuine ? { ...r.q, suspect: null } : r.q, { compact: true })),
       h('span', { class: 'num' }, `${r.s.cutoff.toFixed(1)} kHz`),
-      h('span', { class: 'muted' }, r.s.lossless ? _('MP3 / AAC') : `${r.s.source}k`),
-      h('span', { class: 'muted small' }, t ? _n(crates, 'In {n} crate', 'In {n} crates') : _('Not imported')),
+      h('span', { class: 'muted' }, r.s.lossless ? _('quality.mp3Aac') : `${r.s.source}k`),
+      h('span', { class: 'muted small' }, t ? _n(crates, 'common.inCrateCount') : _('common.notImported')),
       h(
         'button',
         {
@@ -263,13 +263,13 @@ export function createQualityView({ navigate } = {}) {
             openSpectrum(r);
           },
         },
-        _('Spectrum'),
+        _('common.spectrum'),
       ),
     );
   }
 
   const playable = (r) =>
-    r.track ?? { playKey: `f${r.path}`, src: `/api/audio-file?path=${encodeURIComponent(r.path)}`, title: r.path.slice(r.path.lastIndexOf('/') + 1), artist: _('File not in Serato') };
+    r.track ?? { playKey: `f${r.path}`, src: `/api/audio-file?path=${encodeURIComponent(r.path)}`, title: r.path.slice(r.path.lastIndexOf('/') + 1), artist: _('common.fileNotInSerato') };
   const titleOf = (r) => (r.track ? store.trackLabel(r.track.id) : r.path.slice(r.path.lastIndexOf('/') + 1));
   const openSpectrum = (r) => showSpectrum({ path: r.path, title: titleOf(r), quality: r.q });
 
@@ -292,30 +292,30 @@ export function createQualityView({ navigate } = {}) {
       select(next.key, { scroll: true });
       if (wasPlaying) player.play(playable(next));
     }
-    toast(on ? _('Marked genuine: {track}', { track: titleOf(r) }) : _('Marked suspect again: {track}', { track: titleOf(r) }));
+    toast(on ? _('quality.markedGenuineChange', { track: titleOf(r) }) : _('quality.markedSuspectChange', { track: titleOf(r) }));
   }
 
   function reject(r) {
     if (r.track) {
       if (store.eff.removedTracks.has(r.track.id)) return;
-      store.commit(_('Reject: {track}', { track: titleOf(r) }), [store.opReject(r.track.id)]);
+      store.commit(_('common.rejectTrack', { track: titleOf(r) }), [store.opReject(r.track.id)]);
     } else {
       store.setScreenMark([r.path], 'reject');
-      toast(_('Marked reject. Move it to the Trash from Folders ("Review and move to Trash…").'), { timeout: 6000 });
+      toast(_('quality.markedReject'), { timeout: 6000 });
     }
   }
 
   function rowMenu(e, r) {
     select(r.key);
     contextMenu(e, [
-      { label: player.isCurrent(player.playId(playable(r))) && player.playing ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(playable(r)) },
-      { label: _('Spectrum'), hint: 'Enter', action: () => openSpectrum(r) },
-      { label: _('Show in Finder'), action: () => revealInFinder(r.path) },
+      { label: player.isCurrent(player.playId(playable(r))) && player.playing ? _('common.pause') : _('common.play'), hint: _('common.space'), action: () => player.toggle(playable(r)) },
+      { label: _('common.spectrum'), hint: 'Enter', action: () => openSpectrum(r) },
+      { label: _('common.showInFinder'), action: () => revealInFinder(r.path) },
       r.track ? noteMenuItem({ track: r.track }) : noteMenuItem({ path: r.path }),
       'sep',
-      r.genuine ? { label: _('Mark as suspect again'), action: () => setFine(r, false) } : { label: _('Mark as genuine (not a transcode)'), hint: 'F', action: () => setFine(r, true) },
+      r.genuine ? { label: _('quality.markSuspect'), action: () => setFine(r, false) } : { label: _('quality.markGenuine'), hint: 'F', action: () => setFine(r, true) },
       'sep',
-      { label: _('Reject'), hint: 'X', danger: true, action: () => reject(r) },
+      { label: _('common.reject'), hint: 'X', danger: true, action: () => reject(r) },
     ]);
   }
 
@@ -333,7 +333,7 @@ export function createQualityView({ navigate } = {}) {
 
   return {
     el,
-    title: _('Quality'),
+    title: _('tab.quality'),
     update: renderList,
     onKey(e) {
       const r = items.find((x) => x.key === selectedKey);

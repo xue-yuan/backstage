@@ -129,9 +129,9 @@ def serato_processes() -> list[str]:
     try:
         r = subprocess.run(["/bin/ps", "-axo", "pid=,comm="], capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.TimeoutExpired) as e:
-        return [tr("(could not check: {error})", error=e)]
+        return [tr("applyError.checkFailed", error=e)]
     if r.returncode != 0:
-        return [tr("(could not check: ps {code})", code=r.returncode)]
+        return [tr("applyError.psFailed", code=r.returncode)]
     found = []
     for line in r.stdout.splitlines():
         pid, _, comm = line.strip().partition(" ")
@@ -163,12 +163,10 @@ def backup(lib_dir: Path, backups_root: Path, label: str) -> Path:
         if src.exists():
             shutil.copy2(src, dest / name)
             if not _same(src, dest / name):
-                raise ApplyError(tr("Backing up {name} failed: the copy does not match", name=name))
-    (dest / tr("How to restore.txt")).write_text(
+                raise ApplyError(tr("backup.copyMismatch", name=name))
+    (dest / tr("backup.readmeName")).write_text(
         tr(
-            "This is a backup of the Serato database made by Cratify before applying changes.\n"
-            "To restore it, quit Serato DJ and use \"Restore the backup from before the last apply\" in Cratify's Plan view,\n"
-            "or copy these files back to {lib_dir} and delete any extra -wal / -shm files there.\n",
+            "backup.readme",
             lib_dir=lib_dir,
         ),
         encoding="utf-8",
@@ -190,9 +188,9 @@ def _same(a: Path, b: Path) -> bool:
 
 def restore(lib_dir: Path, backup_dir: Path) -> None:
     if serato_running():
-        raise ApplyError(tr("Serato DJ is open. Quit it before restoring"))
+        raise ApplyError(tr("backup.seratoOpen"))
     if not (backup_dir / "master.sqlite").exists() or not (backup_dir / "root.sqlite").exists():
-        raise ApplyError(tr("The backup folder has no master.sqlite / root.sqlite"))
+        raise ApplyError(tr("backup.noDatabase"))
     for name in ("master.sqlite-wal", "master.sqlite-shm", "root.sqlite-journal", "root.sqlite-wal"):
         (lib_dir / name).unlink(missing_ok=True)
     for name in ("master.sqlite", "master.sqlite-wal", "master.sqlite-shm", "root.sqlite"):
@@ -233,7 +231,7 @@ class _Writer:
     def _root_of(self, mid: int) -> int:
         rid = self._one("SELECT external_container_id FROM main.location_container WHERE container_id = ? AND location_id = ?", (mid, LOCAL))
         if rid is None:
-            raise ApplyError(tr("Crate #{id} has no counterpart in root.sqlite", id=mid))
+            raise ApplyError(tr("applyError.crateNotInRoot", id=mid))
         return rid
 
     def _lc(self, mid: int) -> int:
@@ -242,10 +240,10 @@ class _Writer:
     def crate(self, ref, *, allow_root: bool = False) -> int:
         mid = self.new_ids.get(ref) if isinstance(ref, str) else ref
         if mid is None:
-            raise ApplyError(tr("Crate {ref} not found", ref=ref))
+            raise ApplyError(tr("applyError.crateNotFound", ref=ref))
         row = self.con.execute("SELECT space_id, type FROM main.container WHERE id = ?", (mid,)).fetchone()
         if not row or row[0] != self.mspace or (row[1] != 1 and not (allow_root and mid == self.mroot)):
-            raise ApplyError(tr("Crate #{id} no longer exists or is not a Serato Library crate", id=mid))
+            raise ApplyError(tr("applyError.crateGone", id=mid))
         return mid
 
     def asset(self, aid: int) -> tuple[int, int, int]:
@@ -254,7 +252,7 @@ class _Writer:
         msa = self._one("SELECT id FROM main.space_asset WHERE asset_id = ? AND space_id = ?", (aid, self.mspace))
         rsa = self._one("SELECT id FROM db1.space_asset WHERE asset_id = ? AND space_id = ?", (rasset, self.rspace)) if rasset is not None else None
         if rasset is None or msa is None or rsa is None:
-            raise ApplyError(tr("Song #{id} is not in the local Serato Library", id=aid))
+            raise ApplyError(tr("applyError.songNotInLibrary", id=aid))
         return rasset, msa, rsa
 
     def _name_taken(self, mparent: int, name: str, except_mid: int | None = None) -> bool:
@@ -285,9 +283,9 @@ class _Writer:
         mparent = self.crate(op["parent"], allow_root=True)
         name = str(op["name"]).strip()
         if not name:
-            raise ApplyError(tr("The crate name is empty"))
+            raise ApplyError(tr("applyError.emptyName"))
         if self._name_taken(mparent, name):
-            raise ApplyError(tr('"{name}": that level already has a crate with this name', name=name))
+            raise ApplyError(tr("applyError.nameTakenNamed", name=name))
         rparent = self._root_of(mparent)
         cur = self.con.execute(
             "INSERT INTO db1.container (revision, parent_id, name, type, list_order, space_id, time_added, expanded, portable_id, color) "
@@ -309,7 +307,7 @@ class _Writer:
         name = str(op["name"]).strip()
         mparent = self._one("SELECT parent_id FROM main.container WHERE id = ?", (mid,))
         if self._name_taken(mparent, name, mid):
-            raise ApplyError(tr('"{name}" already exists at this level', name=name))
+            raise ApplyError(tr("applyError.nameTakenAtLevel", name=name))
         self.con.execute("UPDATE main.container SET name = ? WHERE id = ?", (name, mid))
         self.con.execute("UPDATE db1.container SET name = ?, revision = ? WHERE id = ?", (name, self.rev, self._root_of(mid)))
 
@@ -317,10 +315,10 @@ class _Writer:
         mid = self.crate(op["crate"])
         mparent = self.crate(op["parent"], allow_root=True)
         if mparent in self._subtree(mid):
-            raise ApplyError(tr("Cannot move a crate into itself"))
+            raise ApplyError(tr("applyError.cannotMoveIntoItself"))
         name = self._one("SELECT name FROM main.container WHERE id = ?", (mid,))
         if self._name_taken(mparent, name, mid):
-            raise ApplyError(tr('"{name}" already exists in the target', name=name))
+            raise ApplyError(tr("applyError.nameTakenInTarget", name=name))
         rid, rparent = self._root_of(mid), self._root_of(mparent)
         if "before" not in op:  # plans from before crates could be placed: to the end of the level, as always
             self.con.execute("UPDATE db1.container SET parent_id = ?, list_order = ?, revision = ? WHERE id = ?", (rparent, self._next_order("db1", rparent), self.rev, rid))
@@ -402,18 +400,18 @@ class _Writer:
         """Add a file to the local Serato Library like Serato's import, minus what its analysis fills in."""
         path = str(op["path"])
         if not path.startswith("/") or path.startswith("/Volumes/"):
-            raise ApplyError(tr("Only files on this Mac's internal drive can be added: {path}", path=path))
+            raise ApplyError(tr("applyError.importInternalOnly", path=path))
         try:
             st = os.stat(path)
         except OSError:
-            raise ApplyError(tr("File not found: {path}", path=path)) from None
+            raise ApplyError(tr("applyError.fileNotFound", path=path)) from None
         if "fileSize" not in op:  # from the page: read the details now (same numbers in the rehearsal and the real write)
             try:
                 op = {**op, **file_details(path)}
             except ValueError as e:
                 raise ApplyError(str(e)) from None
         if st.st_size != int(op["fileSize"]) or int(st.st_mtime) != int(op["mtime"]):
-            raise ApplyError(tr("The file changed after it was read: {path}", path=path))
+            raise ApplyError(tr("applyError.fileChanged", path=path))
         pid = path[1:]
         # The unique indexes compare bytes (ignoring case only); "é" can be stored precomposed or as e + accent,
         # and a few of Serato's own paths use the other form than the disk. Compare normalised as well.
@@ -421,7 +419,7 @@ class _Writer:
             self.known_paths = {_path_key(r[0]) for r in self.con.execute("SELECT portable_id FROM db1.asset")}
             self.known_paths |= {_path_key(r[0]) for r in self.con.execute("SELECT portable_id FROM main.asset WHERE location_id = ?", (LOCAL,))}
         if _path_key(pid) in self.known_paths:
-            raise ApplyError(tr("Already in Serato: {path}", path=path))
+            raise ApplyError(tr("applyError.alreadyInSerato", path=path))
         base = os.path.basename(path)
         values = {
             "portable_id": pid,
@@ -456,13 +454,13 @@ class _Writer:
     def relocate(self, op: dict) -> None:
         aid, path = int(op["asset"]), str(op["path"])
         if not path.startswith("/") or path.startswith("/Volumes/"):
-            raise ApplyError(tr("Files can only be relocated to the local drive: {path}", path=path))
+            raise ApplyError(tr("applyError.relocateLocalOnly", path=path))
         if not os.path.isfile(path):
-            raise ApplyError(tr("No file at the new location: {path}", path=path))
+            raise ApplyError(tr("applyError.relocateMissing", path=path))
         rasset, _, _ = self.asset(aid)
         pid = path[1:]
         if self._one("SELECT id FROM db1.asset WHERE portable_id = ? COLLATE NOCASE AND id <> ?", (pid, rasset)) is not None:
-            raise ApplyError(tr("Another Serato record already points to {path}", path=path))
+            raise ApplyError(tr("applyError.relocateTaken", path=path))
         self.con.execute("UPDATE main.asset SET portable_id = ? WHERE id = ? AND location_id = ?", (pid, aid, LOCAL))
         self.con.execute("UPDATE db1.asset SET portable_id = ?, revision = ? WHERE id = ?", (pid, self.rev, rasset))
 
@@ -476,7 +474,7 @@ class _Writer:
         for t in self.list_caches:
             self.con.execute(f"DELETE FROM main.'{t}' WHERE asset_id = ?", (aid,))
         if self._one("SELECT COUNT(*) FROM main.asset WHERE id = ?", (aid,)) or self._one("SELECT COUNT(*) FROM db1.asset WHERE id = ?", (rasset,)):
-            raise ApplyError(tr("Song #{id} was not removed completely", id=aid))
+            raise ApplyError(tr("applyError.removeIncomplete", id=aid))
         self.removed.append({"asset": aid, "path": "/" + pid, "deleteFile": bool(op.get("deleteFile"))})
 
     def leave_library(self, op: dict) -> None:
@@ -486,18 +484,18 @@ class _Writer:
         aid = int(op["asset"])
         rasset, msa, rsa = self.asset(aid)
         if not self._one("SELECT COUNT(*) FROM main.space_asset WHERE asset_id = ? AND id != ?", (aid, msa)):
-            raise ApplyError(tr("Song #{id} is only in the Serato Library; remove it from the library instead", id=aid))
+            raise ApplyError(tr("applyError.libraryOnlySong", id=aid))
         self.con.execute("DELETE FROM db1.space_asset WHERE id = ?", (rsa,))
         self.con.execute("DELETE FROM main.space_asset WHERE id = ?", (msa,))
         for t in self.list_caches:  # Serato's cached lists; it rebuilds them (as on removeTrack)
             self.con.execute(f"DELETE FROM main.'{t}' WHERE asset_id = ?", (aid,))
         if not self._one("SELECT COUNT(*) FROM main.asset WHERE id = ?", (aid,)) or not self._one("SELECT COUNT(*) FROM db1.asset WHERE id = ?", (rasset,)):
-            raise ApplyError(tr("Song #{id} would have been deleted rather than removed from the library; stopped", id=aid))
+            raise ApplyError(tr("applyError.wouldDelete", id=aid))
 
     def run(self, op: dict) -> None:
         kind = op.get("type")
         if kind not in SUPPORTED:
-            raise ApplyError(tr('Applying "{kind}" is not supported yet', kind=kind))
+            raise ApplyError(tr("applyError.unsupported", kind=kind))
         {
             "createCrate": self.create,
             "renameCrate": self.rename,
@@ -549,10 +547,10 @@ class _Writer:
         """For each level the plan reordered: master lists the crates in the expected order, and root agrees."""
         problems = []
         for key, want in expected_order.items():
-            label = key.replace("\x00", " / ") or tr("top level")
+            label = key.replace("\x00", " / ") or tr("check.topLevel")
             mparent = self._by_path(key)
             if mparent is None:
-                problems.append(tr("{level}: not found", level=label))
+                problems.append(tr("check.levelMissing", level=label))
                 continue
             rows = self.con.execute(
                 "SELECT c.id, c.name FROM main.container c WHERE c.parent_id = ? AND c.space_id = ? AND c.type = 1 "
@@ -560,7 +558,7 @@ class _Writer:
                 (mparent, self.mspace),
             ).fetchall()
             if [r[1] for r in rows] != list(want):
-                problems.append(tr("{level}: the crates are not in the expected order", level=label))
+                problems.append(tr("check.levelOrder", level=label))
                 continue
             r_orders = [
                 self._one("SELECT list_order FROM db1.container WHERE id = ?", (rid,))
@@ -568,7 +566,7 @@ class _Writer:
                 if (rid := self._one("SELECT external_container_id FROM main.location_container WHERE container_id = ? AND location_id = ?", (mid, LOCAL))) is not None
             ]
             if any(b is None or a is None or b <= a for a, b in zip(r_orders, r_orders[1:])):
-                problems.append(tr("{level}: root.sqlite has a different crate order", level=label))
+                problems.append(tr("check.levelRootOrder", level=label))
         return problems
 
     def mirror_problems(self) -> list[str]:
@@ -587,33 +585,33 @@ class _Writer:
             mapped.add(rid)
             r = self.con.execute("SELECT parent_id, name, type, space_id FROM db1.container WHERE id = ?", (rid,)).fetchone()
             if not r:
-                problems.append(tr("master crate {mid} → root {rid} does not exist", mid=mid, rid=rid))
+                problems.append(tr("check.rootCrateMissing", mid=mid, rid=rid))
                 continue
             if r[1] != name or r[2] != 1 or r[3] != self.rspace:
-                problems.append(tr("crate {name}: name or type differs", name=name))
+                problems.append(tr("check.crateNameDiffers", name=name))
             if mparent != self.mroot or r[0] != self.rroot:
                 if self._one("SELECT external_container_id FROM main.location_container WHERE container_id = ? AND location_id = ?", (mparent, LOCAL)) != r[0]:
-                    problems.append(tr("crate {name}: parent differs", name=name))
+                    problems.append(tr("check.crateParentDiffers", name=name))
             m_set = {x[0] for x in self.con.execute("SELECT a.external_id FROM main.container_asset ca JOIN main.asset a ON a.id = ca.asset_id WHERE ca.location_container_id = ?", (lc,))}
             r_set = {x[0] for x in self.con.execute("SELECT sa.asset_id FROM db1.container_asset ca JOIN db1.space_asset sa ON sa.id = ca.space_asset_id WHERE ca.container_id = ?", (rid,))}
             if m_set != r_set:
-                problems.append(tr("crate {name}: master {m} songs, root {r} songs", name=name, m=len(m_set), r=len(r_set)))
+                problems.append(tr("check.crateCountDiffers", name=name, m=len(m_set), r=len(r_set)))
             dangling = self._one(
                 "SELECT COUNT(*) FROM main.container_asset ca WHERE ca.location_container_id = ? AND ca.external_container_asset_id NOT IN (SELECT id FROM db1.container_asset WHERE container_id = ?)",
                 (lc, rid),
             )
             if dangling:
-                problems.append(tr("crate {name}: {n} rows have no match in root", name=name, n=dangling))
+                problems.append(tr("check.crateRowsUnmatched", name=name, n=dangling))
         orphans = self._one(
             f"SELECT COUNT(*) FROM db1.container WHERE space_id = ? AND type = 1 AND id NOT IN ({','.join('?' * len(mapped)) or 'NULL'})",
             (self.rspace, *mapped),
         )
         if orphans:
-            problems.append(tr("root has {n} crates with no counterpart in master", n=orphans))
+            problems.append(tr("check.rootExtraCrates", n=orphans))
         m_assets = {r[0] for r in self.con.execute("SELECT external_id FROM main.asset WHERE location_id = ?", (LOCAL,))}
         r_assets = {r[0] for r in self.con.execute("SELECT id FROM db1.asset")}
         if m_assets != r_assets:
-            problems.append(tr("Song lists differ: {m} only in master, {r} only in root", m=len(m_assets - r_assets), r=len(r_assets - m_assets)))
+            problems.append(tr("check.songListsDiffer", m=len(m_assets - r_assets), r=len(r_assets - m_assets)))
         return problems[:20]
 
 
@@ -629,8 +627,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         if not set(versions.values()) <= KNOWN_SCHEMAS:
             raise ApplyError(
                 tr(
-                    "The Serato database version is {main} (root {root}), but Cratify has only been verified with {known} (Serato DJ Pro 4.0). "
-                    "Serato may have been updated. Nothing is written until the new database format has been checked; no changes were made.",
+                    "check.unknownVersion",
                     main=versions["main"],
                     root=versions["db1"],
                     known=", ".join(map(str, sorted(KNOWN_SCHEMAS))),
@@ -646,7 +643,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
                 try:
                     w.run(op)
                 except ApplyError as e:
-                    raise ApplyError(tr("{action}: {error}", action=op.get("text") or op.get("type"), error=e)) from None
+                    raise ApplyError(tr("applyError.actionError", action=op.get("text") or op.get("type"), error=e)) from None
                 applied += 1
         for t, n in before.items():  # UI notifications Serato would consume while running
             if n == 0:
@@ -656,19 +653,19 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         for schema in ("main", "db1"):
             res = con.execute(f"PRAGMA {schema}.integrity_check").fetchone()[0]
             if res != "ok":
-                raise ApplyError(tr("{schema} integrity_check: {result}", schema=schema, result=res))
+                raise ApplyError(tr("check.integrityFailed", schema=schema, result=res))
         fk = con.execute("PRAGMA foreign_key_check").fetchall()
         if fk:
-            raise ApplyError(tr("Foreign key check failed: {rows}", rows=fk[:3]))
-        checks.append(tr("Database integrity and foreign key checks passed"))
+            raise ApplyError(tr("check.foreignKeys", rows=fk[:3]))
+        checks.append(tr("check.integrityPassed"))
         if w._one("SELECT COUNT(*) FROM main.history_entry") != history_before:
-            raise ApplyError(tr("The number of play history rows changed; nothing is written"))
+            raise ApplyError(tr("check.historyChanged"))
         if w.removed:
-            checks.append(trn(len(w.removed), "Removed {n} song; all {history} play history rows kept", "Removed {n} songs; all {history} play history rows kept", history=history_before))
+            checks.append(trn(len(w.removed), "check.removedKeptHistory", history=history_before))
         problems = w.mirror_problems()
         if problems:
-            raise ApplyError(tr("master / root differ: {problems}", problems=tr("; ").join(problems)))
-        checks.append(tr("master.sqlite and root.sqlite match"))
+            raise ApplyError(tr("check.mirrorDiffers", problems=tr("sep.semicolon").join(problems)))
+        checks.append(tr("check.mirrorPassed"))
         if expected is not None:
             actual = w.actual_tree()
             # Songs the plan added are listed by their plan id ("imp-…"): use the id they got.
@@ -678,35 +675,34 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
             extra = show(sorted(set(actual) - set(want)))
             wrong = show(sorted(k for k in set(want) & set(actual) if want[k] != actual[k]))
             if missing or extra or wrong:
-                details = tr("; ").join(
+                details = tr("sep.semicolon").join(
                     x
                     for x in (
-                        tr("missing {names}", names=missing[:5]) if missing else "",
-                        tr("extra {names}", names=extra[:5]) if extra else "",
-                        tr("different contents {names}", names=wrong[:5]) if wrong else "",
+                        tr("check.missing", names=missing[:5]) if missing else "",
+                        tr("check.extra", names=extra[:5]) if extra else "",
+                        tr("check.different", names=wrong[:5]) if wrong else "",
                     )
                     if x
                 )
                 raise ApplyError(
                     tr(
-                        "The crates after applying differ from what was expected: {details}. A crate was probably changed in Serato after the snapshot was read. "
-                        "Press \"↻ Reload\" at the top right, check the plan and apply again.",
+                        "check.cratesDiffer",
                         details=details,
                     )
                 )
-            checks.append(tr("All {n} crates hold exactly the expected songs", n=len(actual)))
+            checks.append(tr("check.cratesPassed", n=len(actual)))
         if expected_order:
             problems = w.order_problems(expected_order)
             if problems:
-                raise ApplyError(tr("The crate order after applying differs from the plan: {problems}. Crates were probably added or moved in Serato after the snapshot was read. Press \"↻ Reload\" at the top right, check the plan and apply again. Nothing was written.", problems=tr("; ").join(problems)))
-            checks.append(trn(len(expected_order), "The crates are in the planned order ({n} level)", "The crates are in the planned order ({n} levels)"))
+                raise ApplyError(tr("check.orderDiffers", problems=tr("sep.semicolon").join(problems)))
+            checks.append(trn(len(expected_order), "check.orderPassed"))
         if dry_run:
             con.execute("ROLLBACK")
         else:
             con.execute("COMMIT")
             con.execute("PRAGMA main.wal_checkpoint(TRUNCATE)")  # leave the files as a cleanly closed Serato would
         if w.imported:
-            checks.append(trn(len(w.imported), "Added {n} song to the Serato Library (not analysed yet)", "Added {n} songs to the Serato Library (not analysed yet)"))
+            checks.append(trn(len(w.imported), "check.imported"))
         return {"ok": True, "applied": applied, "checks": checks, "newIds": w.new_ids, "removed": w.removed, "imported": w.imported, "dryRun": dry_run}
     except Exception:
         if con.in_transaction:

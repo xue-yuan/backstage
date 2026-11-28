@@ -8,17 +8,17 @@ import { clear, confirmDialog, download, fmt, h, prefs, toast } from '../ui.js';
 import { _, _n } from '../i18n.js';
 
 const KIND = {
-  add: _('Add to crate'),
-  remove: _('Remove from crate'),
-  createCrate: _('New crate'),
-  renameCrate: _('Rename'),
-  moveCrate: _('Move crate'),
-  importTrack: _('Add to Serato'),
-  reorderCrate: _('Reorder crate'),
-  deleteCrate: _('Delete crate'),
-  mergeCrate: _('Merge crate'),
-  removeTrack: _('Remove song'),
-  relocate: _('Relocate'),
+  add: _('common.addToCrate'),
+  remove: _('common.removeFromCrate'),
+  createCrate: _('common.newCrate'),
+  renameCrate: _('common.rename'),
+  moveCrate: _('common.moveCrate'),
+  importTrack: _('common.addToSerato'),
+  reorderCrate: _('common.reorderCrate'),
+  deleteCrate: _('common.deleteCrate'),
+  mergeCrate: _('common.mergeCrate'),
+  removeTrack: _('plan.removeSong'),
+  relocate: _('common.relocate'),
 };
 
 export function createPlanView() {
@@ -62,27 +62,27 @@ export function createPlanView() {
         h(
           'div',
           { class: 'notice notice-info' },
-          h('strong', {}, _('These changes are not in Serato yet.')),
-          _(' To write them, quit Serato DJ and press "Apply to Serato". Cratify tests them on a copy, backs up the database and verifies the result; if any step fails, nothing is written.'),
+          h('strong', {}, _('plan.pendingNote')),
+          _('plan.applyHint'),
         ),
         h(
           'div',
           { class: 'plan-summary' },
-          h('div', { class: 'stat' }, h('div', { class: 'stat-num' }, changes.length), h('div', { class: 'muted small' }, _('changes'))),
-          h('div', { class: 'stat' }, h('div', { class: 'stat-num' }, nOps), h('div', { class: 'muted small' }, _('actions'))),
+          h('div', { class: 'stat' }, h('div', { class: 'stat-num' }, changes.length), h('div', { class: 'muted small' }, _('plan.changesUnit'))),
+          h('div', { class: 'stat' }, h('div', { class: 'stat-num' }, nOps), h('div', { class: 'muted small' }, _('plan.actionsUnit'))),
           h('div', { class: 'chips' }, Object.entries(c).map(([k, n]) => h('span', { class: 'chip' }, `${KIND[k] || k} ${n}`))),
           h(
             'div',
             { class: 'toolbar push-right' },
-            h('button', { class: 'btn btn-primary', disabled: !changes.length, onclick: () => openApplyDialog().then(loadStatus) }, _('Apply to Serato…')),
-            lastBackup ? h('button', { class: 'btn btn-ghost', title: lastBackup, onclick: () => restoreLastBackup(lastBackup).then(loadStatus) }, _('Restore the backup from before the last apply')) : null,
-            h('button', { class: 'btn', disabled: !changes.length, onclick: exportJson }, _('Export JSON')),
-            h('button', { class: 'btn', disabled: !changes.length, onclick: exportMarkdown }, _('Export checklist (Markdown)')),
-            h('button', { class: 'btn btn-danger-ghost', disabled: !changes.length, onclick: clearAll }, _('Clear all')),
+            h('button', { class: 'btn btn-primary', disabled: !changes.length, onclick: () => openApplyDialog().then(loadStatus) }, _('common.applyToSeratoMenu')),
+            lastBackup ? h('button', { class: 'btn btn-ghost', title: lastBackup, onclick: () => restoreLastBackup(lastBackup).then(loadStatus) }, _('common.restoreLastBackup')) : null,
+            h('button', { class: 'btn', disabled: !changes.length, onclick: exportJson }, _('plan.exportJson')),
+            h('button', { class: 'btn', disabled: !changes.length, onclick: exportMarkdown }, _('plan.exportChecklistMarkdown')),
+            h('button', { class: 'btn btn-danger-ghost', disabled: !changes.length, onclick: clearAll }, _('plan.clearAll')),
           ),
         ),
         store.eff.issues.length
-          ? h('div', { class: 'notice notice-danger' }, _n(store.eff.issues.length, '{n} action no longer applies, usually because a crate or song was removed in Serato. Undo the change marked in red.', '{n} actions no longer apply, usually because a crate or song was removed in Serato. Undo the changes marked in red.'))
+          ? h('div', { class: 'notice notice-danger' }, _n(store.eff.issues.length, 'plan.issues'))
           : null,
         changes.length
           ? h(
@@ -92,8 +92,8 @@ export function createPlanView() {
                 'div',
                 { class: 'segmented' },
                 [
-                  ['summary', _('Summary')],
-                  ['history', _('History')],
+                  ['summary', _('common.summary')],
+                  ['history', _('common.history')],
                 ].map(([key, label]) =>
                   h(
                     'button',
@@ -109,11 +109,11 @@ export function createPlanView() {
                   ),
                 ),
               ),
-              h('span', { class: 'muted small' }, mode === 'summary' ? _('Grouped by action. Expand a group to undo single items.') : _('Every change, newest first.')),
+              h('span', { class: 'muted small' }, mode === 'summary' ? _('plan.summaryHint') : _('plan.historyHint')),
             )
           : null,
         !changes.length
-          ? h('div', { class: 'empty' }, _('No changes yet. Changes made in Sort, Cleanup or Crates appear here.'))
+          ? h('div', { class: 'empty' }, _('plan.empty'))
           : mode === 'summary'
           ? renderSummary()
           : h(
@@ -138,14 +138,14 @@ export function createPlanView() {
                     h('span', { class: 'caret' }, h('span', { class: `chev ${isOpen ? 'is-open' : ''}` })),
                     h('span', { class: 'muted num' }, fmt.time(ch.at)),
                     h('span', { class: 'grow' }, ch.label),
-                    h('span', { class: 'muted small' }, _n(ch.ops.length, '{n} action', '{n} actions')),
+                    h('span', { class: 'muted small' }, _n(ch.ops.length, 'plan.actionCount')),
                     h('button', {
                       class: 'btn btn-ghost btn-xs',
                       onclick: (e) => {
                         e.stopPropagation();
                         store.undo(ch.id);
                       },
-                    }, _('Undo')),
+                    }, _('common.undo')),
                   ),
                   isOpen
                     ? h(
@@ -194,15 +194,15 @@ export function createPlanView() {
             },
             h('span', { class: 'caret' }, h('span', { class: `chev ${isOpen ? 'is-open' : ''}` })),
             h('span', { class: 'muted num' }, fmt.time(g.at)),
-            h('span', { class: 'grow' }, g.title, g.meta ? h('span', { class: 'muted small' }, ` · ${g.meta}`) : null, g.issues ? h('span', { class: 'tag tag-danger' }, _n(g.issues, '{n} no longer applies', '{n} no longer apply')) : null),
-            h('span', { class: 'muted small', title: _n(nOps, '{n} action', '{n} actions') }, _n(g.items.length, '{n} item', '{n} items')),
+            h('span', { class: 'grow' }, g.title, g.meta ? h('span', { class: 'muted small' }, ` · ${g.meta}`) : null, g.issues ? h('span', { class: 'tag tag-danger' }, _n(g.issues, 'plan.issueCount')) : null),
+            h('span', { class: 'muted small', title: _n(nOps, 'plan.actionCount') }, _n(g.items.length, 'plan.itemCount')),
             h('button', {
               class: 'btn btn-ghost btn-xs',
               onclick: (e) => {
                 e.stopPropagation();
                 undoGroup(g);
               },
-            }, g.items.length > 1 ? _('Undo all') : _('Undo')),
+            }, g.items.length > 1 ? _('plan.undoAll') : _('common.undo')),
           ),
           isOpen
             ? h(
@@ -212,8 +212,8 @@ export function createPlanView() {
                   h(
                     'li',
                     { class: it.issue ? 'op-issue' : '' },
-                    h('span', { class: 'grow' }, it.text, it.movedOut && mixed ? h('span', { class: 'tag tag-edit' }, _('removed from the source')) : null, it.issue ? h('span', { class: 'tag tag-danger' }, it.issue) : null),
-                    h('button', { class: 'btn btn-ghost btn-xs', title: it.ops.map((o) => o.text || o.type).join('\n'), onclick: () => undoItems([it], it.text) }, _('Undo')),
+                    h('span', { class: 'grow' }, it.text, it.movedOut && mixed ? h('span', { class: 'tag tag-edit' }, _('plan.removedFromSource')) : null, it.issue ? h('span', { class: 'tag tag-danger' }, it.issue) : null),
+                    h('button', { class: 'btn btn-ghost btn-xs', title: it.ops.map((o) => o.text || o.type).join('\n'), onclick: () => undoItems([it], it.text) }, _('common.undo')),
                   ),
                 ),
               )
@@ -232,16 +232,16 @@ export function createPlanView() {
     const deps = dependentOps(store.plan.changes, ops);
     if (items.length > 1 || deps.length) {
       const message = [
-        items.length > 1 ? _n(items.length, 'Removes {n} item from the plan.', 'Removes {n} items from the plan.') : null,
-        deps.length ? _n(deps.length, 'This also undoes {n} action that uses this crate.', 'This also undoes {n} actions that use this crate.') : null,
-        _('Serato is not affected.'),
+        items.length > 1 ? _n(items.length, 'plan.undoItems') : null,
+        deps.length ? _n(deps.length, 'plan.undoDependents') : null,
+        _('plan.seratoNotAffected'),
       ].filter(Boolean).join(' ');
-      const ok = await confirmDialog({ title: _('Undo "{title}"?', { title: label }), message, okText: _('Undo') });
+      const ok = await confirmDialog({ title: _('plan.undoConfirm', { title: label }), message, okText: _('common.undo') });
       if (!ok) return;
     }
     const drop = new Set([...ops, ...deps]);
     store.revertOps((o) => drop.has(o));
-    toast(_('Undone: {label}', { label }));
+    toast(_('common.undone', { label }));
   }
 
   function exportJson() {
@@ -250,7 +250,7 @@ export function createPlanView() {
   }
 
   function exportMarkdown() {
-    const lines = [_('# Serato crate plan'), '', _('Generated: {time}', { time: new Date().toLocaleString() }), _('Snapshot taken: {time}', { time: store.base.snapshot?.takenAt ?? '–' }), ''];
+    const lines = [_('plan.exportTitle'), '', _('plan.exportGenerated', { time: new Date().toLocaleString() }), _('plan.exportSnapshot', { time: store.base.snapshot?.takenAt ?? '–' }), ''];
     for (const ch of store.plan.changes) {
       lines.push(`## ${fmt.time(ch.at)} ${ch.label}`, '');
       for (const op of ch.ops) lines.push(`- [ ] ${op.text || op.type}`);
@@ -260,11 +260,11 @@ export function createPlanView() {
   }
 
   async function clearAll() {
-    const ok = await confirmDialog({ title: _('Clear the whole plan?'), message: _('All actions in the plan are deleted. Serato is not affected.'), okText: _('Clear all'), danger: true });
+    const ok = await confirmDialog({ title: _('plan.clearConfirm'), message: _('plan.clearWarning'), okText: _('plan.clearAll'), danger: true });
     if (ok) store.clearPlan();
   }
 
   render();
   loadStatus();
-  return { el, title: _('Plan'), update: render, onKey: () => false, destroy() {} };
+  return { el, title: _('tab.plan'), update: render, onKey: () => false, destroy() {} };
 }

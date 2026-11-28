@@ -40,7 +40,7 @@ def _signature(paths: list[Path]) -> tuple:
 
 def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int = 6) -> dict:
     if not source.exists():
-        raise SnapshotError(tr("Serato database not found: {path}", path=source))
+        raise SnapshotError(tr("snapshot.notFound", path=source))
 
     src_wal = source.with_name(source.name + "-wal")
     work = data_dir / "snapshot.tmp"
@@ -60,7 +60,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         after = _signature([source, src_wal])
 
         if before != after:
-            last_problem = tr("Serato wrote to the database while it was being copied")
+            last_problem = tr("snapshot.changedWhileCopying")
             time.sleep(0.4 * (attempt + 1))
             continue
 
@@ -73,7 +73,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         finally:
             con.close()
         if check != "ok":
-            last_problem = tr("integrity check failed: {result}", result=check)
+            last_problem = tr("snapshot.integrityFailed", result=check)
             time.sleep(0.4 * (attempt + 1))
             continue
 
@@ -93,7 +93,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         return meta
 
     shutil.rmtree(work, ignore_errors=True)
-    raise SnapshotError(tr("Could not get a consistent snapshot ({problem}). Try again in a moment", problem=last_problem))
+    raise SnapshotError(tr("snapshot.inconsistent", problem=last_problem))
 
 
 def source_signature(source: Path = DEFAULT_SOURCE) -> list:

@@ -130,19 +130,19 @@ function itemText(g, it, trackLabel) {
       return trackLabel(it.asset);
     case 'reject':
     case 'removeTrack':
-      return it.reason ? _('{track} ({reason})', { track: trackLabel(it.asset), reason: it.reason }) : trackLabel(it.asset);
+      return it.reason ? _('summary.trackReason', { track: trackLabel(it.asset), reason: it.reason }) : trackLabel(it.asset);
     case 'dupes': {
       const keeper = it.ops.find((o) => o.keeper != null)?.keeper;
       const removed = it.ops.filter((o) => o.type === 'removeTrack');
       const trashed = removed.filter((o) => o.deleteFile).length;
-      const text = _n(removed.length, 'Keep {keeper}, remove {n} copy', 'Keep {keeper}, remove {n} copies', { keeper: keeper != null ? trackLabel(keeper) : '?' });
-      return trashed ? `${text}${_n(trashed, ' ({n} file to the Trash)', ' ({n} files to the Trash)')}` : text;
+      const text = _n(removed.length, 'summary.keepCopy', { keeper: keeper != null ? trackLabel(keeper) : '?' });
+      return trashed ? `${text}${_n(trashed, 'summary.filesToTrash')}` : text;
     }
     case 'import':
       return it.ops[0].path.slice(it.ops[0].path.lastIndexOf('/') + 1);
     case 'missing': {
       const relocate = it.ops.find((o) => o.type === 'relocate');
-      return relocate ? _('{track}: relocated to {path}', { track: trackLabel(it.asset), path: relocate.path }) : _('{track}: merged into the record that has the file', { track: trackLabel(it.asset) });
+      return relocate ? _('summary.trackRelocated', { track: trackLabel(it.asset), path: relocate.path }) : _('summary.trackMerged', { track: trackLabel(it.asset) });
     }
     default:
       return it.ops.map((o) => o.text || o.type).join(' · ');
@@ -156,42 +156,42 @@ function groupTitle(g, items, eff) {
     case 'add': {
       const moved = items.filter((i) => i.movedOut).length;
       const title = g.from != null
-        ? _n(n, '{from} → {n} song into {to}', '{from} → {n} songs into {to}', { from: path(g.from), to: path(g.to) })
-        : _n(n, '{n} song added to {to}', '{n} songs added to {to}', { to: path(g.to) });
-      const meta = !moved ? '' : moved === n ? _('removed from the source crate') : _n(moved, '{n} removed from the source crate', '{n} removed from the source crate');
+        ? _n(n, 'summary.sortedInto', { from: path(g.from), to: path(g.to) })
+        : _n(n, 'summary.addedTo', { to: path(g.to) });
+      const meta = !moved ? '' : moved === n ? _('summary.leftSource') : _n(moved, 'summary.leftSourceCount');
       return { title, meta };
     }
     case 'remove':
-      return { title: _n(n, 'Removed {n} song from {crate}', 'Removed {n} songs from {crate}', { crate: path(g.crate) }) };
+      return { title: _n(n, 'summary.removedFrom', { crate: path(g.crate) }) };
     case 'reject':
-      return { title: _n(n, 'Rejected {n} song (removed from Serato, file moved to the Trash)', 'Rejected {n} songs (removed from Serato, files moved to the Trash)') };
+      return { title: _n(n, 'summary.rejected') };
     case 'removeTrack':
-      return { title: _n(n, 'Removed {n} song from the Serato library (file kept)', 'Removed {n} songs from the Serato library (files kept)') };
+      return { title: _n(n, 'summary.removedFromLibrary') };
     case 'dupes':
-      return { title: _n(n, 'Duplicates: merged {n} group', 'Duplicates: merged {n} groups') };
+      return { title: _n(n, 'summary.duplicatesMerged') };
     case 'missing':
-      return { title: _n(n, 'Missing files: fixed {n} song', 'Missing files: fixed {n} songs') };
+      return { title: _n(n, 'summary.missingFixed') };
     case 'relocate':
-      return { title: _n(n, 'Relocated {n} file', 'Relocated {n} files') };
+      return { title: _n(n, 'summary.relocatedFiles') };
     case 'import':
       return {
         title: g.crate != null && eff.crates.has(g.crate)
-          ? _n(n, 'Add {n} song to Serato, into {crate}', 'Add {n} songs to Serato, into {crate}', { crate: path(g.crate) })
-          : _n(n, 'Add {n} song to Serato (no crate)', 'Add {n} songs to Serato (no crate)'),
-        meta: _('Analysed in Serato after the plan is applied'),
+          ? _n(n, 'summary.importInto', { crate: path(g.crate) })
+          : _n(n, 'summary.importLibrary'),
+        meta: _('summary.importNote'),
       };
     default: {
       if (n === 1) return { title: items[0].text };
-      const titles = {
-        createCrate: ['Created {n} crate', 'Created {n} crates'],
-        renameCrate: ['Renamed {n} crate', 'Renamed {n} crates'],
-        moveCrate: ['Moved {n} crate', 'Moved {n} crates'],
-        reorderCrate: ['Reordered {n} crate', 'Reordered {n} crates'],
-        deleteCrate: ['Deleted {n} crate', 'Deleted {n} crates'],
-        mergeCrate: ['Merged {n} crate', 'Merged {n} crates'],
-        other: ['{n} other action', '{n} other actions'],
+      const title = {
+        createCrate: 'summary.cratesCreated',
+        renameCrate: 'summary.cratesRenamed',
+        moveCrate: 'summary.cratesMoved',
+        reorderCrate: 'summary.cratesReordered',
+        deleteCrate: 'summary.cratesDeleted',
+        mergeCrate: 'summary.cratesMerged',
+        other: 'summary.otherActions',
       }[g.kind];
-      return { title: _n(n, titles[0], titles[1]) };
+      return { title: _n(n, title) };
     }
   }
 }

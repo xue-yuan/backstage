@@ -1,7 +1,10 @@
-// Minimal i18n, gettext style: _('English text') and _n(count, 'one', 'other'). The English text is the key; locales/zh-Hant.js maps it to Traditional
-// Chinese. The language is read once when the page loads and switching reloads the page, so calling
+// Minimal i18n with semantic keys: _('area.name', params) and _n(count, 'area.name', params).
+// The text for each key is in static/locales/en.json and zh-Hant.json, shared with the server and
+// the Mac app; counted English texts are { one, other }. Both files load before any module that
+// imports this one runs, and the language is read once (switching reloads the page), so calling
 // _() at module level (for constant labels) is fine.
-import { NATIVE, zh } from './locales/zh-Hant.js';
+const loadTable = (name) => fetch(new URL(`../locales/${name}.json`, import.meta.url)).then((r) => r.json());
+const [en, zh] = await Promise.all([loadTable('en'), loadTable('zh-Hant')]);
 
 /** Prefix of every saved setting in localStorage (prefs in ui.js too). */
 export const STORAGE_PREFIX = 'cratify:';
@@ -31,27 +34,36 @@ function saved() {
 /** 'en' (default) or 'zh' (Traditional Chinese). */
 export const lang = saved() === 'zh' ? 'zh' : 'en';
 
-/** What the language button switches to (labelled in that language). */
-export const switchTo = lang === 'zh' ? { lang: 'en', label: 'EN', title: 'Switch to English' } : { lang: 'zh', label: NATIVE.label, title: NATIVE.switchTitle };
+/** What the language button switches to, labelled in that language. */
+const other = lang === 'zh' ? en : zh;
+export const switchTo = { lang: lang === 'zh' ? 'en' : 'zh', label: other['language.name'], title: other['language.switchTo'] };
 
 function fill(text, params) {
   if (!params) return text;
   return text.replace(/\{(\w+)\}/g, (m, k) => (k in params ? String(params[k]) : m));
 }
 
-/** Translate `text` and fill {placeholders} from `params`. */
-export function _(text, params) {
-  return fill(lang === 'zh' ? (zh[text] ?? text) : text, params);
+const table = lang === 'zh' ? zh : en;
+const plural = new Intl.PluralRules(lang === 'zh' ? 'zh-Hant' : 'en');
+
+/** The entry for `key`: this language, else English, else the key itself (so a gap is visible). */
+function entry(key) {
+  const value = table[key] ?? en[key];
+  if (value === undefined) console.warn(`[i18n] missing key: ${key}`);
+  return value ?? key;
 }
 
-/**
- * Count-aware text: _n(n, '{n} song', '{n} songs'). {n} is filled with the formatted number.
- * Chinese has a single form; its entry is keyed by the plural English text.
- */
-export function _n(n, one, other, params) {
-  const p = { ...params, n: Number(n).toLocaleString() };
-  if (lang === 'zh') return fill(zh[other] ?? other, p);
-  return fill(n === 1 ? one : other, p);
+/** Text for `key` with {placeholders} filled from `params`. A counted entry gives its "other" form. */
+export function _(key, params) {
+  const value = entry(key);
+  return fill(typeof value === 'string' ? value : value.other, params);
+}
+
+/** Count-aware text for `key`; {n} is filled with the formatted number. */
+export function _n(n, key, params) {
+  const value = entry(key);
+  const text = typeof value === 'string' ? value : (value[plural.select(n)] ?? value.other);
+  return fill(text, { ...params, n: Number(n).toLocaleString() });
 }
 
 /**

@@ -9,7 +9,7 @@ import { _, _n } from './i18n.js';
 export const INBOX = 'Inbox';
 // The crate under Inbox for songs in no crate. Its name follows the interface language; an existing one
 // in either language is reused.
-export const LOOSE = _('Unsorted songs');
+export const LOOSE = _('unsorted.looseCrateName');
 const LOOSE_NAMES = ['Unsorted songs', '未分類單曲'];
 
 export function inboxCrateId(eff = store.eff) {
@@ -67,7 +67,7 @@ export function consolidateOps() {
     const key = norm(eff.crates.get(id).name);
     if (taken.has(key)) ops.push(store.opMerge(id, taken.get(key)));
     else {
-      ops.push({ ...store.opMove(id, inbox), text: _('Move "{crate}" under "{parent}"', { crate: eff.pathOf(id), parent: INBOX }) });
+      ops.push({ ...store.opMove(id, inbox), text: _('op.moveCrateUnder', { crate: eff.pathOf(id), parent: INBOX }) });
       taken.set(key, id);
     }
   };
@@ -97,11 +97,11 @@ export function consolidateOps() {
   if (loose.length) {
     let target = LOOSE_NAMES.map((n) => taken.get(norm(n))).find((id) => id != null);
     if (target == null) {
-      const op = { ...store.opCreate(LOOSE, inbox), text: _('Create crate "{name}" under "{parent}"', { name: LOOSE, parent: INBOX }) };
+      const op = { ...store.opCreate(LOOSE, inbox), text: _('op.createCrateUnder', { name: LOOSE, parent: INBOX }) };
       ops.push(op);
       target = op.id;
     }
-    for (const t of loose) ops.push({ type: 'add', crate: target, asset: t.id, text: _('Add to "{crate}": {track}', { crate: `${INBOX} / ${LOOSE}`, track: store.trackLabel(t.id) }) });
+    for (const t of loose) ops.push({ type: 'add', crate: target, asset: t.id, text: _('op.addToCrate', { crate: `${INBOX} / ${LOOSE}`, track: store.trackLabel(t.id) }) });
   }
   return { ops, moved, removed: emptied.map((id) => eff.pathOf(id)), loose: loose.length };
 }
@@ -110,22 +110,22 @@ export async function consolidate() {
   if (!store.folderScan) await store.loadFolders().catch(() => {}); // songs in no crate are counted only inside the music folders
   const { ops, moved, removed, loose } = consolidateOps();
   if (!moved && !loose) {
-    toast(_('All unsorted crates are already under Inbox'));
+    toast(_('unsorted.allUnderInbox'));
     return false;
   }
   const ok = await confirmDialog({
-    title: _('Consolidate everything unsorted into Inbox?'),
+    title: _('unsorted.consolidateConfirm'),
     message: [
-      moved ? _n(moved, '{n} unsorted crate will move under "{inbox}"', '{n} unsorted crates will move under "{inbox}"', { inbox: INBOX }) : null,
-      removed.length ? _('Delete {names} once empty', { names: removed.map((name) => _('"{name}"', { name })).join(_(', ')) }) : null,
-      loose ? _n(loose, '{n} song in no crate goes into "{crate}"', '{n} songs in no crate go into "{crate}"', { crate: `${INBOX} / ${LOOSE}` }) : null,
+      moved ? _n(moved, 'unsorted.cratesWillMove', { inbox: INBOX }) : null,
+      removed.length ? _('unsorted.deleteOnceEmpty', { names: removed.map((name) => _('sep.quoted', { name })).join(_('sep.comma')) }) : null,
+      loose ? _n(loose, 'unsorted.looseSongsWillMove', { crate: `${INBOX} / ${LOOSE}` }) : null,
     ]
       .filter(Boolean)
-      .join(_('; ')) + _('. The changes go into the plan and can be undone before applying.'),
-    okText: _('Add to plan'),
+      .join(_('sep.semicolon')) + _('unsorted.planNote'),
+    okText: _('common.addToPlan'),
   });
   if (!ok) return false;
-  return !!store.commit(_('Consolidate unsorted crates and songs into {inbox}', { inbox: INBOX }), ops);
+  return !!store.commit(_('unsorted.consolidateChange', { inbox: INBOX }), ops);
 }
 
 async function createUnder() {
@@ -133,10 +133,10 @@ async function createUnder() {
   const inbox = inboxCrateId(eff);
   const siblings = inbox == null ? [] : (eff.children.get(inbox) || []).map((id) => norm(eff.crates.get(id).name));
   const name = await promptDialog({
-    title: _('New unsorted crate under "{inbox}"', { inbox: INBOX }),
-    placeholder: _('e.g. 2026-12 Beatport'),
-    okText: _('Create'),
-    validate: (v) => (siblings.includes(norm(v)) ? _('"{inbox}" already has a crate with this name', { inbox: INBOX }) : null),
+    title: _('unsorted.newCrateTitle', { inbox: INBOX }),
+    placeholder: _('unsorted.newCratePlaceholder'),
+    okText: _('unsorted.create'),
+    validate: (v) => (siblings.includes(norm(v)) ? _('unsorted.nameTaken', { inbox: INBOX }) : null),
   });
   if (!name) return;
   const ops = [];
@@ -146,11 +146,11 @@ async function createUnder() {
     ops.push(op);
     parent = op.id;
   }
-  ops.push({ ...store.opCreate(name, parent), text: _('Create crate "{name}" under "{parent}"', { name, parent: INBOX }) });
-  store.commit(_('New unsorted crate "{crate}"', { crate: `${INBOX} / ${name}` }), ops);
+  ops.push({ ...store.opCreate(name, parent), text: _('op.createCrateUnder', { name, parent: INBOX }) });
+  store.commit(_('unsorted.newCrateChange', { crate: `${INBOX} / ${name}` }), ops);
 }
 
-const REASON = { inbox: _('Inbox'), folder: _('Folder dragged into Serato'), manual: _('Marked manually') };
+const REASON = { inbox: _('unsorted.reasonInbox'), folder: _('unsorted.reasonFolder'), manual: _('unsorted.reasonManual') };
 
 /** The editor: list / add / remove unsorted crates, create new ones under Inbox, tidy into Inbox. */
 export function openUnsortedEditor() {
@@ -172,37 +172,37 @@ export function openUnsortedEditor() {
           'span',
           { class: 'grow' },
           eff.pathOf(id),
-          h('span', { class: 'tag tag-unsorted' }, REASON[reason] || _('Unsorted crate')),
+          h('span', { class: 'tag tag-unsorted' }, REASON[reason] || _('common.unsortedCrate')),
           h(
             'div',
             { class: 'muted small' },
-            _n(subtreeSongs(eff, id), '{n} song', '{n} songs'),
-            kids ? `${_(' · ')}${_n(kids, '{n} child crate', '{n} child crates')}` : '',
-            auto?.kind === 'folder' ? `${_(' · ')}${_('{n} / {total} songs from {dir}', { n: auto.n, total: auto.total, dir: auto.dir.replace(/^\/Users\/[^/]+/, '~') })}` : '',
+            _n(subtreeSongs(eff, id), 'common.songs'),
+            kids ? `${_('sep.dot')}${_n(kids, 'common.childCrates')}` : '',
+            auto?.kind === 'folder' ? `${_('sep.dot')}${_('unsorted.folderMatch', { n: auto.n, total: auto.total, dir: auto.dir.replace(/^\/Users\/[^/]+/, '~') })}` : '',
           ),
         ),
         h(
           'button',
           {
             class: 'btn btn-sm btn-ghost',
-            title: _('Count the songs in this crate as "Sorted"'),
+            title: _('unsorted.unmarkHint'),
             onclick: () => {
               store.setClassifyOverride(id, auto ? 'count' : null);
               render();
             },
           },
-          _('Remove'),
+          _('common.remove'),
         ),
       );
     };
     clear(
       bodyEl,
-      h('p', { class: 'muted' }, _('Songs in these crates and their child crates count as "Unsorted" unless they are also in another crate. New crates under "{inbox}" are included automatically.', { inbox: INBOX })),
+      h('p', { class: 'muted' }, _('unsorted.explanation', { inbox: INBOX })),
       moved || loose
         ? h(
             'div',
             { class: 'fnote fnote-warn' },
-            h('span', {}, [moved ? _n(moved, '{n} unsorted crate is not under "{inbox}"', '{n} unsorted crates are not under "{inbox}"', { inbox: INBOX }) : null, loose ? _n(loose, '{n} song is in no crate', '{n} songs are in no crate') : null].filter(Boolean).join(_(', ')) + _('.')),
+            h('span', {}, [moved ? _n(moved, 'unsorted.cratesOutsideInbox', { inbox: INBOX }) : null, loose ? _n(loose, 'unsorted.looseSongs') : null].filter(Boolean).join(_('sep.comma')) + _('sep.period')),
             h(
               'button',
               {
@@ -211,12 +211,12 @@ export function openUnsortedEditor() {
                   if (await consolidate()) render();
                 },
               },
-              _('Consolidate into {inbox}…', { inbox: INBOX }),
+              _('unsorted.consolidateMenu', { inbox: INBOX }),
             ),
           )
         : null,
-      h('div', { class: 'section-label' }, _('Unsorted crates ({n})', { n: roots.length })),
-      h('div', { class: 'list rules-scroll' }, roots.length ? roots.map(row) : h('div', { class: 'empty' }, _('No unsorted crates'))),
+      h('div', { class: 'section-label' }, _('unsorted.listTitle', { n: roots.length })),
+      h('div', { class: 'list rules-scroll' }, roots.length ? roots.map(row) : h('div', { class: 'empty' }, _('unsorted.empty'))),
       h(
         'div',
         { class: 'toolbar rules-actions' },
@@ -229,19 +229,19 @@ export function openUnsortedEditor() {
               render();
             },
           },
-          _('+ New crate under {inbox}', { inbox: INBOX }),
+          _('unsorted.addNewCrate', { inbox: INBOX }),
         ),
         h(
           'button',
           {
             class: 'btn btn-sm',
             onclick: async () => {
-              const id = await pickCrateDialog({ title: _('Choose a crate to count as unsorted'), allowCreate: false, exclude: store.rules.skip });
+              const id = await pickCrateDialog({ title: _('unsorted.markPickerTitle'), allowCreate: false, exclude: store.rules.skip });
               if (id != null) store.setClassifyOverride(id, rules.auto.has(id) ? null : 'skip');
               render();
             },
           },
-          _('+ Mark an existing crate as unsorted'),
+          _('unsorted.markExisting'),
         ),
         Object.keys(rules.overrides).length
           ? h(
@@ -253,20 +253,20 @@ export function openUnsortedEditor() {
                   render();
                 },
               },
-              _('Restore defaults'),
+              _('unsorted.restoreDefaults'),
             )
           : null,
       ),
-      inbox == null ? h('p', { class: 'muted small' }, _('"{inbox}" does not exist yet; it is created when needed.', { inbox: INBOX })) : null,
+      inbox == null ? h('p', { class: 'muted small' }, _('unsorted.noInbox', { inbox: INBOX })) : null,
     );
   };
   render();
   // The count of songs in no crate needs the music folders' scan (opened from Crates it may not be loaded yet).
   if (!store.folderScan) store.loadFolders().then(() => bodyEl.isConnected && render(), () => {});
   return modal({
-    title: _('Unsorted crates'),
+    title: _('unsorted.title'),
     wide: true,
     body: bodyEl,
-    actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('Done'))],
+    actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('common.done'))],
   });
 }

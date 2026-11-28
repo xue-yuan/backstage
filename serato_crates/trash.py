@@ -110,18 +110,18 @@ def restore_from_trash(paths: list[str], log_path: Path) -> list[dict]:
     for p in paths:
         entry = trashed.get(p)
         if not entry:
-            results.append({"path": p, "ok": False, "error": tr("There is no record of Cratify moving this file to the Trash")})
+            results.append({"path": p, "ok": False, "error": tr("trash.noRecord")})
             continue
         if os.path.exists(p):
-            results.append({"path": p, "ok": False, "error": tr("A file with the same name is already at the original location")})
+            results.append({"path": p, "ok": False, "error": tr("trash.nameTaken")})
             continue
         try:
             found = _find_in_trash(p, entry.get("size"))
         except PermissionError:
-            results.append({"path": p, "ok": False, "error": tr("No permission to read the Trash. Drag the file back to its folder in Finder")})
+            results.append({"path": p, "ok": False, "error": tr("trash.noPermission")})
             continue
         if not found:
-            results.append({"path": p, "ok": False, "error": tr("Not found in the Trash (it may have been emptied)")})
+            results.append({"path": p, "ok": False, "error": tr("trash.notInTrash")})
             continue
         try:
             os.makedirs(os.path.dirname(p), exist_ok=True)

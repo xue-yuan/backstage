@@ -24,7 +24,7 @@ export async function editMusicFolders({ firstRun = false } = {}) {
   try {
     settings = await getMusicFolders();
   } catch (e) {
-    toast(_('Could not read the music folder settings: {error}', { error: e.message }), { tone: 'danger' });
+    toast(_('folderSettings.readFailed', { error: e.message }), { tone: 'danger' });
     return false;
   }
   const missing = new Set(settings.missing);
@@ -32,8 +32,8 @@ export async function editMusicFolders({ firstRun = false } = {}) {
 
   const listEl = h('div', { class: 'mf-list' });
   const err = h('div', { class: 'field-error' });
-  const input = h('input', { class: 'input input-sm', id: 'music-folder-path', placeholder: _('or paste a path, e.g. ~/Music/DJ') });
-  const chooseBtn = h('button', { class: 'btn btn-sm', onclick: choose }, _('Choose folder…'));
+  const input = h('input', { class: 'input input-sm', id: 'music-folder-path', placeholder: _('folderSettings.pathPlaceholder') });
+  const chooseBtn = h('button', { class: 'btn btn-sm', onclick: choose }, _('folderSettings.chooseFolder'));
 
   function render() {
     listEl.replaceChildren(
@@ -43,11 +43,11 @@ export async function editMusicFolders({ firstRun = false } = {}) {
               'div',
               { class: 'mf-row' },
               h('span', { class: 'mf-path', title: f }, fmt.shortPath(f)),
-              missing.has(f) ? h('span', { class: 'mf-missing' }, _('Not found (is the drive connected?)')) : null,
-              h('button', { class: 'btn btn-sm btn-ghost', title: _('Remove'), 'aria-label': _('Remove {path}', { path: f }), onclick: () => ((folders = folders.filter((x) => x !== f)), render()) }, '✕'),
+              missing.has(f) ? h('span', { class: 'mf-missing' }, _('folderSettings.notFound')) : null,
+              h('button', { class: 'btn btn-sm btn-ghost', title: _('common.remove'), 'aria-label': _('folderSettings.remove', { path: f }), onclick: () => ((folders = folders.filter((x) => x !== f)), render()) }, '✕'),
             ),
           )
-        : [h('div', { class: 'mf-empty muted small' }, _('No folder yet. Choose at least one.'))]),
+        : [h('div', { class: 'mf-empty muted small' }, _('folderSettings.empty'))]),
     );
   }
 
@@ -89,18 +89,18 @@ export async function editMusicFolders({ firstRun = false } = {}) {
 
   render();
   const saved = await modal({
-    title: firstRun ? _('Choose your DJ music folders') : _('Music folders'),
+    title: firstRun ? _('folderSettings.firstRunTitle') : _('folderSettings.title'),
     wide: true,
     body: [
-      h('p', {}, _('Folders scans these folders to show which songs are sorted, not in Serato yet, copies or missing. Missing files are searched for here and in ~/Music. Cratify only reads these folders.')),
-      firstRun ? h('p', { class: 'mf-hint' }, _('Suggested from the locations of the songs in the Serato library. Change them if new music is stored elsewhere.')) : null,
+      h('p', {}, _('folderSettings.explanation')),
+      firstRun ? h('p', { class: 'mf-hint' }, _('folderSettings.suggestedNote')) : null,
       listEl,
-      h('div', { class: 'mf-add' }, chooseBtn, input, h('button', { class: 'btn btn-sm', onclick: addTyped }, _('Add'))),
+      h('div', { class: 'mf-add' }, chooseBtn, input, h('button', { class: 'btn btn-sm', onclick: addTyped }, _('folderSettings.add'))),
       err,
     ],
     actions: (close) => [
-      firstRun ? null : h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel')),
-      h('button', { class: 'btn btn-primary', onclick: () => save(close) }, firstRun ? _('Scan these folders') : _('Save')),
+      firstRun ? null : h('button', { class: 'btn', onclick: () => close(null) }, _('common.cancel')),
+      h('button', { class: 'btn btn-primary', onclick: () => save(close) }, firstRun ? _('folderSettings.scanButton') : _('common.save')),
     ],
     onKey: (e) => {
       if (e.key === 'Enter' && e.target === input) {
@@ -110,7 +110,7 @@ export async function editMusicFolders({ firstRun = false } = {}) {
     },
   });
   if (!saved) return false;
-  toast(_('Music folders saved. Scanning…'));
+  toast(_('folderSettings.saved'));
   await store.loadFolders(true);
   return true;
 }

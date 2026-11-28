@@ -51,7 +51,7 @@ The version number is set in `package.json`. The Mac app reads it through `"vers
 
 1. Add the release notes as a `## <version>` section at the top of `CHANGELOG.md`.
 2. Set the version in `package.json` and `src-tauri/Cargo.toml`.
-3. Run `pnpm app:release` (`tools/package_release.sh`). It checks that the versions match and the notes exist, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (preserving the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It does not publish anything.
+3. Run `pnpm app:release` (`tools/package_release.sh`). It checks that the versions match, the notes exist and the translations are consistent, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (preserving the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It does not publish anything.
 4. Test the zip: unzip it, open the app and check the version in the Guide, preferably on a Mac or user account that has never run Cratify.
 5. Commit, tag `v<version>` and run the printed `gh release create` command.
 
@@ -78,7 +78,13 @@ Folders scans the music folders, and the search for missing files covers them an
 
 Until a language is chosen, the interface follows the Mac: Traditional Chinese when Chinese is the first language in System Settings → General → Language & Region, English otherwise. The button at the top right switches languages. The choice is saved in the page and in `settings.json`, so server messages and the Mac app's startup messages use it too.
 
-Strings are written in English in the code and wrapped in `_()` / `_n()` (front end, `static/js/i18n.js`) or `tr()` / `trn()` (server, `serato_crates/i18n.py`). The Chinese translations are in `static/js/locales/zh-Hant.js`, `serato_crates/locale_zh.py` and `src-tauri/src/locale_zh.rs`, keyed by the English text.
+All interface text is in two files with the same keys, `static/locales/en.json` and `static/locales/zh-Hant.json`, shared by the three parts. Code refers to text by key, `<area>.<name>`:
+
+- front end (`static/js/i18n.js`, which loads both files at startup): `_('folders.trashConfirm')`, `_n(count, 'plan.actionCount')`
+- server (`serato_crates/i18n.py`, which reads them at startup): `tr("check.cratesPassed")`, `trn(n, "check.imported")`
+- Mac app (`src-tauri/src/main.rs`, which embeds them at build time): `tr("startup.portInUse", …)`; rebuild the app after changing its texts
+
+Counted English texts have the forms `one` and `other`; Chinese has a single form. Changing wording only touches the two files. `uv run --no-project tools/check_i18n.py` checks that every key the code uses exists, that both tables have the same keys and placeholders, and that no key is unused; `pnpm app:release` runs it before building.
 
 ## Views
 

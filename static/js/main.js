@@ -17,15 +17,15 @@ import { askMusicFoldersOnce } from './musicFolders.js';
 
 // Tab order = ⌘1–9 (the Mac app's View menu lists the same ids in src-tauri/src/main.rs).
 const VIEWS = {
-  home: { label: _('Overview'), create: createOverviewView },
-  folders: { label: _('Folders'), create: createFoldersView },
-  inbox: { label: _('Sort'), create: createInboxView },
-  cleanup: { label: _('Cleanup'), create: createCleanupView },
-  quality: { label: _('Quality'), create: createQualityView },
-  structure: { label: _('Crates'), create: createStructureView },
-  plan: { label: _('Plan'), create: createPlanView },
-  notes: { label: _('Notes'), create: createNotesView },
-  guide: { label: _('Guide'), create: createGuideView },
+  home: { label: _('tab.overview'), create: createOverviewView },
+  folders: { label: _('tab.folders'), create: createFoldersView },
+  inbox: { label: _('tab.sort'), create: createInboxView },
+  cleanup: { label: _('tab.cleanup'), create: createCleanupView },
+  quality: { label: _('tab.quality'), create: createQualityView },
+  structure: { label: _('tab.crates'), create: createStructureView },
+  plan: { label: _('tab.plan'), create: createPlanView },
+  notes: { label: _('tab.notes'), create: createNotesView },
+  guide: { label: _('tab.guide'), create: createGuideView },
 };
 
 const app = document.getElementById('app');
@@ -66,36 +66,36 @@ function renderHeader() {
     // On narrow windows only the dot stays (app.css); the full text is in the tooltip.
     h(
       'span',
-      { class: 'readonly-pill', title: _('Cratify reads a copy of the Serato database. It writes to Serato only through "Apply to Serato" in Plan, with Serato closed and after a backup') },
+      { class: 'readonly-pill', title: _('app.readonlyTooltip') },
       '●',
-      h('span', { class: 'readonly-text' }, ` ${_('● Writes to Serato only on Apply').replace(/^●\s*/, '')}`),
+      h('span', { class: 'readonly-text' }, ` ${_('app.readonlyPill').replace(/^●\s*/, '')}`),
     ),
-    snap ? h('span', { class: 'muted small snap-time', title: _('Source: {path}', { path: snap.source }) }, _('Snapshot {time}', { time: fmt.time(new Date(snap.takenAt).getTime()) })) : null,
-    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: `${_('Copy the Serato database again (Serato can stay open)')} ⌘R` }, _('↻ Reload')),
-    h('button', { class: 'btn btn-ghost btn-sm', onclick: showHelp, title: _('Keyboard shortcuts (?)') }, '?'),
+    snap ? h('span', { class: 'muted small snap-time', title: _('app.source', { path: snap.source }) }, _('common.snapshot', { time: fmt.time(new Date(snap.takenAt).getTime()) })) : null,
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: `${_('app.reloadTooltip')} ⌘R` }, _('app.reload')),
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: showHelp, title: _('app.shortcutsButton') }, '?'),
     h('button', { class: 'btn btn-ghost btn-sm', onclick: () => setLang(switchTo.lang), title: switchTo.title }, switchTo.label),
   );
 }
 
 async function refreshSnapshot() {
   try {
-    toast(_('Reading a new snapshot of the Serato database…'));
+    toast(_('app.reloading'));
     await store.refreshSnapshot();
-    toast(store.eff.issues.length ? _n(store.eff.issues.length, 'Snapshot updated. {n} plan action no longer applies; see Plan', 'Snapshot updated. {n} plan actions no longer apply; see Plan') : _('Snapshot updated'), {
+    toast(store.eff.issues.length ? _n(store.eff.issues.length, 'common.snapshotUpdatedIssues') : _('app.snapshotUpdated'), {
       tone: store.eff.issues.length ? 'danger' : 'info',
     });
   } catch (e) {
-    toast(_('Could not read: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
+    toast(_('app.readFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
   }
 }
 
 function showHelp() {
   modal({
-    title: _('Keyboard shortcuts'),
+    title: _('common.keyboardShortcuts'),
     wide: true,
     body: (close) => [
       shortcutTable(),
-      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('See the Guide for details →'))),
+      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('app.seeGuide'))),
     ],
   });
 }
@@ -129,7 +129,7 @@ document.addEventListener('keydown', (e) => {
   if (isTyping(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
     const undone = store.undo();
-    toast(undone ? _('Undone: {label}', { label: undone.label }) : _('Nothing to undo'));
+    toast(undone ? _('common.undone', { label: undone.label }) : _('app.nothingToUndo'));
     e.preventDefault();
     return;
   }
@@ -149,7 +149,7 @@ window.addEventListener('hashchange', () => {
 async function boot() {
   if (await adoptServerLanguage()) return; // first start: the page reloads in the Mac's language
   document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
-  document.documentElement.style.setProperty('--kept-label', JSON.stringify(_('Keep'))); // badge text in app.css
+  document.documentElement.style.setProperty('--kept-label', JSON.stringify(_('common.keep'))); // badge text in app.css
   syncServerLang(); // server messages and the Mac app's startup dialogs follow the page's language
   app.append(
     h('header', { class: 'header' }, h('div', { class: 'brand' }, h('img', { class: 'brand-mark', src: '/static/icon.svg', alt: '' }), 'Cratify'), tabsEl, snapEl),
@@ -157,11 +157,11 @@ async function boot() {
     playerEl,
   );
   mountPlayerBar(playerEl);
-  clear(mainEl, h('div', { class: 'loading' }, _('Reading the Serato database snapshot…')));
+  clear(mainEl, h('div', { class: 'loading' }, _('app.loading')));
   try {
     await store.load();
   } catch (e) {
-    clear(mainEl, h('div', { class: 'loading' }, h('p', {}, _('Could not read')), h('p', { class: 'muted' }, e.message), h('button', { class: 'btn', onclick: () => location.reload() }, _('Retry'))));
+    clear(mainEl, h('div', { class: 'loading' }, h('p', {}, _('app.readFailedTitle')), h('p', { class: 'muted' }, e.message), h('button', { class: 'btn', onclick: () => location.reload() }, _('app.retry'))));
     return;
   }
   store.subscribe(() => {

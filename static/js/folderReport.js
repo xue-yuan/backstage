@@ -5,14 +5,14 @@ import { fmt } from './ui.js';
 import { _, _n } from './i18n.js';
 
 export const STATUSES = ['classified', 'unsorted', 'notImported', 'copy', 'rejected', 'missing'];
-export const LABEL = { classified: _('Sorted'), unsorted: _('Unsorted'), notImported: _('Not imported'), copy: _('Copy'), rejected: _('Rejected'), missing: _('Missing') };
+export const LABEL = { classified: _('common.sorted'), unsorted: _('common.unsorted'), notImported: _('common.notImported'), copy: _('status.copy'), rejected: _('common.rejected'), missing: _('status.missing') };
 export const HINT = {
-  classified: _('In Serato and in at least one sorting crate'),
-  unsorted: _('In Serato, but only in Inbox or folder crates, or in no crate'),
-  notImported: _('On disk but not in Serato'),
-  copy: _('Not imported; identical to another file that Serato uses'),
-  rejected: _('Marked reject, not moved to the Trash yet'),
-  missing: _('Serato expects the file here, but it is missing'),
+  classified: _('status.sortedHint'),
+  unsorted: _('status.unsortedHint'),
+  notImported: _('status.notImportedHint'),
+  copy: _('status.copyHint'),
+  rejected: _('status.rejectedHint'),
+  missing: _('status.missingHint'),
 };
 export const BAR = ['classified', 'unsorted', 'notImported', 'copy', 'rejected'];
 const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, suspect: 0, kept: 0 });

@@ -4,7 +4,7 @@ import { h } from './ui.js';
 import { _, _n } from './i18n.js';
 
 export const LOW_QUALITY = { mp3: 256, aac: 192, sampleRate: 44100 };
-export const LOW_QUALITY_TEXT = _('MP3 below {mp3}k, AAC below {aac}k, or a sample rate below 44.1 kHz', { mp3: LOW_QUALITY.mp3, aac: LOW_QUALITY.aac });
+export const LOW_QUALITY_TEXT = _('audio.lowQualityRule', { mp3: LOW_QUALITY.mp3, aac: LOW_QUALITY.aac });
 
 const NOMINAL = [64, 96, 112, 128, 160, 192, 224, 256, 320];
 const LOSSLESS_CODECS = new Set(['lpcm', 'alac', 'flac']);
@@ -28,11 +28,11 @@ export function describeQuality(info, path, track) {
     const fmt = (track?.format || extOf(path || '')).toUpperCase();
     const kbps = track?.bitRate ? Math.round(track.bitRate / 1000) : null;
     const lossless = ['WAV', 'AIF', 'AIFF', 'FLAC'].includes(fmt);
-    return { label: lossless || !kbps ? fmt : `${fmt} ${kbps}`, codec: fmt, kbps, lossless, low: false, known: false, detail: _('Format recorded by Serato (the file has not been read yet)') };
+    return { label: lossless || !kbps ? fmt : `${fmt} ${kbps}`, codec: fmt, kbps, lossless, low: false, known: false, detail: _('audio.formatFromSerato') };
   }
   const [codec, bps, sampleRate, bitDepth] = info;
   if (!codec) {
-    return { label: _('Unreadable'), codec: '', kbps: null, lossless: false, low: false, unreadable: true, known: true, detail: _('macOS cannot open this file. It may be damaged, or its extension may not match its format. Preview it to check.') };
+    return { label: _('audio.unreadable'), codec: '', kbps: null, lossless: false, low: false, unreadable: true, known: true, detail: _('audio.unreadableHint') };
   }
   const lossless = LOSSLESS_CODECS.has(codec);
   const ext = extOf(path || '');
@@ -40,15 +40,15 @@ export function describeQuality(info, path, track) {
   const kbps = bps ? nominalKbps(bps) : null;
   const reasons = [];
   if (!lossless && kbps) {
-    if (codec === 'mp3' && kbps < LOW_QUALITY.mp3) reasons.push(_('MP3 {kbps}k, below {min}k', { kbps, min: LOW_QUALITY.mp3 }));
-    if (codec.startsWith('aac') && kbps < LOW_QUALITY.aac) reasons.push(_('AAC {kbps}k, below {min}k', { kbps, min: LOW_QUALITY.aac }));
+    if (codec === 'mp3' && kbps < LOW_QUALITY.mp3) reasons.push(_('audio.mp3BelowMin', { kbps, min: LOW_QUALITY.mp3 }));
+    if (codec.startsWith('aac') && kbps < LOW_QUALITY.aac) reasons.push(_('audio.aacBelowMin', { kbps, min: LOW_QUALITY.aac }));
   }
-  if (sampleRate && sampleRate < LOW_QUALITY.sampleRate) reasons.push(_('Sample rate {khz} kHz', { khz: sampleRate / 1000 }));
+  if (sampleRate && sampleRate < LOW_QUALITY.sampleRate) reasons.push(_('audio.sampleRateKhz', { khz: sampleRate / 1000 }));
   const detail = [
-    lossless ? `${_('{name} lossless', { name })}${bitDepth ? ` ${bitDepth}-bit` : ''}` : `${name}${bps ? ` ${_('actual {kbps} kbps', { kbps: Math.round(bps / 1000) })}` : ''}`,
+    lossless ? `${_('audio.lossless', { name })}${bitDepth ? ` ${bitDepth}-bit` : ''}` : `${name}${bps ? ` ${_('audio.actualKbps', { kbps: Math.round(bps / 1000) })}` : ''}`,
     sampleRate ? `${sampleRate / 1000} kHz` : null,
-    ext === 'm4a' && codec === 'alac' ? _('(lossless ALAC in an m4a file)') : null,
-    ext === 'm4a' && codec.startsWith('aac') ? _('(AAC in an m4a file)') : null,
+    ext === 'm4a' && codec === 'alac' ? _('audio.m4aAlac') : null,
+    ext === 'm4a' && codec.startsWith('aac') ? _('audio.m4aAac') : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -60,7 +60,7 @@ export function describeQuality(info, path, track) {
     low: reasons.length > 0,
     reasons,
     known: true,
-    detail: reasons.length ? `${_('Low quality: {reasons}', { reasons: reasons.join(_(', ')) })}\n${detail}` : detail,
+    detail: reasons.length ? `${_('common.lowQualityReasons', { reasons: reasons.join(_('sep.comma')) })}\n${detail}` : detail,
   };
 }
 
@@ -79,8 +79,8 @@ export function qualityBadge(q, { compact = false } = {}) {
     'span',
     { class: `qbadge ${q.low || q.unreadable ? 'is-low' : ''} ${q.lossless && !q.suspect ? 'is-lossless' : ''} ${q.known ? '' : 'is-unknown'}`, title: suspect ? `${suspect}\n\n${q.detail}` : q.detail },
     q.label || '–',
-    q.low && !compact ? h('span', { class: 'qbadge-low' }, _('Low quality')) : null,
-    suspect ? h('span', { class: 'qbadge-suspect' }, _('Suspect')) : null,
+    q.low && !compact ? h('span', { class: 'qbadge-low' }, _('common.lowQuality')) : null,
+    suspect ? h('span', { class: 'qbadge-suspect' }, _('common.suspect')) : null,
   );
 }
 
@@ -112,7 +112,7 @@ export function suspectText(q) {
   const s = q.suspect;
   const khz = s.cutoff.toFixed(1);
   const main = s.lossless
-    ? _('Suspect: the sound stops at {khz} kHz. Genuine lossless audio reaches about 22 kHz, so this {label} was probably converted from an MP3 or AAC file.', { khz, label: q.label })
-    : _('Suspect: the sound stops at {khz} kHz, where a {source}k encoder cuts it. This {label} was probably converted from a {source}k file.', { khz, source: s.source, label: q.label });
-  return `${main} ${_('This is an automatic estimate; check the spectrum (right-click → Spectrum) before deleting or replacing the file.')}`;
+    ? _('audio.suspectLossless', { khz, label: q.label })
+    : _('audio.suspectBitrate', { khz, source: s.source, label: q.label });
+  return `${main} ${_('audio.suspectAdvice')}`;
 }

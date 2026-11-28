@@ -16,7 +16,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -24,20 +24,19 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 
-mod locale_zh;
 
 const PORT: u16 = 47615;
 // The page's tabs in order (ids as in static/js/main.js); the View menu binds them to ⌘1–9.
 const VIEWS: [(&str, &str); 9] = [
-    ("home", "Overview"),
-    ("folders", "Folders"),
-    ("inbox", "Sort"),
-    ("cleanup", "Cleanup"),
-    ("quality", "Quality"),
-    ("structure", "Crates"),
-    ("plan", "Plan"),
-    ("notes", "Notes"),
-    ("guide", "Guide"),
+    ("home", "tab.overview"),
+    ("folders", "tab.folders"),
+    ("inbox", "tab.sort"),
+    ("cleanup", "tab.cleanup"),
+    ("quality", "tab.quality"),
+    ("structure", "tab.crates"),
+    ("plan", "tab.plan"),
+    ("notes", "tab.notes"),
+    ("guide", "tab.guide"),
 ];
 const DEFAULT_SIZE: (f64, f64) = (1440.0, 900.0);
 const MIN_SIZE: (f64, f64) = (1024.0, 640.0);
@@ -98,14 +97,28 @@ fn lang_is_zh() -> bool {
     text[i + 6..].trim_start().trim_start_matches(':').trim_start().starts_with("\"zh\"")
 }
 
-/// The English message or its Chinese translation (locale_zh.rs), with {name} placeholders filled in.
-fn tr(en: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
-    let template = if lang_is_zh() {
-        locale_zh::ZH.iter().find(|(k, _)| *k == en).map(|(_, v)| *v).unwrap_or(en)
-    } else {
-        en
+// Interface text shared with the page and the server, embedded at build time.
+const EN_JSON: &str = include_str!("../../static/locales/en.json");
+const ZH_JSON: &str = include_str!("../../static/locales/zh-Hant.json");
+
+fn text_table(zh: bool) -> &'static serde_json::Map<String, serde_json::Value> {
+    static EN: OnceLock<serde_json::Map<String, serde_json::Value>> = OnceLock::new();
+    static ZH: OnceLock<serde_json::Map<String, serde_json::Value>> = OnceLock::new();
+    let (cell, json) = if zh { (&ZH, ZH_JSON) } else { (&EN, EN_JSON) };
+    cell.get_or_init(|| serde_json::from_str(json).unwrap_or_default())
+}
+
+/// The text for `key` (Chinese when the page is in Chinese, else English), with {name} placeholders
+/// filled in. A counted entry gives its "other" form; an unknown key is shown as is, so a gap is visible.
+fn tr(key: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
+    let lookup = |zh: bool| -> Option<String> {
+        match text_table(zh).get(key)? {
+            serde_json::Value::String(s) => Some(s.clone()),
+            serde_json::Value::Object(forms) => forms.get("other")?.as_str().map(str::to_string),
+            _ => None,
+        }
     };
-    let mut out = template.to_string();
+    let mut out = if lang_is_zh() { lookup(true) } else { None }.or_else(|| lookup(false)).unwrap_or_else(|| key.to_string());
     for (name, value) in args {
         out = out.replace(&format!("{{{name}}}"), &value.to_string());
     }
@@ -126,9 +139,9 @@ fn port_owner() -> Option<String> {
 /// Why the app's port is taken, in words the user can act on.
 fn port_in_use_message() -> String {
     match port_owner() {
-        Some(s) if s.starts_with("Backstage/") => tr("Backstage (this app's former name) is running.\nQuit Backstage, then open Cratify again.", &[]),
-        Some(s) if s.starts_with("Cratify/") => tr("Another copy of Cratify is already running.\nQuit it, then open Cratify again.", &[]),
-        _ => tr("Another program is using 127.0.0.1:{port}, which Cratify's local server requires.\nQuit that program or restart the Mac, then open Cratify again.", &[("port", &PORT)]),
+        Some(s) if s.starts_with("Backstage/") => tr("startup.backstageRunning", &[]),
+        Some(s) if s.starts_with("Cratify/") => tr("startup.alreadyRunning", &[]),
+        _ => tr("startup.portInUse", &[("port", &PORT)]),
     }
 }
 
@@ -148,16 +161,16 @@ fn find_uv() -> Option<PathBuf> {
 
 /// A uv-managed Python interpreter (never the system one).
 fn find_python() -> Result<PathBuf, String> {
-    let uv = find_uv().ok_or_else(|| tr("uv was not found. Install uv first (for example: brew install uv).", &[]))?;
+    let uv = find_uv().ok_or_else(|| tr("startup.uvMissing", &[]))?;
     let out = Command::new(&uv)
         .args(["python", "find", "--no-project", "--managed-python", PYTHON_REQUEST])
         .stdin(Stdio::null())
         .output()
-        .map_err(|e| tr("Could not run {program}: {error}", &[("program", &uv.display()), ("error", &e)]))?;
+        .map_err(|e| tr("startup.runFailed", &[("program", &uv.display()), ("error", &e)]))?;
     let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
     if !out.status.success() || !path.is_file() {
         return Err(tr(
-            "uv found no Python matching {request}.\nRun in Terminal: uv python install 3.14\n\n{details}",
+            "startup.pythonMissing",
             &[("request", &PYTHON_REQUEST), ("details", &String::from_utf8_lossy(&out.stderr).trim())],
         ));
     }
@@ -170,12 +183,12 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
     }
     let python = find_python()?;
     app_log(&format!("python: {}", python.display()));
-    std::fs::create_dir_all(data_dir).map_err(|e| tr("Could not create the folder {path}: {error}", &[("path", &data_dir.display()), ("error", &e)]))?;
+    std::fs::create_dir_all(data_dir).map_err(|e| tr("startup.createFolderFailed", &[("path", &data_dir.display()), ("error", &e)]))?;
     let log = OpenOptions::new()
         .create(true)
         .append(true)
         .open(data_dir.join("server.log"))
-        .map_err(|e| tr("Could not write server.log: {error}", &[("error", &e)]))?;
+        .map_err(|e| tr("startup.logFailed", &[("error", &e)]))?;
     Command::new(&python)
         .arg("-B") // never write __pycache__ into the app bundle
         .arg(server_dir.join("app.py"))
@@ -186,7 +199,7 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
         .stdout(log.try_clone().map_err(|e| e.to_string())?)
         .stderr(log)
         .spawn()
-        .map_err(|e| tr("Could not start {program}: {error}", &[("program", &python.display()), ("error", &e)]))
+        .map_err(|e| tr("startup.startFailed", &[("program", &python.display()), ("error", &e)]))
 }
 
 // ---------- menu bar ----------
@@ -199,49 +212,49 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         "Cratify",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(&t("About Cratify")), None)?,
+            &PredefinedMenuItem::about(app, Some(&t("menu.about")), None)?,
             &sep()?,
-            &PredefinedMenuItem::services(app, Some(&t("Services")))?,
+            &PredefinedMenuItem::services(app, Some(&t("menu.services")))?,
             &sep()?,
-            &PredefinedMenuItem::hide(app, Some(&t("Hide Cratify")))?,
-            &PredefinedMenuItem::hide_others(app, Some(&t("Hide Others")))?,
-            &PredefinedMenuItem::show_all(app, Some(&t("Show All")))?,
+            &PredefinedMenuItem::hide(app, Some(&t("menu.hide")))?,
+            &PredefinedMenuItem::hide_others(app, Some(&t("menu.hideOthers")))?,
+            &PredefinedMenuItem::show_all(app, Some(&t("menu.showAll")))?,
             &sep()?,
-            &PredefinedMenuItem::quit(app, Some(&t("Quit Cratify")))?,
+            &PredefinedMenuItem::quit(app, Some(&t("menu.quit")))?,
         ],
     )?;
     let edit = Submenu::with_items(
         app,
-        t("Edit"),
+        t("menu.edit"),
         true,
         &[
-            &PredefinedMenuItem::undo(app, Some(&t("Undo")))?,
-            &PredefinedMenuItem::redo(app, Some(&t("Redo")))?,
+            &PredefinedMenuItem::undo(app, Some(&t("menu.undo")))?,
+            &PredefinedMenuItem::redo(app, Some(&t("menu.redo")))?,
             &sep()?,
-            &PredefinedMenuItem::cut(app, Some(&t("Cut")))?,
-            &PredefinedMenuItem::copy(app, Some(&t("Copy")))?,
-            &PredefinedMenuItem::paste(app, Some(&t("Paste")))?,
-            &PredefinedMenuItem::select_all(app, Some(&t("Select All")))?,
+            &PredefinedMenuItem::cut(app, Some(&t("menu.cut")))?,
+            &PredefinedMenuItem::copy(app, Some(&t("menu.copy")))?,
+            &PredefinedMenuItem::paste(app, Some(&t("menu.paste")))?,
+            &PredefinedMenuItem::select_all(app, Some(&t("menu.selectAll")))?,
         ],
     )?;
     // Item ids are the page commands (window.__cratify.command in static/js/main.js).
-    let view = Submenu::new(app, t("View"), true)?;
-    view.append(&MenuItem::with_id(app, "reload", t("Reload Serato Snapshot"), true, Some("CmdOrCtrl+R"))?)?;
+    let view = Submenu::new(app, t("menu.view"), true)?;
+    view.append(&MenuItem::with_id(app, "reload", t("menu.reload"), true, Some("CmdOrCtrl+R"))?)?;
     view.append(&sep()?)?;
     for (i, (id, label)) in VIEWS.iter().enumerate() {
         view.append(&MenuItem::with_id(app, format!("view:{id}"), t(label), true, Some(format!("CmdOrCtrl+{}", i + 1)))?)?;
     }
     view.append(&sep()?)?;
-    view.append(&PredefinedMenuItem::fullscreen(app, Some(&t("Enter Full Screen")))?)?;
+    view.append(&PredefinedMenuItem::fullscreen(app, Some(&t("menu.fullScreen")))?)?;
     let window = Submenu::with_items(
         app,
-        t("Window"),
+        t("menu.window"),
         true,
         &[
-            &PredefinedMenuItem::minimize(app, Some(&t("Minimize")))?,
-            &PredefinedMenuItem::maximize(app, Some(&t("Zoom")))?,
+            &PredefinedMenuItem::minimize(app, Some(&t("menu.minimize")))?,
+            &PredefinedMenuItem::maximize(app, Some(&t("menu.zoom")))?,
             &sep()?,
-            &PredefinedMenuItem::close_window(app, Some(&t("Close Window")))?,
+            &PredefinedMenuItem::close_window(app, Some(&t("menu.closeWindow")))?,
         ],
     )?;
     Menu::with_items(app, &[&app_menu, &edit, &view, &window])
@@ -419,7 +432,7 @@ fn main() {
                     if payload.event() == PageLoadEvent::Finished {
                         app_log(&format!("page loaded: {}", payload.url()));
                         if payload.url().scheme() != "http" {
-                            let _ = window.eval(format!("setStatus({})", serde_json_string(&tr("Starting…", &[]))));
+                            let _ = window.eval(format!("setStatus({})", serde_json_string(&tr("startup.starting", &[]))));
                             loading_flag.store(true, Ordering::SeqCst);
                         }
                     }
@@ -428,7 +441,7 @@ fn main() {
                 .on_download(|webview, event| {
                     if let DownloadEvent::Finished { path: Some(path), success: true, .. } = event {
                         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                        let msg = serde_json_string(&tr("Saved to Downloads: {name}", &[("name", &name)]));
+                        let msg = serde_json_string(&tr("download.saved", &[("name", &name)]));
                         let _ = webview.eval(format!("window.__cratify?.toast?.({msg})"));
                     }
                     true
@@ -459,7 +472,7 @@ fn main() {
                             if started.elapsed() > Duration::from_secs(20) {
                                 app_log("timed out waiting for the server / loading page");
                                 let log = data_dir.join("server.log");
-                                show_error(&window, &tr("The local server did not start within 20 seconds.\nSee {path} for details.", &[("path", &log.display())]));
+                                show_error(&window, &tr("startup.timeout", &[("path", &log.display())]));
                                 return;
                             }
                             thread::sleep(Duration::from_millis(100));
@@ -468,7 +481,7 @@ fn main() {
                         app_log(&format!("server ready after {:?}, navigating", started.elapsed()));
                         if let Err(e) = window.navigate(url) {
                             app_log(&format!("navigate failed: {e}"));
-                            show_error(&window, &tr("Could not open the page: {error}", &[("error", &e)]));
+                            show_error(&window, &tr("startup.openFailed", &[("error", &e)]));
                         }
                     });
                 }

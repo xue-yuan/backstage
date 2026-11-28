@@ -51,7 +51,7 @@ export function createFoldersView({ navigate }) {
   const summaryEl = h('section', { class: 'panel folders-summary' });
   const treeEl = h('div', { class: 'ftree' });
   const treeToolbar = h('div', { class: 'toolbar' });
-  const treePanel = h('aside', { class: 'panel ftree-panel' }, h('div', { class: 'panel-head' }, h('h2', {}, _('Folders'))), treeToolbar, treeEl);
+  const treePanel = h('aside', { class: 'panel ftree-panel' }, h('div', { class: 'panel-head' }, h('h2', {}, _('tab.folders'))), treeToolbar, treeEl);
   const detailHead = h('div', { class: 'fdetail-head' });
   const detailToolbar = h('div', { class: 'toolbar' });
   const fileHead = h(
@@ -59,10 +59,10 @@ export function createFoldersView({ navigate }) {
     { class: 'fileRow fileRow-head' },
     h('span'),
     h('span'),
-    h('span', {}, _('Songs')),
-    h('span', {}, _('In crates')),
-    h('span', { class: 'num' }, _('Format')),
-    h('span', { class: 'num', title: _('X reject · V keep') }, _('Screen')),
+    h('span', {}, _('folders.songs')),
+    h('span', {}, _('folders.inCrates')),
+    h('span', { class: 'num' }, _('common.format')),
+    h('span', { class: 'num', title: _('folders.screenKeys') }, _('folders.screen')),
   );
   const vlist = new VirtualList({ rowHeight: 44, renderRow: renderFile, className: 'file-list' });
   const detailPanel = h('section', { class: 'panel fdetail' }, detailHead, detailToolbar, fileHead, vlist.el);
@@ -76,7 +76,7 @@ export function createFoldersView({ navigate }) {
     render();
     try {
       await store.loadFolders(refresh);
-      if (refresh) toast(_('Folders rescanned'));
+      if (refresh) toast(_('folders.foldersRescanned'));
     } catch (e) {
       loadError = e.message;
     }
@@ -120,19 +120,19 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fsum-title' },
-          h('h2', {}, r ? _n(r.sum.files, '{roots}: {n} audio file', '{roots}: {n} audio files', { roots: r.roots.map((x) => x.name).join(_(', ')) }) : _('Folder status')),
+          h('h2', {}, r ? _n(r.sum.files, 'folders.fileCount', { roots: r.roots.map((x) => x.name).join(_('sep.comma')) }) : _('folders.folderStatus')),
           h(
             'span',
             { class: 'muted small' },
-            store.folderScan ? _('Scanned at {time} ({s} s) · Scanning does not change files', { time: fmt.time(store.folderScan.scannedAt * 1000), s: store.folderScan.seconds }) : '',
+            store.folderScan ? _('folders.scannedAt', { time: fmt.time(store.folderScan.scannedAt * 1000), s: store.folderScan.seconds }) : '',
           ),
         ),
         h(
           'div',
           { class: 'toolbar' },
-          h('button', { class: 'btn btn-sm', onclick: () => editMusicFolders(), title: _('Choose the folders to scan') }, _('Music folders · {n}', { n: store.folderScan?.roots.length ?? 0 })),
-          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted') }, _('Unsorted crates · {n}', { n: unsortedCount })),
-          h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? _('Scanning…') : _('↻ Rescan')),
+          h('button', { class: 'btn btn-sm', onclick: () => editMusicFolders(), title: _('folders.musicFoldersTitle') }, _('folders.musicFoldersButton', { n: store.folderScan?.roots.length ?? 0 })),
+          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('folders.unsortedButtonTitle') }, _('folders.unsortedButton', { n: unsortedCount })),
+          h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? _('common.scanning') : _('folders.rescan')),
         ),
       ),
       r ? stackedBar(r.sum, 'sbar-lg') : null,
@@ -146,14 +146,14 @@ export function createFoldersView({ navigate }) {
             ),
             h('span', { class: 'legend-sep' }),
             store.audioProgress?.running
-              ? h('span', { class: 'muted small' }, _('Reading file formats… {done} / {total}', { done: store.audioProgress.done.toLocaleString(), total: store.audioProgress.total.toLocaleString() }))
+              ? h('span', { class: 'muted small' }, _('folders.readingFileFormats', { done: store.audioProgress.done.toLocaleString(), total: store.audioProgress.total.toLocaleString() }))
               : store.audioProgress?.error
-                ? h('span', { class: 'muted small' }, _('Could not read file formats: {error}', { error: store.audioProgress.error }))
-                : h('span', { class: 'legend-item', title: _('Low quality: {reasons}', { reasons: LOW_QUALITY_TEXT }) }, h('span', { class: 'qbadge is-low' }, _('Low quality')), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
-            r.sum.suspect ? h('span', { class: 'legend-item', title: _('Suspected transcode: the sound stops where a lower bit rate cuts it (automatic estimate)') }, h('span', { class: 'qbadge-suspect' }, _('Suspect')), h('strong', { class: 'num' }, r.sum.suspect.toLocaleString())) : null,
-            store.spectrumProgress?.running ? h('span', { class: 'muted small' }, _('Checking for transcodes… {done} / {total}', { done: store.spectrumProgress.done.toLocaleString(), total: store.spectrumProgress.total.toLocaleString() })) : null,
-            r.outsideCount ? h('span', { class: 'muted small', title: _('For example files on ~/Desktop or in the _Serato_ folder') }, _n(r.outsideCount, '{n} more Serato song is outside the scanned folders', '{n} more Serato songs are outside the scanned folders')) : null,
-            r.outsideMissing ? h('span', { class: 'muted small' }, _n(r.outsideMissing, '· {n} missing song is outside them', '· {n} missing songs are outside them')) : null,
+                ? h('span', { class: 'muted small' }, _('folders.readFormatsFailed', { error: store.audioProgress.error }))
+                : h('span', { class: 'legend-item', title: _('common.lowQualityReasons', { reasons: LOW_QUALITY_TEXT }) }, h('span', { class: 'qbadge is-low' }, _('common.lowQuality')), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
+            r.sum.suspect ? h('span', { class: 'legend-item', title: _('folders.suspectHint') }, h('span', { class: 'qbadge-suspect' }, _('common.suspect')), h('strong', { class: 'num' }, r.sum.suspect.toLocaleString())) : null,
+            store.spectrumProgress?.running ? h('span', { class: 'muted small' }, _('common.checkingForTranscodes', { done: store.spectrumProgress.done.toLocaleString(), total: store.spectrumProgress.total.toLocaleString() })) : null,
+            r.outsideCount ? h('span', { class: 'muted small', title: _('folders.outsideHint') }, _n(r.outsideCount, 'folders.outsideCount')) : null,
+            r.outsideMissing ? h('span', { class: 'muted small' }, _n(r.outsideMissing, 'folders.outsideMissing')) : null,
           )
         : null,
     );
@@ -176,13 +176,13 @@ export function createFoldersView({ navigate }) {
       { class: 'trash-bar' },
       files.length
         ? [
-            h('span', {}, _n(files.length, '{n} file marked reject ({size}), not moved to the Trash yet.', '{n} files marked reject ({size}), not moved to the Trash yet.', { size: fmt.size(bytes) })),
-            h('button', { class: 'btn btn-sm btn-danger', onclick: () => openTrash(files) }, _('Review and move to Trash…')),
+            h('span', {}, _n(files.length, 'folders.rejectedPending', { size: fmt.size(bytes) })),
+            h('button', { class: 'btn btn-sm btn-danger', onclick: () => openTrash(files) }, _('common.reviewTrash')),
           ]
         : null,
-      viaPlan ? h('span', { class: 'muted small', title: _('These songs are in Serato; they are removed from Serato and moved to the Trash when the plan is applied') }, _n(viaPlan, '{n} more song in Serato is marked reject and is handled when the plan is applied', '{n} more songs in Serato are marked reject and are handled when the plan is applied')) : null,
+      viaPlan ? h('span', { class: 'muted small', title: _('folders.rejectedInSeratoHint') }, _n(viaPlan, 'folders.rejectedInSerato')) : null,
       store.lastTrashed.length
-        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, _n(store.lastTrashed.length, '↩ Restore the {n} file just moved to the Trash', '↩ Restore the {n} files just moved to the Trash'))
+        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, _n(store.lastTrashed.length, 'folders.restoreTrashed'))
         : null,
     );
   }
@@ -205,8 +205,8 @@ export function createFoldersView({ navigate }) {
           renderTree();
         },
       },
-      h('option', { value: 'name' }, _('By name')),
-      h('option', { value: 'todo' }, _('Most remaining first')),
+      h('option', { value: 'name' }, _('folders.byName')),
+      h('option', { value: 'todo' }, _('folders.mostRemainingFirst')),
     );
     sortSelect.value = sortBy;
     clear(
@@ -224,14 +224,14 @@ export function createFoldersView({ navigate }) {
             renderTree();
           },
         }),
-        _('Hide finished'),
+        _('folders.hideFinished'),
       ),
     );
   }
 
   function renderTree() {
     if (!report) {
-      clear(treeEl, h('div', { class: 'empty' }, loading ? _('Scanning…') : loadError ? _('Scan failed: {error}', { error: loadError }) : ''));
+      clear(treeEl, h('div', { class: 'empty' }, loading ? _('common.scanning') : loadError ? _('common.scanFailed', { error: loadError }) : ''));
       return;
     }
     visibleRows = [];
@@ -277,8 +277,8 @@ export function createFoldersView({ navigate }) {
       h(
         'span',
         { class: 'frow-count' },
-        t.missing ? h('span', { class: 'tag tag-danger', title: _n(t.missing, '{n} missing song', '{n} missing songs') }, `✕${t.missing}`) : null,
-        node.todo ? h('span', { class: 'todo', title: _('Unsorted {unsorted}, not imported {notImported}', { unsorted: t.unsorted, notImported: t.notImported }) }, node.todo.toLocaleString()) : node.done ? h('span', { class: 'done', title: _('Finished') }, '✓') : null,
+        t.missing ? h('span', { class: 'tag tag-danger', title: _n(t.missing, 'folders.missingCount') }, `✕${t.missing}`) : null,
+        node.todo ? h('span', { class: 'todo', title: _('folders.folderCounts', { unsorted: t.unsorted, notImported: t.notImported }) }, node.todo.toLocaleString()) : node.done ? h('span', { class: 'done', title: _('folders.finished') }, '✓') : null,
       ),
     );
   }
@@ -329,7 +329,7 @@ export function createFoldersView({ navigate }) {
   function renderDetail() {
     const node = selected();
     if (!node) {
-      clear(detailHead, h('div', { class: 'empty' }, report ? _('Pick a folder on the left') : loading ? _('Scanning…') : loadError ? _('Scan failed: {error}', { error: loadError }) : ''));
+      clear(detailHead, h('div', { class: 'empty' }, report ? _('folders.pickFolder') : loading ? _('common.scanning') : loadError ? _('common.scanFailed', { error: loadError }) : ''));
       clear(detailToolbar);
       vlist.setItems([]);
       return;
@@ -355,16 +355,16 @@ export function createFoldersView({ navigate }) {
       );
 
     const notes = [];
-    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, _('This folder no longer exists (it may have been moved or renamed), but Serato still has songs that point here.')));
+    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, _('folders.folderGone')));
     if (t.files && !todo && !t.missing)
-      notes.push(h('div', { class: 'fnote fnote-ok' }, _('✓ Finished: every song here is sorted'), t.copy ? _n(t.copy, ' ({n} more copy; Serato uses the one elsewhere)', ' ({n} more copies; Serato uses the ones elsewhere)') : '', _('.')));
+      notes.push(h('div', { class: 'fnote fnote-ok' }, _('folders.finishedNote'), t.copy ? _n(t.copy, 'folders.moreCopies') : '', _('sep.period')));
     if (t.unsorted)
       notes.push(
         h(
           'div',
           { class: 'fnote fnote-warn' },
-          h('span', {}, _n(t.unsorted, '{n} song is already in Serato but not sorted yet.', '{n} songs are already in Serato but not sorted yet.')),
-          h('button', { class: 'btn btn-sm btn-primary', onclick: () => sortHere(node) }, _('Go to Sort →')),
+          h('span', {}, _n(t.unsorted, 'folders.unsortedNote')),
+          h('button', { class: 'btn btn-sm btn-primary', onclick: () => sortHere(node) }, _('folders.goSort')),
         ),
       );
     if (t.notImported || t.rejected) {
@@ -377,10 +377,10 @@ export function createFoldersView({ navigate }) {
           h(
             'div',
             { class: 'fnote-text' },
-            h('strong', {}, _('Screen before importing: {done} / {total} screened', { done: screened.toLocaleString(), total: pool.toLocaleString() })),
-            _(' (keep {kept}, reject {rejected})', { kept: t.kept.toLocaleString(), rejected: t.rejected.toLocaleString() }),
+            h('strong', {}, _('folders.screenProgress', { done: screened.toLocaleString(), total: pool.toLocaleString() })),
+            _('folders.screenCounts', { kept: t.kept.toLocaleString(), rejected: t.rejected.toLocaleString() }),
             h('br'),
-            h('span', { class: 'muted' }, _('Select a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. Then move the rejected files to the Trash and add the rest to Serato (button on the right, or drag this folder into a crate under Inbox in Serato).')),
+            h('span', { class: 'muted' }, _('folders.screenHint')),
           ),
           addButton(node),
         ),
@@ -388,16 +388,16 @@ export function createFoldersView({ navigate }) {
     }
     if (crates.length)
       notes.push(
-        h('div', { class: 'fnote' }, _('{crates} in Serato was created by dragging this folder in, so it does not count as sorted. Once its songs are sorted, the crate can be deleted.', { crates: crates.map((name) => _('"{name}"', { name })).join(_(', ')) })),
+        h('div', { class: 'fnote' }, _('folders.folderCrateNote', { crates: crates.map((name) => _('sep.quoted', { name })).join(_('sep.comma')) })),
       );
     if (t.unreadable)
-      notes.push(h('div', { class: 'fnote fnote-danger' }, _n(t.unreadable, 'macOS cannot open {n} file. It may be damaged, or its extension may not match its format. "Low quality only" lists it; preview it to check.', 'macOS cannot open {n} files. They may be damaged, or their extensions may not match their format. "Low quality only" lists them; preview them to check.')));
+      notes.push(h('div', { class: 'fnote fnote-danger' }, _n(t.unreadable, 'folders.unreadableNote')));
     if (t.low || t.unreadable)
       notes.push(
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', { title: LOW_QUALITY_TEXT }, t.low ? _n(t.low, '{n} low-quality song ({rule}). AAC 256 and MP3 320 are not low quality.', '{n} low-quality songs ({rule}). AAC 256 and MP3 320 are not low quality.', { rule: LOW_QUALITY_TEXT }) : _('No low-quality files apart from the unreadable files above.')),
+          h('span', { title: LOW_QUALITY_TEXT }, t.low ? _n(t.low, 'folders.lowQualityNote', { rule: LOW_QUALITY_TEXT }) : _('folders.qualityFine')),
           h(
             'button',
             {
@@ -407,7 +407,7 @@ export function createFoldersView({ navigate }) {
                 renderDetail();
               },
             },
-            lowOnly ? _('Show all') : _('Low quality only'),
+            lowOnly ? _('folders.showAll') : _('folders.lowQualityOnly'),
           ),
         ),
       );
@@ -416,7 +416,7 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fnote fnote-warn' },
-          h('span', {}, _n(t.suspect, '{n} file looks like a transcode: the sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic estimate; check the spectrum before deleting.', '{n} files look like transcodes: the sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic estimate; check the spectrum before deleting.')),
+          h('span', {}, _n(t.suspect, 'folders.suspectNote')),
           h(
             'button',
             {
@@ -426,7 +426,7 @@ export function createFoldersView({ navigate }) {
                 renderDetail();
               },
             },
-            suspectOnly ? _('Show all') : _('Suspect only'),
+            suspectOnly ? _('folders.showAll') : _('folders.suspectOnly'),
           ),
         ),
       );
@@ -435,8 +435,8 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', {}, _n(t.missing, '{n} song in Serato points here, but its file is missing.', '{n} songs in Serato point here, but their files are missing.')),
-          h('button', { class: 'btn btn-sm', onclick: () => navigate('cleanup') }, _('Fix in Cleanup →')),
+          h('span', {}, _n(t.missing, 'folders.missingNote')),
+          h('button', { class: 'btn btn-sm', onclick: () => navigate('cleanup') }, _('folders.fixInCleanup')),
         ),
       );
 
@@ -446,7 +446,7 @@ export function createFoldersView({ navigate }) {
         'div',
         { class: 'fdetail-title' },
         h('div', { class: 'grow' }, h('h2', {}, node.name), h('div', { class: 'path', title: node.path }, fmt.shortPath(node.path))),
-        !node.ghost ? h('button', { class: 'btn btn-sm', onclick: () => reveal(node.path) }, _('Show in Finder')) : null,
+        !node.ghost ? h('button', { class: 'btn btn-sm', onclick: () => reveal(node.path) }, _('common.showInFinder')) : null,
       ),
       h('div', { class: 'fstats' }, STATUSES.map(stat)),
       notes,
@@ -454,7 +454,7 @@ export function createFoldersView({ navigate }) {
 
     const filterInput = h('input', {
       class: 'input input-sm',
-      placeholder: _('Filter by file name, title, artist…'),
+      placeholder: _('folders.filterPlaceholder'),
       value: filter,
       oninput: (e) => {
         filter = e.target.value;
@@ -473,32 +473,32 @@ export function createFoldersView({ navigate }) {
             'button',
             {
               class: 'chip',
-              title: _('Clear status filter'),
+              title: _('folders.clearStatusFilter'),
               onclick: () => {
                 statusFilter = 'all';
                 renderDetail();
               },
             },
             h('span', { class: `swatch st-${statusFilter}` }),
-            _('Only {status}', { status: LABEL[statusFilter] }),
+            _('folders.onlyStatus', { status: LABEL[statusFilter] }),
             h('span', { class: 'chip-x' }, '×'),
           )
         : null,
       suspectOnly
-        ? h('button', { class: 'chip', onclick: () => { suspectOnly = false; renderDetail(); } }, _('Suspect only'), h('span', { class: 'chip-x' }, '×'))
+        ? h('button', { class: 'chip', onclick: () => { suspectOnly = false; renderDetail(); } }, _('folders.suspectOnly'), h('span', { class: 'chip-x' }, '×'))
         : null,
       lowOnly
         ? h(
             'button',
             {
               class: 'chip',
-              title: _('Clear low-quality filter'),
+              title: _('folders.clearLowQualityFilter'),
               onclick: () => {
                 lowOnly = false;
                 renderDetail();
               },
             },
-            _('Low quality only'),
+            _('folders.lowQualityOnly'),
             h('span', { class: 'chip-x' }, '×'),
           )
         : null,
@@ -515,7 +515,7 @@ export function createFoldersView({ navigate }) {
                 renderDetail();
               },
             }),
-            _('Include subfolders'),
+            _('folders.includeSubfolders'),
           )
         : null,
     );
@@ -530,7 +530,7 @@ export function createFoldersView({ navigate }) {
     // Work still to do first; within a status, keep the folder order from the tree.
     const order = new Map(files.map((f, i) => [f, i]));
     fileItems = files.slice().sort((a, b) => rank[a.status] - rank[b.status] || order.get(a) - order.get(b));
-    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || suspectOnly || statusFilter !== 'all' ? _('No matching files') : _('This folder has no audio files')));
+    vlist.setItems(fileItems, h('div', { class: 'empty' }, filter || lowOnly || suspectOnly || statusFilter !== 'all' ? _('folders.noMatchingFiles') : _('folders.noAudioFiles')));
   }
 
   // ---------- screening ----------
@@ -577,10 +577,10 @@ export function createFoldersView({ navigate }) {
       store.setScreenMark([f.path], null);
       return;
     }
-    if (f.status === 'missing') return toast(_('This song\'s file is missing. Fix it in Cleanup'));
+    if (f.status === 'missing') return toast(_('folders.fileMissingHint'));
     if (f.assetId != null) {
       // In Serato: remove it there and trash the file when the plan is applied.
-      store.commit(_('Reject: {track}', { track: store.trackLabel(f.assetId) }), [store.opReject(f.assetId)], { silent: true });
+      store.commit(_('common.rejectTrack', { track: store.trackLabel(f.assetId) }), [store.opReject(f.assetId)], { silent: true });
     } else {
       store.setScreenMark([f.path], 'reject');
     }
@@ -589,7 +589,7 @@ export function createFoldersView({ navigate }) {
 
   function markKeep(f) {
     if (!f) return;
-    if (f.assetId != null || f.status === 'missing') return toast(_('This song is already in Serato; sort it in Sort'));
+    if (f.assetId != null || f.status === 'missing') return toast(_('folders.inSeratoHint'));
     const next = fileItems[fileIndex(f.path) + 1]?.path;
     const wasPlaying = isPlaying(f);
     if (f.kept) {
@@ -599,7 +599,7 @@ export function createFoldersView({ navigate }) {
     store.setScreenMark([f.path], 'keep');
     if (f.inSerato) {
       const twin = store.base.tracks.get(f.inSerato[0]);
-      toast(_('Serato already has this song ({dir}). Importing this file too would make a duplicate.', { dir: twin ? fmt.shortPath(dirOf(effectivePath(store.eff, twin))) : '' }), { tone: 'warn', timeout: 7000 });
+      toast(_('folders.duplicateWarning', { dir: twin ? fmt.shortPath(dirOf(effectivePath(store.eff, twin))) : '' }), { tone: 'warn', timeout: 7000 });
     }
     advanceFrom(f.path, next, wasPlaying);
   }
@@ -613,19 +613,19 @@ export function createFoldersView({ navigate }) {
       return h(
         'span',
         { class: 'ellipsis warn-text', title: inSeratoTip(f) },
-        _('Serato already has it: {dir} ({status})', { dir: twin ? fmt.shortPath(dirOf(effectivePath(eff, twin))) : '', status: ok ? _('Sorted') : _('Unsorted') }),
+        _('folders.copyOf', { dir: twin ? fmt.shortPath(dirOf(effectivePath(eff, twin))) : '', status: ok ? _('common.sorted') : _('common.unsorted') }),
       );
     }
     if (f.status === 'rejected')
-      return h('span', { class: 'muted' }, f.viaPlan ? _('Reject · removed and moved to the Trash when the plan is applied') : _('Reject · not moved to the Trash yet'));
+      return h('span', { class: 'muted' }, f.viaPlan ? _('folders.rejectedViaPlan') : _('folders.rejectedPendingHint'));
     if (f.status === 'copy') {
       const twin = store.base.tracks.get(f.twins[0]);
       const twinPath = twin ? effectivePath(eff, twin) : '';
       const ok = f.twins.some((id) => isClassified(eff, store.rules, id));
-      return h('span', { class: 'muted', title: twinPath }, _('Copy · Serato uses {dir} ({status})', { dir: fmt.shortPath(dirOf(twinPath)), status: ok ? _('Sorted') : _('Unsorted') }));
+      return h('span', { class: 'muted', title: twinPath }, _('folders.copyHint', { dir: fmt.shortPath(dirOf(twinPath)), status: ok ? _('common.sorted') : _('common.unsorted') }));
     }
     const ids = eff.cratesOf.get(f.assetId) || [];
-    if (!ids.length) return h('span', { class: 'muted' }, _('In no crate'));
+    if (!ids.length) return h('span', { class: 'muted' }, _('common.inNoCrate'));
     const counted = ids.filter((c) => !store.rules.skip.has(c));
     const skipped = ids.filter((c) => store.rules.skip.has(c));
     const all = [...counted, ...skipped].map((c) => eff.pathOf(c));
@@ -641,15 +641,15 @@ export function createFoldersView({ navigate }) {
   function inSeratoTip(f) {
     const lines = f.inSerato.map((id) => {
       const t = store.base.tracks.get(id);
-      return t ? `${store.trackLabel(id)}\n   ${effectivePath(store.eff, t)}${t.exists ? '' : ` (${_('Missing file')})`}` : `#${id}`;
+      return t ? `${store.trackLabel(id)}\n   ${effectivePath(store.eff, t)}${t.exists ? '' : ` (${_('common.missingFile')})`}` : `#${id}`;
     });
-    return `${_('Serato already has a song with this name. Importing this file too would make a duplicate:')}\n${lines.join('\n')}`;
+    return `${_('folders.sameNameWarning')}\n${lines.join('\n')}`;
   }
 
   function playable(f) {
     if (f.status === 'missing') return null;
     if (f.assetId != null) return store.base.tracks.get(f.assetId);
-    return { playKey: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: _('File not in Serato') };
+    return { playKey: `f${f.path}`, src: `/api/audio-file?path=${encodeURIComponent(f.path)}`, title: stripExt(f.name), artist: _('common.fileNotInSerato') };
   }
 
   function renderFile(f) {
@@ -669,13 +669,13 @@ export function createFoldersView({ navigate }) {
         oncontextmenu: (e) => fileMenu(e, f),
         ondblclick: () => play && player.play(play),
       },
-      h('span', { class: `swatch st-${f.status}`, title: `${LABEL[f.status]}${_(': ')}${HINT[f.status]}` }),
+      h('span', { class: `swatch st-${f.status}`, title: `${LABEL[f.status]}${_('sep.colon')}${HINT[f.status]}` }),
       play
         ? h(
             'button',
             {
               class: 'icon-btn',
-              title: _('Preview'),
+              title: _('common.preview'),
               onclick: (e) => {
                 e.stopPropagation();
                 selectFile(f.path, { scroll: false });
@@ -693,8 +693,8 @@ export function createFoldersView({ navigate }) {
           { class: 'trow-title', title: f.path },
           f.assetId != null && store.base.tracks.has(f.assetId) ? noteMark({ track: store.base.tracks.get(f.assetId) }) : noteMark({ path: f.path }),
           title,
-          f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('An identical file exists on disk') }, _('Duplicate ×{n}', { n: f.sameCopies + 1 })) : null,
-          f.inSerato ? h('span', { class: 'tag tag-warn', title: inSeratoTip(f) }, _('Already in Serato')) : null,
+          f.sameCopies && f.status !== 'copy' ? h('span', { class: 'tag tag-warn', title: _('folders.identicalFile') }, _('folders.duplicateCount', { n: f.sameCopies + 1 })) : null,
+          f.inSerato ? h('span', { class: 'tag tag-warn', title: inSeratoTip(f) }, _('common.alreadyInSerato')) : null,
           plannedTag(f),
         ),
         h('div', { class: 'trow-sub' }, sub),
@@ -709,7 +709,7 @@ export function createFoldersView({ navigate }) {
               'button',
               {
                 class: `screen-btn screen-x ${f.status === 'rejected' ? 'is-on' : ''}`,
-                title: f.status === 'rejected' ? _('Undo reject') : _('Reject (X)'),
+                title: f.status === 'rejected' ? _('folders.undoReject') : _('folders.rejectButton'),
                 onclick: (e) => {
                   e.stopPropagation();
                   selectFile(f.path, { scroll: false });
@@ -724,7 +724,7 @@ export function createFoldersView({ navigate }) {
               'button',
               {
                 class: `screen-btn screen-v ${f.kept ? 'is-on' : ''}`,
-                title: f.kept ? _('Undo keep') : _('Keep (V)'),
+                title: f.kept ? _('folders.undoKeep') : _('folders.keepButton'),
                 onclick: (e) => {
                   e.stopPropagation();
                   selectFile(f.path, { scroll: false });
@@ -743,7 +743,7 @@ export function createFoldersView({ navigate }) {
     try {
       await api.reveal(path);
     } catch (e) {
-      toast(_('Could not open: {error}', { error: e.message }), { tone: 'danger' });
+      toast(_('common.couldNotOpen', { error: e.message }), { tone: 'danger' });
     }
   }
 
@@ -756,7 +756,7 @@ export function createFoldersView({ navigate }) {
     }
     const bytes = files.reduce((n, f) => n + (f.size || 0), 0);
     const ok = await modal({
-      title: _n(files.length, 'Move {n} file to the Trash?', 'Move {n} files to the Trash?'),
+      title: _n(files.length, 'folders.trashConfirm'),
       wide: true,
       body: h(
         'div',
@@ -764,32 +764,32 @@ export function createFoldersView({ navigate }) {
         h(
           'p',
           {},
-          _('{size} in total. The files go to the Trash and can be restored from Cratify until the Trash is emptied. None of them are in Serato.', { size: fmt.size(bytes) }),
+          _('folders.trashExplanation', { size: fmt.size(bytes) }),
         ),
         h(
           'div',
           { class: 'list trash-list' },
           [...groups].map(([dir, list]) => [
-            h('div', { class: 'trash-dir' }, fmt.shortPath(dir), h('span', { class: 'muted small' }, ` ${_n(list.length, '{n} file', '{n} files')}`)),
+            h('div', { class: 'trash-dir' }, fmt.shortPath(dir), h('span', { class: 'muted small' }, ` ${_n(list.length, 'folders.files')}`)),
             list.map((f) => h('div', { class: 'trash-file', title: f.path }, f.name, h('span', { class: 'muted small' }, ` ${fmt.size(f.size)}`))),
           ]),
         ),
       ),
       actions: (close) => [
-        h('button', { class: 'btn', onclick: () => close(false) }, _('Cancel')),
-        h('button', { class: 'btn btn-danger', onclick: () => close(true) }, _n(files.length, 'Move to Trash ({n} file)', 'Move to Trash ({n} files)')),
+        h('button', { class: 'btn', onclick: () => close(false) }, _('common.cancel')),
+        h('button', { class: 'btn btn-danger', onclick: () => close(true) }, _n(files.length, 'folders.trashButton')),
       ],
     });
     if (ok !== true) return;
     try {
-      toast(_('Moving to the Trash…'));
+      toast(_('folders.trashing'));
       const results = await store.trashFiles(files.map((f) => f.path));
       const done = results.filter((r) => r.ok);
       const failed = results.filter((r) => !r.ok);
-      toast(_n(done.length, 'Moved {n} file to the Trash', 'Moved {n} files to the Trash'), { action: () => restore(done.map((r) => r.path)), actionLabel: _('Restore'), timeout: 10000 });
-      if (failed.length) showFailures(_('Some files were not moved'), failed);
+      toast(_n(done.length, 'folders.trashed'), { action: () => restore(done.map((r) => r.path)), actionLabel: _('common.restore'), timeout: 10000 });
+      if (failed.length) showFailures(_('folders.trashPartial'), failed);
     } catch (e) {
-      toast(_('Could not move to the Trash: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
+      toast(_('folders.trashFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
     }
   }
 
@@ -797,10 +797,10 @@ export function createFoldersView({ navigate }) {
     try {
       const results = await store.restoreFiles(paths);
       const failed = results.filter((r) => !r.ok);
-      toast(_n(results.length - failed.length, 'Restored {n} file to its original location', 'Restored {n} files to their original locations'));
-      if (failed.length) showFailures(_('Some files were not restored'), failed);
+      toast(_n(results.length - failed.length, 'folders.restored'));
+      if (failed.length) showFailures(_('folders.restorePartial'), failed);
     } catch (e) {
-      toast(_('Restore failed: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
+      toast(_('folders.restoreFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
     }
   }
 
@@ -809,7 +809,7 @@ export function createFoldersView({ navigate }) {
       title,
       wide: true,
       body: h('div', { class: 'list trash-list' }, failed.map((r) => h('div', { class: 'trash-file', title: r.path }, fmt.shortPath(r.path), h('div', { class: 'muted small' }, r.error)))),
-      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('OK'))],
+      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('common.ok'))],
     });
   }
 
@@ -823,11 +823,11 @@ export function createFoldersView({ navigate }) {
     focusFiles = false;
     select(node.key);
     contextMenu(e, [
-      navigate ? { label: _('Go to Sort →'), action: () => sortHere(node) } : null,
-      node.children.length ? { label: expanded.has(node.key) ? _('Collapse') : _('Expand'), action: () => toggle(node.key) } : null,
+      navigate ? { label: _('folders.goSort'), action: () => sortHere(node) } : null,
+      node.children.length ? { label: expanded.has(node.key) ? _('common.collapse') : _('common.expand'), action: () => toggle(node.key) } : null,
       ...folderImportItems(node),
       'sep',
-      !node.ghost ? { label: _('Show in Finder'), action: () => reveal(node.path) } : null,
+      !node.ghost ? { label: _('common.showInFinder'), action: () => reveal(node.path) } : null,
     ]);
   }
 
@@ -838,8 +838,8 @@ export function createFoldersView({ navigate }) {
   function plannedTag(f) {
     const imp = f.status === 'notImported' ? store.planned(f.path) : null;
     if (!imp) return null;
-    const where = imp.crate != null && store.eff.crates.has(imp.crate) ? store.eff.pathOf(imp.crate) : _('the library, no crate');
-    return h('span', { class: 'tag tag-new', title: _('In the plan: added to Serato when the plan is applied ({where})', { where }) }, _('Adding to Serato'));
+    const where = imp.crate != null && store.eff.crates.has(imp.crate) ? store.eff.pathOf(imp.crate) : _('folders.libraryOnly');
+    return h('span', { class: 'tag tag-new', title: _('folders.importPlanned', { where }) }, _('folders.importingLabel'));
   }
 
   function addButton(node) {
@@ -850,8 +850,8 @@ export function createFoldersView({ navigate }) {
     return h(
       'div',
       { class: 'fnote-actions' },
-      todo.length ? h('button', { class: 'btn btn-sm btn-primary', onclick: () => addToSerato(todo, { folderName: folderName(node) }) }, _n(todo.length, 'Add {n} song to Serato…', 'Add {n} songs to Serato…')) : null,
-      planned ? h('span', { class: 'muted small' }, _n(planned, '{n} in the plan', '{n} in the plan')) : null,
+      todo.length ? h('button', { class: 'btn btn-sm btn-primary', onclick: () => addToSerato(todo, { folderName: folderName(node) }) }, _n(todo.length, 'folders.importMenu')) : null,
+      planned ? h('span', { class: 'muted small' }, _n(planned, 'folders.plannedCount')) : null,
     );
   }
 
@@ -861,8 +861,8 @@ export function createFoldersView({ navigate }) {
     const todo = files.filter((f) => !store.planned(f.path));
     const planned = files.filter((f) => store.planned(f.path));
     return [
-      todo.length ? { label: _n(todo.length, 'Add {n} new song to Serato…', 'Add {n} new songs to Serato…'), action: () => addToSerato(todo, { folderName: folderName(node) }) } : null,
-      planned.length ? { label: _n(planned.length, 'Do not add the {n} planned song', 'Do not add the {n} planned songs'), action: () => dontAdd(planned.map((f) => f.path)) } : null,
+      todo.length ? { label: _n(todo.length, 'folders.importNewMenu'), action: () => addToSerato(todo, { folderName: folderName(node) }) } : null,
+      planned.length ? { label: _n(planned.length, 'folders.cancelPlannedImport'), action: () => dontAdd(planned.map((f) => f.path)) } : null,
     ];
   }
 
@@ -871,19 +871,19 @@ export function createFoldersView({ navigate }) {
     const p = playable(f);
     const canKeep = f.assetId == null && f.status !== 'missing';
     contextMenu(e, [
-      p ? { label: isPlaying(f) ? _('Pause') : _('Play'), hint: _('Space'), action: () => player.toggle(p) } : null,
-      p ? { label: _('Play from the start'), hint: 'Q', action: () => player.play(p, { at: 0 }) } : null,
+      p ? { label: isPlaying(f) ? _('common.pause') : _('common.play'), hint: _('common.space'), action: () => player.toggle(p) } : null,
+      p ? { label: _('common.playFromStart'), hint: 'Q', action: () => player.play(p, { at: 0 }) } : null,
       'sep',
-      f.status !== 'missing' ? { label: f.status === 'rejected' ? _('Undo reject') : _('Reject'), hint: 'X', danger: f.status !== 'rejected', action: () => markReject(f) } : null,
-      canKeep ? { label: f.kept ? _('Undo keep') : _('Keep'), hint: 'V', action: () => markKeep(f) } : null,
+      f.status !== 'missing' ? { label: f.status === 'rejected' ? _('folders.undoReject') : _('common.reject'), hint: 'X', danger: f.status !== 'rejected', action: () => markReject(f) } : null,
+      canKeep ? { label: f.kept ? _('folders.undoKeep') : _('common.keep'), hint: 'V', action: () => markKeep(f) } : null,
       'sep',
       importable(f)
         ? store.planned(f.path)
-          ? { label: _('Do not add to Serato'), action: () => dontAdd([f.path]) }
-          : { label: _('Add to Serato…'), action: () => addToSerato([f], { folderName: f.path.split('/').slice(-2, -1)[0] }) }
+          ? { label: _('folders.cancelImport'), action: () => dontAdd([f.path]) }
+          : { label: _('common.addToSeratoMenu'), action: () => addToSerato([f], { folderName: f.path.split('/').slice(-2, -1)[0] }) }
         : null,
-      f.status !== 'missing' ? { label: _('Show in Finder'), action: () => reveal(f.path) } : null,
-      f.status !== 'missing' && spectrumAvailable() ? { label: _('Spectrum'), action: () => showSpectrum({ path: f.path, title: f.assetId != null ? store.trackLabel(f.assetId) : stripExt(f.name), quality: f.quality }) } : null,
+      f.status !== 'missing' ? { label: _('common.showInFinder'), action: () => reveal(f.path) } : null,
+      f.status !== 'missing' && spectrumAvailable() ? { label: _('common.spectrum'), action: () => showSpectrum({ path: f.path, title: f.assetId != null ? store.trackLabel(f.assetId) : stripExt(f.name), quality: f.quality }) } : null,
       f.assetId != null && store.base.tracks.has(f.assetId) ? noteMenuItem({ track: store.base.tracks.get(f.assetId) }) : noteMenuItem({ path: f.path }),
     ]);
   }
@@ -963,7 +963,7 @@ export function createFoldersView({ navigate }) {
   requestAnimationFrame(() => treeEl.querySelector('.frow.is-selected')?.scrollIntoView({ block: 'nearest' }));
   return {
     el,
-    title: _('Folders'),
+    title: _('tab.folders'),
     update() {
       const scrollTop = treeEl.scrollTop;
       render();
