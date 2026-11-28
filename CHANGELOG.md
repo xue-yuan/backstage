@@ -2,7 +2,7 @@
 
 Each section is also used as the release notes for that version on GitHub (`tools/package_release.sh` copies it).
 
-## Unreleased
+## 0.1.1
 
 - The app includes its own Python: uv no longer needs to be installed.
 - Changes saved in another window (or in the browser version) are no longer overwritten: the page asks to be reloaded first.
@@ -11,6 +11,10 @@ Each section is also used as the release notes for that version on GitHub (`tool
 - Apply to Serato now refuses to merge a crate into itself, refuses empty names, and compares crate names ignoring letter case in any alphabet, as the plan preview does.
 - Before a language is chosen, the Mac app's menus and startup messages follow the Mac's language, as the page does.
 - Interface text, the Guide and the README rewritten in a more formal, concise style in both English and Traditional Chinese. "Sounds fine" in Quality is now "Mark as genuine".
+
+**Requirements**: macOS 12 or later on Apple silicon and Serato DJ Pro 4.0 (database version 202); optionally ffmpeg for the transcode check. Python is included.
+
+**Not signed by Apple yet**: macOS blocks the first launch. Open System Settings → Privacy & Security and press "Open Anyway" next to Cratify, or run `xattr -dr com.apple.quarantine /Applications/Cratify.app` in Terminal.
 
 ## 0.1.0
 

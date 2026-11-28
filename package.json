@@ -1,7 +1,7 @@
 {
   "name": "cratify",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cratify Mac app shell (Tauri). The app itself is the Python server in app.py + static/.",
   "scripts": {
     "tauri": "tauri",

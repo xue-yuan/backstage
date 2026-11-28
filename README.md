@@ -69,7 +69,7 @@ The version number is set in `package.json`. The Mac app reads it through `"vers
 4. Test the zip: unzip it, open the app and check the version in the Guide, preferably on a Mac or user account that has never run Cratify.
 5. Commit, tag `v<version>` and run the printed `gh release create` command.
 
-Builds target the architecture of the build machine, and so does the bundled Python. A universal build (`rustup target add x86_64-apple-darwin`, then `tools/bundle_python.sh` and `pnpm tauri build --bundles app --target universal-apple-darwin`) also needs a universal Python in `src-tauri/python`, which the script does not make. Signing with a Developer ID and notarizing (Apple Developer Program) removes the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
+Signing with a Developer ID and notarizing (Apple Developer Program) removes the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
 
 ## Running in a browser
 
