@@ -50,7 +50,7 @@ def clean(values) -> list[Path]:
         if not any(p.is_relative_to(k) for k in kept):  # a folder inside another one is scanned already
             kept.append(p)
     if len(kept) > MAX_FOLDERS:
-        raise ValueError(tr("At most {n} music folders", n=MAX_FOLDERS))
+        raise ValueError(tr("No more than {n} music folders", n=MAX_FOLDERS))
     return sorted(kept, key=str)
 
 
@@ -108,7 +108,7 @@ def relocate_roots(folders: list[Path], home: Path | None = None) -> list[Path]:
 
 def choose_folder() -> str | None:
     """Ask with the macOS folder dialog (osascript, so no extra permission). None when cancelled."""
-    prompt = tr("Choose a folder with your DJ music")
+    prompt = tr("Choose a folder that contains DJ music")
     quoted = '"' + prompt.replace("\\", "\\\\").replace('"', '\\"') + '"'
     script = f"POSIX path of (choose folder with prompt {quoted} default location (path to music folder))"
     try:

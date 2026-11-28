@@ -37,24 +37,24 @@ export async function addToSerato(files, { folderName } = {}) {
     wide: true,
     className: 'modal-import',
     body: (close) => [
-      h('p', {}, _('They go into the plan. When you apply it (Serato closed), Cratify adds them the way Serato\'s own import does. Then select them in Serato DJ and choose "Analyze Files": Serato reads their tags and works out BPM, key, beatgrid and waveform.')),
+      h('p', {}, _('The songs go into the plan. When it is applied (with Serato closed), Cratify adds them the same way Serato\'s import does. Then select them in Serato DJ and choose "Analyze Files" to read their tags and detect BPM, key, beatgrid and waveform.')),
       lookalikes.length
         ? h(
             'label',
             { class: 'check import-skip' },
             h('input', { type: 'checkbox', checked: true, onchange: (e) => (skipLookalikes = e.target.checked) }),
-            _n(lookalikes.length, 'Skip {n} that looks like a song Serato already has (same artist and title)', 'Skip {n} that look like songs Serato already has (same artist and title)'),
+            _n(lookalikes.length, 'Skip {n} song that Serato appears to have already (same artist and title)', 'Skip {n} songs that Serato appears to have already (same artist and title)'),
           )
         : null,
-      h('div', { class: 'section-label' }, _('Where should they go?')),
+      h('div', { class: 'section-label' }, _('Destination')),
       folderName && inbox != null
         ? h(
             'button',
             { class: 'btn btn-primary btn-block import-folder', onclick: () => close({ crate: existing ?? 'new-under-inbox' }) },
-            existing != null ? _('Into "Inbox / {name}"', { name: folderName }) : _('New crate "Inbox / {name}" (like dragging the folder into Serato)', { name: folderName }),
+            existing != null ? _('Into "Inbox / {name}"', { name: folderName }) : _('New crate "Inbox / {name}" (same as dragging the folder into Serato)', { name: folderName }),
           )
         : null,
-      createCratePicker({ inline: true, autofocus: !folderName, allowCreate: true, placeholder: _('Or pick another crate (type to search or create)'), onPick: (id) => close({ crate: id }) }).el,
+      createCratePicker({ inline: true, autofocus: !folderName, allowCreate: true, placeholder: _('Or choose another crate (type to search or create)'), onPick: (id) => close({ crate: id }) }).el,
       h('button', { class: 'btn btn-block', onclick: () => close({ crate: null }) }, _('Only the library (no crate)')),
     ],
     actions: (close) => [h('button', { class: 'btn', onclick: () => close(undefined) }, _('Cancel'))],
@@ -63,7 +63,7 @@ export async function addToSerato(files, { folderName } = {}) {
 
   const add = skipLookalikes ? todo.filter((f) => !f.inSerato) : todo;
   if (!add.length) {
-    toast(_('Nothing added: all of them look like songs Serato already has (untick "Skip" to add them anyway)'));
+    toast(_('Nothing added: Serato appears to have all of these songs already (untick "Skip" to add them anyway)'));
     return;
   }
   const ops = [];

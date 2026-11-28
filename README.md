@@ -1,220 +1,224 @@
 # Cratify
 
-A local app for organising a Serato DJ 4 library: see which folders are already sorted into crates, screen new music, sort songs into crates quickly, clean up missing files and duplicates, reshape the crate tree, and write the result back to Serato in one verified step.
+Cratify is a Mac app for organising a Serato DJ 4 library. It shows which music folders are sorted into crates, screens new music, sorts songs into crates, cleans up missing files and duplicates, restructures the crate tree, and writes the result back to Serato in one verified step.
 
-The interface is in English or Traditional Chinese (the language button at the top right switches it).
+The interface is available in English and Traditional Chinese.
 
-Cratify is an independent project, not made by or affiliated with Serato. It writes to Serato DJ's own library database; read [Disclaimer](#disclaimer) before using it on your library.
+Cratify is an independent project and is not affiliated with Serato. It writes to Serato DJ's library database; read the [Disclaimer](#disclaimer) before using it.
 
 ## Install
 
 Requirements:
 
-- macOS 12 or later. The release builds are for Apple silicon.
-- Serato DJ Pro 4.0. "Apply to Serato" writes only to the database version Cratify was verified with (version 202) and refuses others.
-- [uv](https://docs.astral.sh/uv/), which provides the Python that runs Cratify's local server. In Terminal: `brew install uv`, then `uv python install 3.14` (any Python 3.12 or later that uv manages works). Without it the app shows what to install instead of starting.
-- Optional: ffmpeg for the transcode check in Quality (`brew install ffmpeg`). Everything else works without it.
+- macOS 12 or later. Release builds are for Apple silicon.
+- Serato DJ Pro 4.0. "Apply to Serato" writes only to the database version Cratify has been verified with (version 202) and refuses other versions.
+- [uv](https://docs.astral.sh/uv/), which provides the Python that runs Cratify's local server: `brew install uv`, then `uv python install 3.14` (any uv-managed Python 3.12 or later works). Without it, the app shows installation instructions instead of starting.
+- Optional: ffmpeg, for the transcode check in Quality (`brew install ffmpeg`).
 
-Then:
+Steps:
 
-1. Download `Cratify-<version>-mac-arm64.zip` from the GitHub Releases page, unzip it and move `Cratify.app` to Applications.
-2. The app is not signed by Apple yet, so the first time macOS blocks it ("Apple could not verify…"). Open System Settings → Privacy & Security, scroll down and press "Open Anyway" next to Cratify. Or run `xattr -dr com.apple.quarantine /Applications/Cratify.app` in Terminal once.
-3. On the first start Cratify asks which folders hold your DJ music (see Music folders).
+1. Download `Cratify-<version>-mac-arm64.zip` from GitHub Releases, unzip it and move `Cratify.app` to Applications.
+2. The app is not signed by Apple yet, so macOS blocks the first launch. Open System Settings → Privacy & Security and press "Open Anyway" next to Cratify, or run `xattr -dr com.apple.quarantine /Applications/Cratify.app` once in Terminal.
+3. On first launch, Cratify asks which folders contain DJ music (see [Music folders](#music-folders)).
 
-Quit Serato DJ before pressing "Apply to Serato"; everything else works with Serato open.
+Serato DJ can stay open while Cratify is in use. Quit it only before "Apply to Serato".
 
 ## Building the Mac app
 
 ```bash
-pnpm install          # first time: installs the Tauri CLI
+pnpm install          # first time only: installs the Tauri CLI
 pnpm app:build        # builds src-tauri/target/release/bundle/macos/Cratify.app
 ```
 
-The Mac app is a Tauri window. On launch it starts the same Python server in the background (fixed at `127.0.0.1:47615`) and stops it when the app quits. If something else already uses that port, the app says what: the old Backstage app, another copy of Cratify, or another program.
+The Mac app is a Tauri window. On launch it starts the Python server in the background on `127.0.0.1:47615` and stops it on quit. If the port is in use, the app reports whether the old Backstage app, another copy of Cratify or another program holds it.
 
-Python comes from [uv](https://docs.astral.sh/uv/): the app runs the uv-managed interpreter that `uv python find --managed-python ">=3.12"` returns, never the system Python. If none is installed, run `uv python install 3.14`.
+The app runs the uv-managed interpreter returned by `uv python find --managed-python ">=3.12"`, never the system Python.
 
-Data lives in `~/Library/Application Support/Cratify/`:
+Data is stored in `~/Library/Application Support/Cratify/`:
 
-- the Serato snapshot
-- the plan
+- the Serato snapshot and the plan
 - screening marks
-- notes (`notes.json`; `notes.prev.json` keeps the version before the last save)
-- unsorted-crate rules
+- notes (`notes.json`; `notes.prev.json` holds the version before the last save)
+- unsorted-crate rules (`rules.json`)
 - settings (`settings.json`: interface language and music folders)
-- the audio-format cache and the transcode-check cache (`spectrum.json`)
-- the trash log
+- the audio format cache (`audio_info.json`) and transcode-check cache (`spectrum.json`)
+- the Trash log (`trash_log.jsonl`)
 - `app.log` and `server.log`
 
 ### Releasing
 
-The version number lives in `package.json`. The Mac app takes it from there (`"version": "../package.json"` in `tauri.conf.json`), the server reads the bundled copy and the Guide shows it. `src-tauri/Cargo.toml` keeps the same number.
+The version number is set in `package.json`. The Mac app reads it through `"version": "../package.json"` in `tauri.conf.json`, the server reads the bundled copy, and the Guide displays it. `src-tauri/Cargo.toml` must carry the same number.
 
-1. Write the release notes as a `## <version>` section at the top of `CHANGELOG.md`.
+1. Add the release notes as a `## <version>` section at the top of `CHANGELOG.md`.
 2. Set the version in `package.json` and `src-tauri/Cargo.toml`.
-3. `pnpm app:release` (`tools/package_release.sh`): checks that both versions match and the notes exist, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (keeps the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It publishes nothing by itself.
-4. Try the zip: unzip it, open the app and check the version in the Guide (ideally on a Mac or user account that never ran Cratify, to see the first start).
-5. Commit, tag `v<version>`, and run the printed `gh release create` command.
+3. Run `pnpm app:release` (`tools/package_release.sh`). It checks that the versions match and the notes exist, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (preserving the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It does not publish anything.
+4. Test the zip: unzip it, open the app and check the version in the Guide, preferably on a Mac or user account that has never run Cratify.
+5. Commit, tag `v<version>` and run the printed `gh release create` command.
 
-The build is for the Mac it runs on (Apple silicon here). For Intel Macs too: `rustup target add x86_64-apple-darwin`, then build with `pnpm tauri build --bundles app --target universal-apple-darwin`. Signing with a Developer ID and notarizing (Apple Developer Program) would remove the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
+Builds target the architecture of the build machine. For a universal build, run `rustup target add x86_64-apple-darwin`, then `pnpm tauri build --bundles app --target universal-apple-darwin`. Signing with a Developer ID and notarizing (Apple Developer Program) removes the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
 
 ## Running in a browser
 
 ```bash
-uv run --no-project app.py            # opens http://127.0.0.1:8765 (same data folder as the Mac app)
+uv run --no-project app.py            # opens http://127.0.0.1:8765 (uses the Mac app's data folder)
 uv run --no-project app.py --port 9000 --no-browser
 ```
 
-The server uses only the Python standard library and the front end is plain JavaScript; there are no packages to install. Do not run the browser version and the Mac app at the same time: both write the same plan.
+The server uses only the Python standard library, and the front end is plain JavaScript, so there is nothing to install. Do not run the browser version and the Mac app at the same time; both write the same plan.
 
 ## Watching Serato
 
-While the page is open it asks the server every few seconds whether Serato DJ is running and whether its library changed since the last snapshot (size and modification time of `master.sqlite` and its WAL; Serato's files are never opened). After a change it reloads the snapshot once the database has been quiet for 2 seconds (15 seconds while Serato is open, so a set is not interrupted by reloads). When Serato DJ closes and the plan has changes that can be applied, it offers to apply them.
+While the page is open, it checks every few seconds whether Serato DJ is running and whether the library has changed since the last snapshot, using the size and modification time of `master.sqlite` and its WAL. Serato's files are never opened. After a change, the snapshot is reloaded once the database has been idle for 2 seconds (15 seconds while Serato is running, so a set is not interrupted). When Serato DJ quits and the plan has changes that can be applied, Cratify offers to apply them.
 
 ## Music folders
 
-The Folders view scans the music folders, and finding missing files searches them and `~/Music`. On the first start Cratify suggests folders from where the songs in the Serato library are (in each area, such as `~/Music` or a drive under `/Volumes`, the deepest folder that holds 80% of its songs) and asks once to confirm them. Change them later with "Music folders" at the top right of Folders: pick a folder with the macOS dialog or paste a path. They are saved in `settings.json`. A folder on a drive that is not connected is shown as not found and skipped.
+Folders scans the music folders, and the search for missing files covers them and `~/Music`. On first launch, Cratify suggests folders based on where the songs in the Serato library are (in each area, such as `~/Music` or a drive under `/Volumes`, the deepest folder that holds 80% of its songs) and asks for confirmation. To change them later, use "Music folders" at the top right of Folders. The setting is saved in `settings.json`. Folders on disconnected drives are marked as not found and skipped.
 
 ## Language
 
-The interface is in English and Traditional Chinese. Until you choose, it follows the Mac's language: Traditional Chinese when Chinese comes first in System Settings → General → Language & Region, English otherwise. The button at the top right switches. The choice is saved in the page and in `settings.json` in the data folder, so server messages and the Mac app's startup messages follow it.
+Until a language is chosen, the interface follows the Mac: Traditional Chinese when Chinese is the first language in System Settings → General → Language & Region, English otherwise. The button at the top right switches languages. The choice is saved in the page and in `settings.json`, so server messages and the Mac app's startup messages use it too.
 
-Strings are written in English in the code and wrapped in `_()` / `_n()` (front end, `static/js/i18n.js`) or `tr()` / `trn()` (server, `serato_crates/i18n.py`). Chinese translations live in `static/js/locales/zh-Hant.js`, `serato_crates/locale_zh.py` and `src-tauri/src/locale_zh.rs`, keyed by the English text.
+Strings are written in English in the code and wrapped in `_()` / `_n()` (front end, `static/js/i18n.js`) or `tr()` / `trn()` (server, `serato_crates/i18n.py`). The Chinese translations are in `static/js/locales/zh-Hant.js`, `serato_crates/locale_zh.py` and `src-tauri/src/locale_zh.rs`, keyed by the English text.
 
 ## Views
 
-| View | What it does |
+| View | Purpose |
 |---|---|
-| Overview | The start page: songs left to sort, files left to screen per folder, staged changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality, suspected transcodes). Every card opens the view that handles it |
-| Folders | Scans the music folders (see Music folders) and labels every song: sorted, unsorted, not imported, copy, rejected or missing. Shows which folders are done, real audio format and quality, lets you screen files, add songs to Serato (see Adding songs to Serato) and open folders in Finder |
-| Sort | Go through unsorted songs (a crate under Inbox, a disk folder, songs in no crate, recently added) and sort them. Keys 1–9 add to pinned crates, ⇧+number adds a suggested crate, `/` searches or creates a crate, `X` rejects |
-| Cleanup | Missing files (relocate, or merge into the record that already points at the moved file), duplicates (keep one, merge crates), empty crates |
-| Quality | Runs the transcode check by hand and lists the suspect files: listen, look at the spectrum, mark "Sounds fine", reject (see Audio quality) |
-| Crates | Tree editing (drag onto a crate to move it inside, between two crates to change the order, auto-scrolls near the edges; ⌥↑ ⌥↓ and the right-click menu also reorder), rename, merge, delete, multi-select songs to add or move, mark crates as unsorted |
-| Plan | Everything staged so far, undo, export, and Apply to Serato |
-| Notes | Free notes about songs and songs to remember, optionally linked to a library song, with #tags, search and Markdown export (see Notes) |
-| Guide | How everything works and the suggested workflow, in the interface language |
+| Overview | Start page: songs left to sort, files left to screen per folder, pending changes (with Apply when Serato is closed), and library health (missing files, duplicates, empty crates, low quality, suspected transcodes). Each card opens the corresponding view |
+| Folders | Scans the music folders and labels each song as sorted, unsorted, not imported, copy, rejected or missing. Shows progress per folder and the actual audio format, and supports screening, adding songs to Serato and opening folders in Finder |
+| Sort | Sorts unsorted songs from a crate under Inbox, a folder, songs in no crate, or recently added songs. Keys 1–9 add to pinned crates, ⇧+number adds to a suggested crate, `/` searches or creates a crate, `X` rejects |
+| Cleanup | Missing files (relocate, or merge into the record that already points to the moved file), duplicates (keep one copy and merge crates), empty crates |
+| Quality | Runs the transcode check and lists suspect files for listening, spectrum review, marking as genuine or rejecting (see [Audio quality](#audio-quality)) |
+| Crates | Edits the crate tree: drag to move or reorder (⌥↑ ⌥↓ and the right-click menu also reorder), rename, merge, delete, add or move selected songs, and mark crates as unsorted |
+| Plan | All pending changes, undo, export, and Apply to Serato |
+| Notes | Notes about songs and songs to find, optionally linked to a library song, with #tags, search and Markdown export |
+| Guide | Usage instructions and the suggested workflow, in the interface language |
 
-Press `?` for all keyboard shortcuts.
+Press `?` for the full list of keyboard shortcuts.
 
 ### Unsorted crates and Inbox
 
-A song counts as sorted once it sits in any crate that is not "unsorted". Unsorted crates are:
+A song counts as sorted when it is in at least one crate that is not marked unsorted. Unsorted crates are:
 
-- `Inbox` and everything under it (new music goes under Inbox)
-- top-level crates named like TBD / Temp / Inbox
-- crates that are a whole disk folder dragged into Serato (same name as the folder and holding at least 60% of its songs)
-- crates you mark yourself
+- `Inbox` and all crates under it
+- top-level crates named TBD, Temp or Inbox
+- crates created by dragging a whole folder into Serato (same name as the folder, holding at least 60% of its songs)
+- crates marked manually
 
-The unsorted-crate editor, opened from Folders or Crates, can:
+The unsorted-crate editor, available from Folders and Crates, adds or removes unsorted crates, creates crates under Inbox, and consolidates everything unsorted into Inbox. Each crate in Crates also has an "unsorted" checkbox. The settings are saved in `rules.json`.
 
-- add or remove unsorted crates
-- create new crates under Inbox
-- tidy everything into Inbox in one step
+These defaults assume one workflow: new music goes into crates under `Inbox` (for example "Inbox / 2026-12 Beatport", or a folder dragged into Serato) and is then sorted into genre or set crates. "Consolidate into Inbox…" moves every unsorted crate under `Inbox` and collects songs in the music folders that are in no crate into "Inbox / Unsorted songs" (named in the interface language; an existing crate in either language is reused). For other workflows, mark or unmark crates as unsorted instead. Nothing is moved unless "Consolidate into Inbox…" is used, and every change goes through the plan.
 
-Every crate in the Crates view also has an "unsorted" checkbox. The settings are saved in `rules.json`.
-
-These defaults follow one way of working: new music lands in crates under `Inbox` (for example "Inbox / 2026-12 Beatport", or a folder dragged into Serato), and is then sorted into genre or set crates. "Tidy up into Inbox…" moves every unsorted crate under `Inbox` and collects the songs in the music folders that are in no crate into "Inbox / Unsorted songs" (named in the interface language; an existing one in either language is reused). If you work differently, mark or unmark crates as unsorted instead: nothing is moved unless you press "Tidy up into Inbox…", and every change still goes through the plan.
-
-Crates named by a BPM range (like "Open Format / 120-129 / All") are understood too: when suggesting crates in Sort, the song's BPM decides which range fits.
+Crates named by a BPM range (for example "Open Format / 120-129 / All") are recognised: Sort suggests the range that matches the song's BPM.
 
 ### Screening and the Trash
 
-In Folders, click a song and screen with the keyboard:
+In Folders, select a song and screen with the keyboard:
 
-- `↑` `↓`: next / previous song
-- space: play
+- `↑` `↓`: previous / next song
+- Space: play
 - `Q` `W` `E` `R`: jump to 0 / 25 / 50 / 75%
 - `X`: reject
 - `V`: keep
 
-Marks are saved in `screen.json`.
+Marks are saved in `screen.json`. Rejected songs are handled according to whether they are in Serato:
 
-What happens to rejected songs depends on whether they are in Serato:
-
-- **Files Serato does not use**: they can be moved to the macOS Trash after a confirmation list. A fresh Serato snapshot is taken first, and any file Serato uses is refused. Each move is logged in `trash_log.jsonl` with its original path and size, so the app can restore it until the Trash is emptied. Finder's "Put Back" may not know about these items.
-- **Songs that are in Serato**: they are staged in the plan instead. Applying the plan removes them from Serato and then moves their files to the Trash, with the same refusal check and log as above. `⇧X` in Sort removes a song from the library but keeps the file (samples, demo tracks).
+- **Files Serato does not use** can be moved to the macOS Trash after a confirmation list. Cratify takes a fresh Serato snapshot first and refuses any file Serato uses. Each move is logged in `trash_log.jsonl` with the original path and size, so Cratify can restore the file until the Trash is emptied. Finder's "Put Back" may not recognise these items.
+- **Songs in Serato** are added to the plan. Applying the plan removes them from Serato and then moves their files to the Trash, with the same check and log. `⇧X` in Sort removes a song from the library but keeps the file (samples, demo tracks).
 
 ### Audio quality
 
-Serato only stores the file extension, which cannot tell AAC from lossless ALAC, and leaves many bit rates empty. The app reads every file's header with macOS `afinfo` and caches the result in `audio_info.json`.
+Serato stores only the file extension, which does not distinguish AAC from lossless ALAC, and leaves many bit rates empty. Cratify reads each file's header with macOS `afinfo` and caches the result in `audio_info.json`.
 
 - **Labels**: `AAC 256`, `MP3 320`, `WAV 24-bit`, `ALAC`. Lossless formats are shown in green.
-- **Low quality** (shown in red): MP3 below 256k, AAC below 192k, or a sample rate below 44.1 kHz. AAC 256 is roughly MP3 320 and is not flagged.
+- **Low quality** (red): MP3 below 256k, AAC below 192k, or a sample rate below 44.1 kHz. AAC 256 is roughly equivalent to MP3 320 and is not flagged.
 - **Unreadable**: files macOS cannot open are flagged separately.
-- **Suspect** (orange, optional, needs `brew install ffmpeg`): transcodes such as an MP3 320 made from a 128k file, or a WAV made from an MP3. Encoders cut the highest frequencies (about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k; lossless reaches 22 kHz), and converting cannot bring them back. `serato_crates/spectrum.py` decodes 3 × 10 s of each file with ffmpeg, measures 250 Hz bands from 14 to 22 kHz against an 8–12 kHz reference, and flags a sharp "wall" well below what the format can hold: at 19 kHz or lower for MP3 320 / AAC 256, below 17.3 kHz for 192k, at 20.6 kHz or lower for lossless. Levels are measured in floating point (ffmpeg `astats`), because `volumedetect` works in 16 bits and cannot see below about −90 dB, which hid transcodes in quiet songs. It never runs on its own (to save power): the Quality tab shows how many new or changed files are unchecked and runs the check when asked, at background priority (macOS `taskpolicy -c background`; 1, 3 or 6 files at a time) with a Stop button. Levels are cached in `spectrum.json`, so each run only checks new or changed files. Serato writes its analysis and cue points into the music file, which changes its size and date but not its sound, so each result also keeps an audio fingerprint (MD5 of the audio packets of 0–10 s and 60–70 s, read without decoding, about 0.04 s a file): a changed file with the same fingerprint keeps its result. Results from before fingerprints existed get one in a single low-priority pass the first time the Quality data is read; results from the old 16-bit meter are kept where the verdict cannot change and the rest show up as unchecked again. The Quality tab lists the suspects (listen, Spectrum, mark "Sounds fine", reject; keys `↑` `↓`, space, `Enter` for the spectrum, `F` for "Sounds fine", which moves on to the next file, and `X` to reject); right-click → Spectrum anywhere shows ffmpeg's picture of the file to check by eye. The mark is a guess: songs mastered without much high end can be flagged too, which is what "Sounds fine" is for.
-- **Duplicates**: the same information is used to pick which copy to keep.
+- **Suspect** (orange; requires ffmpeg): transcodes, such as an MP3 320 made from a 128k file or a WAV made from an MP3. See below.
+- **Duplicates**: the same information decides which copy to keep.
+
+#### Transcode check
+
+Encoders remove the highest frequencies (about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k; lossless reaches 22 kHz), and conversion cannot restore them. `serato_crates/spectrum.py` decodes three 10-second excerpts of each file with ffmpeg, measures 250 Hz bands from 14 to 22 kHz against an 8–12 kHz reference, and flags a sharp cut-off well below what the format can carry: 19 kHz or lower for MP3 320 / AAC 256, below 17.3 kHz for 192k, and 20.6 kHz or lower for lossless. Levels are measured in floating point (ffmpeg `astats`); `volumedetect` works in 16 bits and cannot measure below about −90 dB, which hid transcodes in quiet songs.
+
+- **When it runs**: only when started from Quality, to save power. It runs at background priority (`taskpolicy -c background`) with 1, 3 or 6 files at a time, and can be stopped.
+- **Caching**: results are stored in `spectrum.json`, so each run checks only new or changed files. Serato writes analysis and cue points into music files, which changes their size and date but not the audio, so each result also stores an audio fingerprint (MD5 of the audio packets at 0–10 s and 60–70 s, read without decoding, about 0.04 s per file). A changed file with the same fingerprint keeps its result. Results from before fingerprints were introduced receive one in a single low-priority pass; results from the earlier 16-bit meter are kept where the verdict cannot change, and the rest are listed as unchecked.
+- **Review**: Quality lists the suspect files. Keys: `↑` `↓`, Space, `Enter` for the spectrum, `F` to mark as genuine and move to the next file, `X` to reject. Right-click → Spectrum is available in every view.
+
+The result is an estimate. Songs mastered with little high-frequency content can be flagged too; mark them as genuine.
 
 ### Adding songs to Serato
 
-In Folders, songs that are not in Serato can be added from Cratify: the button in a folder's screening note, or right-click a folder or a file → "Add to Serato…". Pick where they go: a new crate "Inbox / folder name" (like dragging the folder into Serato), another crate, or only the library. Songs that look like ones Serato already has (same artist and title) are skipped unless you untick that. The songs go into the plan ("Adding to Serato" in Folders, "+ N songs" in Crates) and are added when the plan is applied.
+In Folders, songs that are not in Serato can be added with the button in a folder's screening note, or with right-click → "Add to Serato…". The songs can go into a new crate "Inbox / folder name" (the same result as dragging the folder into Serato), another crate, or the library only. Songs that appear to be in Serato already (same artist and title) are skipped unless that option is cleared. The songs are added to the plan and written when it is applied.
 
-Applying writes what Serato's own import writes, which was worked out by comparing Serato's database before and after it imported single files and folders: one song row and one "Serato Library" row in each of `master.sqlite` and `root.sqlite`, plus the crate rows. Cratify fills only what describes the file (file name, size, bit rate, sample rate and length from macOS `afinfo`, the same numbers Serato stores) and the title tag; every other column gets the database default, which is what Serato stores itself. Serato's database computes a few columns with functions that only exist inside Serato DJ (search text and key number); Cratify registers equivalents under the same names, equal to Serato's for 99.998 % of a real library's values, and Serato recomputes them with its own the next time it updates the song. Both files allow only one song per file path, so a song can never be added twice, also not by dragging it into Serato later.
+Applying writes the same rows as Serato's own import, determined by comparing Serato's database before and after importing single files and folders: one song row and one "Serato Library" row in both `master.sqlite` and `root.sqlite`, plus the crate rows. Cratify fills in the file details (file name, size, bit rate, sample rate and length from macOS `afinfo`, matching what Serato stores) and the title tag; every other column takes the database default, as Serato's import does. A few columns are computed by functions that exist only inside Serato DJ (search text and key number). Cratify registers equivalents under the same names, which match Serato's output for 99.998% of the values in a real library, and Serato recomputes them the next time it updates the song. Both database files allow only one song per file path, so a song cannot be added twice, including by dragging it into Serato later.
 
-Afterwards, select the songs in Serato DJ (for example their crate) and choose "Analyze Files": Serato reads the other tags (artist, album, key…) and works out BPM, beatgrid and waveform. The Apply result says so too. Tried on the real library: the song shows in its crate and in all songs, search finds it, it plays, and Serato read its tags and BPM when it was loaded on a deck.
+Afterwards, select the songs in Serato DJ (for example through their crate) and choose "Analyze Files". Serato then reads the remaining tags (artist, album, key and so on) and detects BPM, beatgrid and waveform. This was verified on a real library: the song appears in its crate and in All, search finds it, it plays, and Serato read its tags and BPM when it was loaded on a deck.
 
 ### Notes
 
-The Notes tab is a place for thoughts about songs ("good opener", "mix out at the second drop") and for songs to remember (heard in a set, to buy). Notes are kept in `notes.json` only; they are never written to Serato.
+Notes hold comments about songs ("good opener", "mix out at the second drop") and songs to find (heard in a set, to buy). They are stored only in `notes.json` and are never written to Serato.
 
-- **Writing**: type in the box at the top and press ⌘↵. Press `N` to jump there, `/` to search.
-- **Linking a song**: "Link a song…" searches the library (empty search shows the playing song and the newest songs), or one click links the song that is playing. A note keeps the song's Serato id and file path, plus title and artist to show if the song later leaves the library.
-- **From other views**: right-click a song in Sort, Crates, Folders or Quality → "Add a note…", or press `M` in Sort. Sort shows the selected song's newest notes in its detail panel, and songs with notes show 📝 before their title in those lists (hover for the newest notes, click to add one).
-- **Files not imported yet**: a note about a file in Folders is linked by path, so it attaches to the song once the file is imported in Serato.
+- **Writing**: type in the box at the top and press ⌘↵. `N` focuses the box, `/` searches.
+- **Linking a song**: "Link a song…" searches the library (an empty search shows the playing song and the newest songs), or one click links the song that is playing. A note stores the song's Serato ID and file path, plus title and artist for display if the song later leaves the library.
+- **From other views**: right-click a song in Sort, Crates, Folders or Quality → "Add a note…", or press `M` in Sort. Sort shows the selected song's newest notes in its detail panel, and songs with notes show 📝 before their title in those lists.
+- **Files not imported yet**: a note about a file in Folders is linked by path and attaches to the song once the file is imported in Serato.
 - **Songs to find**: an unlinked note such as "Artist - Title" can be linked later; the search starts with the note's first line.
-- **#tags** (`#opener`, `#開場`) become filter chips above the list. Delete has an Undo, and Export downloads every note as Markdown.
+- **#tags** (`#opener`, `#開場`) appear as filters above the list. Deleting a note can be undone, and Export downloads all notes as Markdown.
 
-If `notes.json` cannot be read, the tab refuses to save rather than overwrite it.
+If `notes.json` cannot be read, saving is disabled so the file is not overwritten.
 
 ## Apply to Serato
 
-"Apply to Serato" in the Plan view writes the staged crate changes into Serato DJ 4's database:
+"Apply to Serato" in Plan writes the pending crate changes into Serato DJ 4's database:
 
 1. It checks that Serato DJ is not running (by executable name) and that no process has the databases open.
-2. It rehearses the whole plan on a private copy of the databases. Any problem stops it here, before Serato is touched.
-3. It backs up `master.sqlite` and `root.sqlite` to `~/Cratify Backups/` (a timestamped folder per apply).
-4. It writes both databases in one transaction. Root is attached as `db1`, the way Serato itself does it. Before committing it checks:
+2. It applies the whole plan to a private copy of the databases. Any error stops the process before Serato is touched.
+3. It backs up `master.sqlite` and `root.sqlite` to a timestamped folder in `~/Cratify Backups/`.
+4. It writes both databases in one transaction, with root attached as `db1` as Serato does. Before committing, it verifies:
    - integrity and foreign keys
    - that master and root mirror each other
-   - that every crate holds exactly the songs the app expected
+   - that every crate holds exactly the expected songs
 
    If any check fails, nothing is written.
 
-If crates were changed in Serato after the last snapshot, the expected result will not match and the apply is refused. Press refresh and apply again.
+If crates were changed in Serato after the last snapshot, the result does not match the expectation and the apply is refused. Reload the snapshot and apply again.
 
-If something looks wrong afterwards, quit Serato and use "restore the backup from before the last apply" in the Plan view.
+If something looks wrong afterwards, quit Serato and use "Restore the backup from before the last apply" in Plan.
 
 Supported actions:
 
 - create, rename, move, delete and merge crates
-- change the order of crates within a level. Like Serato when you drag a crate, each database file renumbers that level 1…N on its own (master holds a few crates root does not); after writing, Apply checks that both files list the level in the planned order. New crates still go to the end of their level
+- reorder crates within a level. As when a crate is dragged in Serato, each database file renumbers that level 1…N independently (master holds a few crates that root does not); after writing, Cratify checks that both files list the level in the planned order. New crates are placed at the end of their level
 - add songs to crates and remove them from crates
-- point a song at a new file location
-- add songs from disk to the library, optionally into a crate (see Adding songs to Serato)
-- remove songs from the library, the way Serato's own ⌘⌫ does: their crate memberships go, play history is kept. For rejected songs, the files go to the Trash only after the database write has been committed.
+- point a song to a new file location
+- add songs from disk to the library, optionally into a crate (see [Adding songs to Serato](#adding-songs-to-serato))
+- remove songs from the library, as Serato's ⌘⌫ does: crate memberships are removed and play history is kept. Files of rejected songs are moved to the Trash only after the database write is committed
 
 `serato_crates/apply.py` documents the Serato 4 database layout.
 
 ## Safety
 
-- Serato DJ 4 keeps its library in `~/Library/Application Support/Serato/Library/`: `master.sqlite`, with `root.sqlite` for the local drive. The legacy `~/Music/_Serato_` files are no longer read by Serato 4.
-- **Reading**: the app never opens Serato's live files for reading. Even a read-only SQLite connection writes to `-shm`. It copies the bytes of `master.sqlite` and its `-wal`, checks nothing changed while copying, and works on that snapshot. This is safe while Serato is open.
-- **Writing**: Serato is written only by "Apply to Serato" (Serato closed, rehearsed, backed up, verified) and by `tools/serato_move_paths.py`. `tools/serato_import_poc.py` is a proof of concept that adds one song the way Serato's import does (title and file details only; Serato's analysis fills the rest), with the same safety steps; it only rehearses on a copy unless given `--apply`. `tools/serato_apply_ops.py` applies a list of plan actions from a JSON file the same way (used to clean up after testing); it never moves music files. The tool rewrites file paths after music folders were moved; it also requires Serato to be closed and only does a dry run without `--apply`.
-- **The server**: it listens on `127.0.0.1` only and checks the Host header. Writes must be JSON. Audio preview only serves files that are in the library or found by the folder scan.
+- Serato DJ 4 keeps its library in `~/Library/Application Support/Serato/Library/`: `master.sqlite`, plus `root.sqlite` for the local drive. Serato 4 no longer reads the legacy `~/Music/_Serato_` files.
+- **Reading**: Cratify never opens Serato's live files, because even a read-only SQLite connection writes to `-shm`. It copies the bytes of `master.sqlite` and its `-wal`, verifies that nothing changed during the copy, and works on that snapshot. This is safe while Serato is running.
+- **Writing**: Serato's database is written only by "Apply to Serato" (Serato closed; tested on a copy, backed up and verified) and by the tools in `tools/`, which follow the same steps and only do a dry run unless given `--apply`:
+  - `serato_move_paths.py` rewrites file paths after music folders were moved.
+  - `serato_apply_ops.py` applies a list of plan actions from a JSON file; it never moves music files.
+  - `serato_import_poc.py` is the proof of concept for adding one song the way Serato's import does.
+- **The server** listens only on `127.0.0.1` and checks the Host header. Writes must be JSON. Audio preview serves only files that are in the library or found by the folder scan.
 
 ## Disclaimer
 
 Cratify is an independent project. It is not made by, affiliated with or endorsed by Serato, and it does not use Serato's logos. Serato and Serato DJ are trademarks of their owner.
 
-Serato DJ's library database is private and undocumented. What Cratify knows about it was worked out by comparing the database before and after Serato's own actions, and `serato_crates/apply.py` documents it. Cratify writes to it only when you press "Apply to Serato", with Serato closed, after rehearsing the changes on a copy and backing the database up to `~/Cratify Backups/`; it checks the result before committing, and refuses database versions it has not been verified with. Even so, a Serato update or an untested library could behave differently. Keep your own backups too, and use Cratify at your own risk. The software is provided as is, without warranty (see [License](#license)).
+Serato DJ's library database is private and undocumented. Cratify's knowledge of it comes from comparing the database before and after Serato's own actions, and is documented in `serato_crates/apply.py`. Cratify writes to it only through "Apply to Serato", with Serato closed, after testing the changes on a copy and backing the database up to `~/Cratify Backups/`. It verifies the result before committing and refuses database versions it has not been verified with. A Serato update or an untested library may still behave differently. Keep separate backups and use Cratify at your own risk. The software is provided as is, without warranty (see [License](#license)).
 
 ## Limitations
 
-- The Folders report only scans the music folders; finding missing files searches them and `~/Music`. Choosing a folder in `~/Downloads`, `~/Documents` or `~/Desktop` makes macOS ask for permission the first time it is scanned.
-- Songs added by Cratify are not analysed: select them in Serato and choose "Analyze Files" (loading one on a deck analyses it too). Dragging files into Serato analyses them on import.
+- Folders scans only the music folders; the search for missing files covers them and `~/Music`. Folders in `~/Downloads`, `~/Documents` or `~/Desktop` trigger a macOS permission prompt on the first scan.
+- Songs added by Cratify are not analysed. Select them in Serato and choose "Analyze Files"; loading a song on a deck also analyses it.
 - In a browser, Chrome cannot play AIFF. Safari and the Mac app can.
-- Only the local Serato Library is handled; streaming playlists do not appear.
+- Only the local Serato Library is supported; streaming playlists are not shown.
 
 ## License
 
-[MIT](LICENSE). You may use, copy, change and share Cratify, including commercially, as long as the copyright and license notice stay with it. It comes without warranty.
+[MIT](LICENSE). Cratify may be used, copied, modified and distributed, including commercially, provided the copyright and license notice are retained. It is provided without warranty.

@@ -115,7 +115,7 @@ export function mountPlayerBar(host) {
     'select',
     {
       class: 'input input-sm player-start',
-      title: _('Where new previews start (Q jumps back to the beginning)'),
+      title: _('Start point for new previews (Q jumps to the beginning)'),
       onchange: (e) => {
         prefs.set('player.startAt', (startAt = Number(e.target.value)));
         e.target.blur(); // give the keyboard shortcuts back

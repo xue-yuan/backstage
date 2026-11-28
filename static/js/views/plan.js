@@ -63,7 +63,7 @@ export function createPlanView() {
           'div',
           { class: 'notice notice-info' },
           h('strong', {}, _('These changes are not in Serato yet.')),
-          _(' When they look right, quit Serato DJ and press "Apply to Serato". It rehearses on a copy first, backs up the Serato database automatically and checks everything after writing. If any step fails, nothing is written.'),
+          _(' To write them, quit Serato DJ and press "Apply to Serato". Cratify tests them on a copy, backs up the database and verifies the result; if any step fails, nothing is written.'),
         ),
         h(
           'div',
@@ -82,7 +82,7 @@ export function createPlanView() {
           ),
         ),
         store.eff.issues.length
-          ? h('div', { class: 'notice notice-danger' }, _n(store.eff.issues.length, '{n} action no longer applies (usually because a crate or song no longer exists in Serato after reloading the snapshot). Changes marked red can be undone directly.', '{n} actions no longer apply (usually because a crate or song no longer exists in Serato after reloading the snapshot). Changes marked red can be undone directly.'))
+          ? h('div', { class: 'notice notice-danger' }, _n(store.eff.issues.length, '{n} action no longer applies, usually because a crate or song was removed in Serato. Undo the change marked in red.', '{n} actions no longer apply, usually because a crate or song was removed in Serato. Undo the changes marked in red.'))
           : null,
         changes.length
           ? h(
@@ -109,11 +109,11 @@ export function createPlanView() {
                   ),
                 ),
               ),
-              h('span', { class: 'muted small' }, mode === 'summary' ? _('Grouped by what the actions do. Open a group to undo single items.') : _('Every change in the order you made it, newest first.')),
+              h('span', { class: 'muted small' }, mode === 'summary' ? _('Grouped by action. Expand a group to undo single items.') : _('Every change, newest first.')),
             )
           : null,
         !changes.length
-          ? h('div', { class: 'empty' }, _('No changes yet. Start organising in Sort, Cleanup or Crates.'))
+          ? h('div', { class: 'empty' }, _('No changes yet. Changes made in Sort, Cleanup or Crates appear here.'))
           : mode === 'summary'
           ? renderSummary()
           : h(
@@ -212,7 +212,7 @@ export function createPlanView() {
                   h(
                     'li',
                     { class: it.issue ? 'op-issue' : '' },
-                    h('span', { class: 'grow' }, it.text, it.movedOut && mixed ? h('span', { class: 'tag tag-edit' }, _('taken out of the source')) : null, it.issue ? h('span', { class: 'tag tag-danger' }, it.issue) : null),
+                    h('span', { class: 'grow' }, it.text, it.movedOut && mixed ? h('span', { class: 'tag tag-edit' }, _('removed from the source')) : null, it.issue ? h('span', { class: 'tag tag-danger' }, it.issue) : null),
                     h('button', { class: 'btn btn-ghost btn-xs', title: it.ops.map((o) => o.text || o.type).join('\n'), onclick: () => undoItems([it], it.text) }, _('Undo')),
                   ),
                 ),
@@ -232,9 +232,9 @@ export function createPlanView() {
     const deps = dependentOps(store.plan.changes, ops);
     if (items.length > 1 || deps.length) {
       const message = [
-        items.length > 1 ? _n(items.length, 'Takes {n} item out of the plan.', 'Takes {n} items out of the plan.') : null,
+        items.length > 1 ? _n(items.length, 'Removes {n} item from the plan.', 'Removes {n} items from the plan.') : null,
         deps.length ? _n(deps.length, 'This also undoes {n} action that uses this crate.', 'This also undoes {n} actions that use this crate.') : null,
-        _('Serato itself is not affected.'),
+        _('Serato is not affected.'),
       ].filter(Boolean).join(' ');
       const ok = await confirmDialog({ title: _('Undo "{title}"?', { title: label }), message, okText: _('Undo') });
       if (!ok) return;
@@ -260,7 +260,7 @@ export function createPlanView() {
   }
 
   async function clearAll() {
-    const ok = await confirmDialog({ title: _('Clear the whole plan?'), message: _('All staged actions will be deleted (Serato itself is not affected).'), okText: _('Clear all'), danger: true });
+    const ok = await confirmDialog({ title: _('Clear the whole plan?'), message: _('All actions in the plan are deleted. Serato is not affected.'), okText: _('Clear all'), danger: true });
     if (ok) store.clearPlan();
   }
 

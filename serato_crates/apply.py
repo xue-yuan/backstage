@@ -163,12 +163,12 @@ def backup(lib_dir: Path, backups_root: Path, label: str) -> Path:
         if src.exists():
             shutil.copy2(src, dest / name)
             if not _same(src, dest / name):
-                raise ApplyError(tr("Backing up {name} failed (the copy differs)", name=name))
+                raise ApplyError(tr("Backing up {name} failed: the copy does not match", name=name))
     (dest / tr("How to restore.txt")).write_text(
         tr(
-            "This is a backup of the Serato database, made by Cratify before applying changes.\n"
-            "To restore: quit Serato DJ, then press \"Restore the backup from before the last apply\" in Cratify's Plan view,\n"
-            "or copy the files here back to {lib_dir} by hand (and delete any extra -wal / -shm files there).\n",
+            "This is a backup of the Serato database made by Cratify before applying changes.\n"
+            "To restore it, quit Serato DJ and use \"Restore the backup from before the last apply\" in Cratify's Plan view,\n"
+            "or copy these files back to {lib_dir} and delete any extra -wal / -shm files there.\n",
             lib_dir=lib_dir,
         ),
         encoding="utf-8",
@@ -190,7 +190,7 @@ def _same(a: Path, b: Path) -> bool:
 
 def restore(lib_dir: Path, backup_dir: Path) -> None:
     if serato_running():
-        raise ApplyError(tr("Serato DJ is still open. Quit it before restoring"))
+        raise ApplyError(tr("Serato DJ is open. Quit it before restoring"))
     if not (backup_dir / "master.sqlite").exists() or not (backup_dir / "root.sqlite").exists():
         raise ApplyError(tr("The backup folder has no master.sqlite / root.sqlite"))
     for name in ("master.sqlite-wal", "master.sqlite-shm", "root.sqlite-journal", "root.sqlite-wal"):
@@ -402,7 +402,7 @@ class _Writer:
         """Add a file to the local Serato Library like Serato's import, minus what its analysis fills in."""
         path = str(op["path"])
         if not path.startswith("/") or path.startswith("/Volumes/"):
-            raise ApplyError(tr("Only files on this Mac's own drive can be added: {path}", path=path))
+            raise ApplyError(tr("Only files on this Mac's internal drive can be added: {path}", path=path))
         try:
             st = os.stat(path)
         except OSError:
@@ -456,7 +456,7 @@ class _Writer:
     def relocate(self, op: dict) -> None:
         aid, path = int(op["asset"]), str(op["path"])
         if not path.startswith("/") or path.startswith("/Volumes/"):
-            raise ApplyError(tr("Can only relocate to the local drive: {path}", path=path))
+            raise ApplyError(tr("Files can only be relocated to the local drive: {path}", path=path))
         if not os.path.isfile(path):
             raise ApplyError(tr("No file at the new location: {path}", path=path))
         rasset, _, _ = self.asset(aid)
@@ -492,7 +492,7 @@ class _Writer:
         for t in self.list_caches:  # Serato's cached lists; it rebuilds them (as on removeTrack)
             self.con.execute(f"DELETE FROM main.'{t}' WHERE asset_id = ?", (aid,))
         if not self._one("SELECT COUNT(*) FROM main.asset WHERE id = ?", (aid,)) or not self._one("SELECT COUNT(*) FROM db1.asset WHERE id = ?", (rasset,)):
-            raise ApplyError(tr("Song #{id} would have been deleted, not only taken out of the library", id=aid))
+            raise ApplyError(tr("Song #{id} would have been deleted rather than removed from the library; stopped", id=aid))
 
     def run(self, op: dict) -> None:
         kind = op.get("type")
@@ -630,7 +630,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
             raise ApplyError(
                 tr(
                     "The Serato database version is {main} (root {root}), but Cratify has only been verified with {known} (Serato DJ Pro 4.0). "
-                    "Serato may have been updated. To be safe, nothing is written until the new database format has been checked. Nothing was changed.",
+                    "Serato may have been updated. Nothing is written until the new database format has been checked; no changes were made.",
                     main=versions["main"],
                     root=versions["db1"],
                     known=", ".join(map(str, sorted(KNOWN_SCHEMAS))),
@@ -662,7 +662,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
             raise ApplyError(tr("Foreign key check failed: {rows}", rows=fk[:3]))
         checks.append(tr("Database integrity and foreign key checks passed"))
         if w._one("SELECT COUNT(*) FROM main.history_entry") != history_before:
-            raise ApplyError(tr("The number of play history rows changed, so nothing is written, to be safe"))
+            raise ApplyError(tr("The number of play history rows changed; nothing is written"))
         if w.removed:
             checks.append(trn(len(w.removed), "Removed {n} song; all {history} play history rows kept", "Removed {n} songs; all {history} play history rows kept", history=history_before))
         problems = w.mirror_problems()
@@ -689,8 +689,8 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
                 )
                 raise ApplyError(
                     tr(
-                        "The crates after applying differ from what was expected: {details}. Usually a crate was changed in Serato after Cratify read the snapshot: "
-                        "press \"↻ Reload\" at the top right, check the plan, then apply again.",
+                        "The crates after applying differ from what was expected: {details}. A crate was probably changed in Serato after the snapshot was read. "
+                        "Press \"↻ Reload\" at the top right, check the plan and apply again.",
                         details=details,
                     )
                 )
@@ -698,7 +698,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         if expected_order:
             problems = w.order_problems(expected_order)
             if problems:
-                raise ApplyError(tr("Crate order after applying differs from the plan: {problems}. Usually crates were added or moved in Serato after Cratify read the snapshot: press \"↻ Reload\" at the top right, check the plan, then apply again. Nothing was written.", problems=tr("; ").join(problems)))
+                raise ApplyError(tr("The crate order after applying differs from the plan: {problems}. Crates were probably added or moved in Serato after the snapshot was read. Press \"↻ Reload\" at the top right, check the plan and apply again. Nothing was written.", problems=tr("; ").join(problems)))
             checks.append(trn(len(expected_order), "The crates are in the planned order ({n} level)", "The crates are in the planned order ({n} levels)"))
         if dry_run:
             con.execute("ROLLBACK")

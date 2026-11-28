@@ -67,7 +67,7 @@ export function createCleanupView({ navigate }) {
         'button',
         {
           class: 'seg',
-          title: _('Handle in Sort'),
+          title: _('Open in Sort'),
           onclick: () => {
             prefs.set('inbox.source', { kind: 'uncategorized' });
             navigate('inbox');
@@ -116,8 +116,8 @@ export function createCleanupView({ navigate }) {
       h(
         'p',
         {},
-        _n(list.length, '{n} song in the Serato library is not on disk. Files with the same name in your music folders or ~/Music are offered as candidate locations.', '{n} songs in the Serato library are not on disk. Files with the same name in your music folders or ~/Music are offered as candidate locations.'),
-        _('If a candidate file already has its own record in Serato (usually because the folder was moved and imported again), this song\'s crates are merged into that record instead of adding a second record for the same file.'),
+        _n(list.length, '{n} song in the Serato library is missing on disk. Files with the same name in the music folders or ~/Music are listed as candidates.', '{n} songs in the Serato library are missing on disk. Files with the same name in the music folders or ~/Music are listed as candidates.'),
+        _('If a candidate file already has its own record in Serato (usually because the folder was moved and imported again), this song\'s crates are merged into that record.'),
       ),
       scanning ? h('p', { class: 'muted' }, _('Scanning…')) : null,
       scanError ? h('p', { class: 'notice notice-danger' }, _('Scan failed: {error}', { error: scanError })) : null,
@@ -146,7 +146,7 @@ export function createCleanupView({ navigate }) {
         body = h(
           'div',
           { class: 'staged' },
-          h('span', { class: 'tag tag-ok' }, _('Staged')),
+          h('span', { class: 'tag tag-ok' }, _('In the plan')),
           relocatedTo ? ` ${_('moved to {path}', { path: fmt.shortPath(relocatedTo) })}` : ` ${_('removed from the library ({reason})', { reason: eff.removedTracks.get(t.id) || _('Missing file') })}`,
           h('button', {
             class: 'btn btn-ghost btn-xs',
@@ -249,8 +249,8 @@ export function createCleanupView({ navigate }) {
   async function removeAll(list) {
     const ok = await confirmDialog({
       title: _n(list.length, 'Remove {n} missing song?', 'Remove {n} missing songs?'),
-      message: _('This only goes into the plan (removed from the Serato library, no files deleted) and can be undone in Plan at any time.'),
-      okText: _('Stage in plan'),
+      message: _('The songs are removed from the Serato library; no files are deleted. The change goes into the plan and can be undone.'),
+      okText: _('Add to plan'),
     });
     if (ok) store.commit(_n(list.length, 'Remove {n} missing song', 'Remove {n} missing songs'), list.map((t) => store.opRemoveTrack(t.id, _('Missing file'))));
   }
@@ -281,9 +281,9 @@ export function createCleanupView({ navigate }) {
       h(
         'p',
         {},
-        _('Finds duplicates by "artist + title". Pick the one to keep: the crates of the others are merged into it, then the others are removed from the library (files are not deleted).'),
+        _('Duplicates are matched by artist and title. Choose the copy to keep: the crates of the others are merged into it, and the others are removed from the library (their files are not deleted).'),
         ' ',
-        _('"Merge and Trash the other files" also moves their files to the Trash after Apply to Serato, so they cannot be imported again by mistake.'),
+        _('"Merge and Trash" also moves the other files to the Trash after applying, so they are not imported again by mistake.'),
       ),
       h(
         'div',
@@ -300,7 +300,7 @@ export function createCleanupView({ navigate }) {
               render();
             },
           }),
-          _('Only show songs within 2 s of each other in length (skips different versions such as Extended / Radio)'),
+          _('Only songs within 2 s of each other in length (excludes versions such as Extended / Radio)'),
         ),
         h(
           'label',
@@ -314,7 +314,7 @@ export function createCleanupView({ navigate }) {
               render();
             },
           }),
-          _('Only show groups whose copies differ in quality'),
+          _('Only groups whose copies differ in quality'),
         ),
         dismissed.size
           ? h('button', {
@@ -334,7 +334,7 @@ export function createCleanupView({ navigate }) {
             h('button', { class: 'btn btn-sm btn-primary', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length) }, _n(sameVersion.length, 'Merge all {n} group (keep the selected copy)', 'Merge all {n} groups (keep the selected copies)')),
             h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: () => mergeAll(sameVersion, keepOf, groups.length - sameVersion.length, { trash: true }) }, _('Merge all and Trash the other files')),
             groups.length > sameVersion.length
-              ? h('span', { class: 'muted small' }, _n(groups.length - sameVersion.length, '{n} group differs in length by more than 2 s and is left for you', '{n} groups differ in length by more than 2 s and are left for you'))
+              ? h('span', { class: 'muted small' }, _n(groups.length - sameVersion.length, '{n} group differs in length by more than 2 s and is skipped', '{n} groups differ in length by more than 2 s and are skipped'))
               : null,
           )
         : null,
@@ -350,7 +350,7 @@ export function createCleanupView({ navigate }) {
         h(
           'div',
           { class: 'staged' },
-          h('span', { class: 'tag tag-ok' }, _('Staged')),
+          h('span', { class: 'tag tag-ok' }, _('In the plan')),
           ` ${_n(removed.length, 'keep {keeper}, remove {n} duplicate', 'keep {keeper}, remove {n} duplicates', { keeper: keeper ? _('{title} ({quality})', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }) : '' })}`,
           nTrash ? h('span', { class: 'tag tag-danger' }, _n(nTrash, '{n} file to the Trash', '{n} files to the Trash')) : null,
           h('button', { class: 'btn btn-ghost btn-xs', onclick: () => store.revertOps((op) => op.group === key) }, _('Cancel')),
@@ -371,7 +371,7 @@ export function createCleanupView({ navigate }) {
           'div',
           { class: 'card-head' },
           h('div', {}, h('strong', {}, first.title || first.fileName), h('span', { class: 'muted' }, first.artist ? ` · ${first.artist}` : ''), ` (${g.tracks.length})`),
-          g.spreadMs > 2000 ? h('span', { class: 'tag tag-warn', title: _('Different lengths, maybe different versions') }, _('{s} s apart', { s: Math.round(g.spreadMs / 1000) })) : null,
+          g.spreadMs > 2000 ? h('span', { class: 'tag tag-warn', title: _('Different lengths; possibly different versions') }, _('{s} s apart', { s: Math.round(g.spreadMs / 1000) })) : null,
         ),
         h(
           'div',
@@ -400,7 +400,7 @@ export function createCleanupView({ navigate }) {
               spectrumAvailable() && t.exists
                 ? h('button', {
                     class: 'btn btn-ghost btn-xs',
-                    title: _('Check where the sound stops (spots transcodes such as fake 320k)'),
+                    title: _('Show where the sound stops (reveals transcodes such as fake 320k)'),
                     onclick: (e) => {
                       e.preventDefault(); // inside the row's label: do not pick this copy
                       showSpectrum({ path: effectivePath(eff, t), title: t.title || t.fileName, quality: store.trackQuality(t) });
@@ -419,7 +419,7 @@ export function createCleanupView({ navigate }) {
                 'button',
                 {
                   class: 'btn btn-sm btn-danger-ghost',
-                  title: `${_('After Apply to Serato succeeds, these files go to the macOS Trash (restorable):')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
+                  title: `${_('These files go to the Trash after a successful apply (restorable):')}\n${trashable.map((t) => effectivePath(eff, t)).join('\n')}`,
                   onclick: () => mergeDupes(g, keep, { trash: true }),
                 },
                 _n(trashable.length, 'Merge and Trash the other file', 'Merge and Trash the other {n} files'),
@@ -436,7 +436,7 @@ export function createCleanupView({ navigate }) {
         ),
       );
     });
-    return [head, h('div', { class: 'cards' }, stagedCards, cards.length ? cards : h('div', { class: 'empty' }, _('No duplicates 🎉')))];
+    return [head, h('div', { class: 'cards' }, stagedCards, cards.length ? cards : h('div', { class: 'empty' }, _('No duplicates')))];
   }
 
   /** pathKey -> ids of live tracks using that file (memoised per plan/snapshot version). */
@@ -520,10 +520,10 @@ export function createCleanupView({ navigate }) {
     const ok = await confirmDialog({
       title: _n(list.length, 'Merge {n} duplicate group?', 'Merge {n} duplicate groups?'),
       message: [
-        _n(removed, '{n} copy leaves the library; its crates move to the copy you keep.', '{n} copies leave the library; their crates move to the copies you keep.'),
-        trashed ? _n(trashed, '{n} file goes to the Trash after Apply to Serato (restorable).', '{n} files go to the Trash after Apply to Serato (restorable).') : null,
-        skipped ? _n(skipped, '{n} group whose lengths differ by more than 2 s is left for you to check.', '{n} groups whose lengths differ by more than 2 s are left for you to check.') : null,
-        _('Everything goes into the plan and can be undone there.'),
+        _n(removed, '{n} copy is removed from the library; its crates move to the kept copy.', '{n} copies are removed from the library; their crates move to the kept copies.'),
+        trashed ? _n(trashed, '{n} file is moved to the Trash after applying (restorable).', '{n} files are moved to the Trash after applying (restorable).') : null,
+        skipped ? _n(skipped, '{n} group whose lengths differ by more than 2 s is skipped.', '{n} groups whose lengths differ by more than 2 s are skipped.') : null,
+        _('The changes go into the plan and can be undone there.'),
       ].filter(Boolean).join(' '),
       okText: trash ? _('Merge and Trash') : _('Merge all'),
       danger: trash,
@@ -539,7 +539,7 @@ export function createCleanupView({ navigate }) {
     const head = h(
       'div',
       { class: 'cleanup-intro' },
-      h('p', {}, _('Crates with no songs and no child crates. Placeholder crates such as an "Opening" crate can stay; tick only the ones to delete.')),
+      h('p', {}, _('Crates with no songs and no child crates. Select the ones to delete; placeholder crates can stay.')),
       h(
         'div',
         { class: 'toolbar' },

@@ -24,7 +24,7 @@ export async function editMusicFolders({ firstRun = false } = {}) {
   try {
     settings = await getMusicFolders();
   } catch (e) {
-    toast(_('Could not read the music folders: {error}', { error: e.message }), { tone: 'danger' });
+    toast(_('Could not read the music folder settings: {error}', { error: e.message }), { tone: 'danger' });
     return false;
   }
   const missing = new Set(settings.missing);
@@ -43,7 +43,7 @@ export async function editMusicFolders({ firstRun = false } = {}) {
               'div',
               { class: 'mf-row' },
               h('span', { class: 'mf-path', title: f }, fmt.shortPath(f)),
-              missing.has(f) ? h('span', { class: 'mf-missing' }, _('Not found (drive not connected?)')) : null,
+              missing.has(f) ? h('span', { class: 'mf-missing' }, _('Not found (is the drive connected?)')) : null,
               h('button', { class: 'btn btn-sm btn-ghost', title: _('Remove'), 'aria-label': _('Remove {path}', { path: f }), onclick: () => ((folders = folders.filter((x) => x !== f)), render()) }, '✕'),
             ),
           )
@@ -89,11 +89,11 @@ export async function editMusicFolders({ firstRun = false } = {}) {
 
   render();
   const saved = await modal({
-    title: firstRun ? _('Where is your DJ music?') : _('Music folders'),
+    title: firstRun ? _('Choose your DJ music folders') : _('Music folders'),
     wide: true,
     body: [
-      h('p', {}, _('The Folders view scans these folders: which songs are sorted, not in Serato yet, copies or missing. Missing files are also looked for here and in ~/Music. Cratify only reads them.')),
-      firstRun ? h('p', { class: 'mf-hint' }, _('Suggested from where the songs in your Serato library are. Change them if new music goes somewhere else.')) : null,
+      h('p', {}, _('Folders scans these folders to show which songs are sorted, not in Serato yet, copies or missing. Missing files are searched for here and in ~/Music. Cratify only reads these folders.')),
+      firstRun ? h('p', { class: 'mf-hint' }, _('Suggested from the locations of the songs in the Serato library. Change them if new music is stored elsewhere.')) : null,
       listEl,
       h('div', { class: 'mf-add' }, chooseBtn, input, h('button', { class: 'btn btn-sm', onclick: addTyped }, _('Add'))),
       err,

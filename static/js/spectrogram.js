@@ -13,7 +13,7 @@ export function showSpectrum({ path, title, quality }) {
   const img = h('img', { class: 'spectrum-img', alt: '', src: `/api/spectrogram?path=${encodeURIComponent(path)}` });
   img.addEventListener('load', () => status.remove());
   img.addEventListener('error', () => {
-    status.textContent = _('Could not draw the spectrum. It needs ffmpeg (brew install ffmpeg), and the file must be readable.');
+    status.textContent = _('Could not draw the spectrum. This requires ffmpeg (brew install ffmpeg) and a readable file.');
     img.remove();
   });
   const q = quality || store.qualityOf(path);
@@ -25,19 +25,19 @@ export function showSpectrum({ path, title, quality }) {
         'div',
         { class: 'spectrum-verdict' },
         qualityBadge(q),
-        h('span', { class: q.suspect ? '' : 'muted' }, q.suspect ? suspectText(q) : _('No wall found: the sound does not stop where a lower bit rate would cut it (or the song is too quiet to tell).')),
+        h('span', { class: q.suspect ? '' : 'muted' }, q.suspect ? suspectText(q) : _('No cut-off found: the sound does not stop where a lower bit rate would cut it, or the song is too quiet to tell.')),
       ),
       status,
       img,
       h(
         'ul',
         { class: 'spectrum-help' },
-        h('li', {}, _('Look at the top edge of the coloured area: that is where the sound stops.')),
-        h('li', {}, _('Real MP3 320 and AAC 256 reach about 20 kHz; real lossless (WAV, AIFF) about 22 kHz.')),
+        h('li', {}, _('The top edge of the coloured area is where the sound stops.')),
+        h('li', {}, _('Genuine MP3 320 and AAC 256 reach about 20 kHz; genuine lossless (WAV, AIFF) about 22 kHz.')),
         h('li', {}, _('A flat, sharp ceiling across the whole song at about 16 kHz means a 128k source; about 19 kHz means 192k.')),
-        h('li', {}, _('A soft, uneven edge that moves with the music is usually how the song was mastered (old or lo-fi recordings), not a transcode.')),
+        h('li', {}, _('A soft, uneven edge that moves with the music usually comes from the mastering (old or lo-fi recordings), not from a transcode.')),
       ),
-      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('More in the Guide: checking suspect files →'))),
+      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('Guide: checking suspect files →'))),
     ],
     actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close(null) }, _('Close'))],
   });

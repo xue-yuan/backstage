@@ -62,7 +62,7 @@ export function createInboxView({ navigate } = {}) {
       {
         class: 'btn btn-ghost btn-block',
         onclick: async () => {
-          const id = await pickCrateDialog({ title: _('Which crate do you want to sort?'), allowCreate: false });
+          const id = await pickCrateDialog({ title: _('Choose a crate to sort'), allowCreate: false });
           if (id != null) setSource({ kind: 'crate', id });
         },
       },
@@ -107,7 +107,7 @@ export function createInboxView({ navigate } = {}) {
     'select',
     {
       class: 'input input-sm',
-      title: _('Which songs to list'),
+      title: _('Songs to show'),
       onchange: (e) => {
         show = e.target.value;
         prefs.set('inbox.show', show);
@@ -174,11 +174,11 @@ export function createInboxView({ navigate } = {}) {
           prefs.set('inbox.autoAdvance', autoAdvance);
         },
       }),
-      _('Go to the next song after adding (keeps playing if a song is playing)'),
+      _('Go to the next song after adding (playback continues)'),
     ),
     moveOutRow,
-    h('div', { class: 'muted small' }, _('X: reject this song (added to the plan; it is removed and its file moved to the Trash only when you apply to Serato)')),
-    h('div', { class: 'muted small' }, _('⇧X: only remove it from the Serato library and keep the file (samples, demo tracks, files that belong to other apps)')),
+    h('div', { class: 'muted small' }, _('X: reject this song (added to the plan; the song is removed and its file moved to the Trash when the plan is applied)')),
+    h('div', { class: 'muted small' }, _('⇧X: remove from the Serato library only and keep the file (samples, demo tracks, files of other apps)')),
   );
   const detailEl = h(
     'aside',
@@ -299,7 +299,7 @@ export function createInboxView({ navigate } = {}) {
   function goNextCrate() {
     const n = nextCrate();
     if (!n) {
-      toast(_('Every unsorted crate is done 🎉'));
+      toast(_('All unsorted crates are done'));
       return;
     }
     setSource({ kind: 'crate', id: n.id });
@@ -484,14 +484,14 @@ export function createInboxView({ navigate } = {}) {
     nextBtn.className = `btn btn-sm ${finished ? 'btn-primary' : ''}`;
     const stale = staleInSource();
     cleanOutBtn.hidden = !stale.length;
-    cleanOutBtn.textContent = _n(stale.length, 'Take {n} sorted song out of this crate', 'Take {n} sorted songs out of this crate');
-    cleanOutBtn.title = _('These songs are already in a sorted crate but still sit in this unsorted one. Removes them from this crate only (added to the plan).');
+    cleanOutBtn.textContent = _n(stale.length, 'Remove {n} sorted song from this crate', 'Remove {n} sorted songs from this crate');
+    cleanOutBtn.title = _('These songs are already in a sorting crate but are still in this unsorted one. They are removed from this crate only (added to the plan).');
 
     const empty = filter
       ? h('div', { class: 'empty' }, _('No songs match the filter'))
       : show === 'done' && all.length
         ? h('div', { class: 'empty' }, _('Nothing sorted here yet'))
-        : h('div', { class: 'empty' }, h('p', {}, _('No songs left here 🎉')), hasNext ? h('button', { class: 'btn btn-primary', onclick: () => goNextCrate() }, _('Next crate →')) : null);
+        : h('div', { class: 'empty' }, h('p', {}, _('No songs left')), hasNext ? h('button', { class: 'btn btn-primary', onclick: () => goNextCrate() }, _('Next crate →')) : null);
     vlist.setItems(items, empty);
   }
 
@@ -510,7 +510,7 @@ export function createInboxView({ navigate } = {}) {
     if (!ids.length) return;
     const crate = store.eff.pathOf(crateId);
     store.commit(
-      _n(ids.length, 'Took {n} sorted song out of {crate}', 'Took {n} sorted songs out of {crate}', { crate }),
+      _n(ids.length, 'Removed {n} sorted song from {crate}', 'Removed {n} sorted songs from {crate}', { crate }),
       ids.map((a) => store.opRemove(crateId, a)),
     );
   }
@@ -586,10 +586,10 @@ export function createInboxView({ navigate } = {}) {
         { class: 'path-row' },
         h('div', { class: 'path', title: t.path }, fmt.shortPath(t.path)),
         t.exists && spectrumAvailable()
-          ? h('button', { class: 'btn btn-ghost btn-xs', title: _('Check where the sound stops (spots transcodes such as fake 320k)'), onclick: () => openSpectrum(t) }, _('Spectrum'))
+          ? h('button', { class: 'btn btn-ghost btn-xs', title: _('Show where the sound stops (reveals transcodes such as fake 320k)'), onclick: () => openSpectrum(t) }, _('Spectrum'))
           : null,
       ),
-      !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is not on disk. You can relocate it in Cleanup.')) : null,
+      !t.exists ? h('div', { class: 'notice notice-danger' }, _('This file is missing. Relocate it in Cleanup.')) : null,
       detailNotes(t),
     );
 
@@ -647,7 +647,7 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, _('Pin the crates you use most here, then add songs with the number keys.')),
+        : h('div', { class: 'muted small' }, _('Pin frequently used crates here to add songs with the number keys.')),
     );
 
     suggestions = suggestCrates(eff, store.profiles, t, { exclude: new Set(inboxCrateIds()) });
@@ -679,7 +679,7 @@ export function createInboxView({ navigate } = {}) {
               ),
             ),
           )
-        : h('div', { class: 'muted small' }, _('No confident suggestions (this song lacks genre, BPM and similar info)')),
+        : h('div', { class: 'muted small' }, _('No suggestions (the song has no genre, BPM or similar information)')),
     );
   }
 
@@ -742,7 +742,7 @@ export function createInboxView({ navigate } = {}) {
     const stale = staleIn(n.id);
     contextMenu(e, [
       n.total ? { label: _('Sort this crate'), action: () => setSource({ kind: 'crate', id: n.id }) } : null,
-      stale.length ? { label: _n(stale.length, 'Take {n} sorted song out of this crate', 'Take {n} sorted songs out of this crate'), action: () => cleanOut(n.id) } : null,
+      stale.length ? { label: _n(stale.length, 'Remove {n} sorted song from this crate', 'Remove {n} sorted songs from this crate'), action: () => cleanOut(n.id) } : null,
       n.children.length ? { label: collapsed.has(n.id) ? _('Expand') : _('Collapse'), action: () => toggleCollapsed(n.id) } : null,
       'sep',
       navigate
@@ -793,7 +793,7 @@ export function createInboxView({ navigate } = {}) {
     if (source.kind !== 'crate' || !leftBefore || leftIn(source)) return;
     const next = nextCrate();
     const crate = store.eff.pathOf(source.id);
-    toast(_('All of {crate} is sorted 🎉', { crate }), next ? { action: () => goNextCrate(), actionLabel: _('Next: {crate}', { crate: store.eff.crates.get(next.id).name }), timeout: 10000 } : {});
+    toast(_('All of {crate} is sorted', { crate }), next ? { action: () => goNextCrate(), actionLabel: _('Next: {crate}', { crate: store.eff.crates.get(next.id).name }), timeout: 10000 } : {});
   }
 
   function advance() {

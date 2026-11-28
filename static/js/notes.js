@@ -125,7 +125,7 @@ export function pickSong({ title = _('Link a song'), query = '' } = {}) {
 export function noteDialog({ track = null, path = null } = {}) {
   const song = store.songRef(track, path);
   const earlier = track ? store.notesFor(track) : store.notesForPath(path);
-  const input = h('textarea', { class: 'input note-input', rows: 4, placeholder: _('What do you think of this song? #tags work, for example #opener #transition') });
+  const input = h('textarea', { class: 'input note-input', rows: 4, placeholder: _('Note about this song. #tags are supported, e.g. #opener #transition') });
   const save = (close) => {
     const text = input.value.trim();
     if (!text) return close(null);
@@ -146,7 +146,7 @@ export function noteDialog({ track = null, path = null } = {}) {
           )
         : null,
       input,
-      h('p', { class: 'muted small note-dialog-hint' }, _('⌘↵ saves.'), ' ', h('a', { href: '#notes', onclick: () => close(null) }, _('All notes are in the Notes tab →'))),
+      h('p', { class: 'muted small note-dialog-hint' }, _('⌘↵ saves.'), ' ', h('a', { href: '#notes', onclick: () => close(null) }, _('All notes are in Notes →'))),
     ],
     actions: (close) => [h('button', { class: 'btn', onclick: () => close(null) }, _('Cancel')), h('button', { class: 'btn btn-primary', onclick: () => save(close) }, _('Save note'))],
     onKey: (e, close) => {

@@ -183,7 +183,7 @@ class AppState:
             raise ApplyError(tr("Already applying"))
         try:
             if serato_running():
-                raise ApplyError(tr("Serato DJ is still open. Quit it before applying"))
+                raise ApplyError(tr("Serato DJ is open. Quit it before applying"))
             busy = files_in_use(SERATO_LIBRARY)
             if busy:
                 raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
@@ -217,7 +217,7 @@ class AppState:
     def restore_serato(self, backup_dir: str) -> dict:
         target = Path(backup_dir).resolve()
         if not target.is_relative_to(SERATO_BACKUPS.resolve()):
-            raise ApplyError(tr("Can only restore from a Cratify backup"))
+            raise ApplyError(tr("Only Cratify backups can be restored"))
         busy = files_in_use(SERATO_LIBRARY)
         if busy:
             raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
@@ -240,9 +240,9 @@ class AppState:
             if p not in scanned:
                 refused.append({"path": p, "ok": False, "error": tr("Not a scanned audio file")})
             elif path_key(p) in serato:
-                refused.append({"path": p, "ok": False, "error": tr("This file is in Serato; it is handled when you apply to Serato")})
+                refused.append({"path": p, "ok": False, "error": tr("This file is in Serato; it is handled when the plan is applied")})
             elif not os.path.isfile(p):
-                refused.append({"path": p, "ok": False, "error": tr("The file is already gone")})
+                refused.append({"path": p, "ok": False, "error": tr("The file no longer exists")})
             else:
                 sizes[p] = os.path.getsize(p)
                 todo.append(p)
@@ -367,7 +367,7 @@ class AppState:
             is_dir = path in self.folder_dirs
             is_file = path in self.folder_files or path in self.track_paths.values()
         if not (is_dir or is_file) or not os.path.exists(path):
-            raise ValueError(tr("Can only open scanned folders or files"))
+            raise ValueError(tr("Only scanned folders and files can be opened"))
         cmd = ["open", "-a", "Finder", path] if is_dir else ["open", "-R", path]
         subprocess.run(cmd, check=False, timeout=10)
 

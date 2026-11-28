@@ -126,9 +126,9 @@ fn port_owner() -> Option<String> {
 /// Why the app's port is taken, in words the user can act on.
 fn port_in_use_message() -> String {
     match port_owner() {
-        Some(s) if s.starts_with("Backstage/") => tr("Backstage (this app's old name) is still open.\nQuit Backstage, then open Cratify again.", &[]),
+        Some(s) if s.starts_with("Backstage/") => tr("Backstage (this app's former name) is running.\nQuit Backstage, then open Cratify again.", &[]),
         Some(s) if s.starts_with("Cratify/") => tr("Another copy of Cratify is already running.\nQuit it, then open Cratify again.", &[]),
-        _ => tr("Another program is using 127.0.0.1:{port}, which Cratify needs for its local server.\nQuit that program (or restart the Mac), then open Cratify again.", &[("port", &PORT)]),
+        _ => tr("Another program is using 127.0.0.1:{port}, which Cratify's local server requires.\nQuit that program or restart the Mac, then open Cratify again.", &[("port", &PORT)]),
     }
 }
 
@@ -157,7 +157,7 @@ fn find_python() -> Result<PathBuf, String> {
     let path = PathBuf::from(String::from_utf8_lossy(&out.stdout).trim());
     if !out.status.success() || !path.is_file() {
         return Err(tr(
-            "uv found no Python matching {request}.\nRun this in Terminal: uv python install 3.14\n\n{details}",
+            "uv found no Python matching {request}.\nRun in Terminal: uv python install 3.14\n\n{details}",
             &[("request", &PYTHON_REQUEST), ("details", &String::from_utf8_lossy(&out.stderr).trim())],
         ));
     }
@@ -459,7 +459,7 @@ fn main() {
                             if started.elapsed() > Duration::from_secs(20) {
                                 app_log("timed out waiting for the server / loading page");
                                 let log = data_dir.join("server.log");
-                                show_error(&window, &tr("The local server did not start within 20 seconds.\nDetails are in {path}", &[("path", &log.display())]));
+                                show_error(&window, &tr("The local server did not start within 20 seconds.\nSee {path} for details.", &[("path", &log.display())]));
                                 return;
                             }
                             thread::sleep(Duration::from_millis(100));

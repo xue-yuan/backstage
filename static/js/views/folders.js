@@ -124,14 +124,14 @@ export function createFoldersView({ navigate }) {
           h(
             'span',
             { class: 'muted small' },
-            store.folderScan ? _('Scanned at {time} ({s} s) · Scanning only reads; files move only when you press "Move to Trash"', { time: fmt.time(store.folderScan.scannedAt * 1000), s: store.folderScan.seconds }) : '',
+            store.folderScan ? _('Scanned at {time} ({s} s) · Scanning does not change files', { time: fmt.time(store.folderScan.scannedAt * 1000), s: store.folderScan.seconds }) : '',
           ),
         ),
         h(
           'div',
           { class: 'toolbar' },
-          h('button', { class: 'btn btn-sm', onclick: () => editMusicFolders(), title: _('Choose which folders are scanned') }, _('Music folders · {n}', { n: store.folderScan?.roots.length ?? 0 })),
-          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates make their songs "Unsorted"') }, _('Unsorted crates · {n}', { n: unsortedCount })),
+          h('button', { class: 'btn btn-sm', onclick: () => editMusicFolders(), title: _('Choose the folders to scan') }, _('Music folders · {n}', { n: store.folderScan?.roots.length ?? 0 })),
+          h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted') }, _('Unsorted crates · {n}', { n: unsortedCount })),
           h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? _('Scanning…') : _('↻ Rescan')),
         ),
       ),
@@ -146,12 +146,12 @@ export function createFoldersView({ navigate }) {
             ),
             h('span', { class: 'legend-sep' }),
             store.audioProgress?.running
-              ? h('span', { class: 'muted small' }, _('Reading each file\'s format… {done} / {total}', { done: store.audioProgress.done.toLocaleString(), total: store.audioProgress.total.toLocaleString() }))
+              ? h('span', { class: 'muted small' }, _('Reading file formats… {done} / {total}', { done: store.audioProgress.done.toLocaleString(), total: store.audioProgress.total.toLocaleString() }))
               : store.audioProgress?.error
                 ? h('span', { class: 'muted small' }, _('Could not read file formats: {error}', { error: store.audioProgress.error }))
                 : h('span', { class: 'legend-item', title: _('Low quality: {reasons}', { reasons: LOW_QUALITY_TEXT }) }, h('span', { class: 'qbadge is-low' }, _('Low quality')), h('strong', { class: 'num' }, r.sum.low.toLocaleString())),
-            r.sum.suspect ? h('span', { class: 'legend-item', title: _('Suspected transcodes: the sound stops where a lower bit rate cuts it (automatic guess)') }, h('span', { class: 'qbadge-suspect' }, _('Suspect')), h('strong', { class: 'num' }, r.sum.suspect.toLocaleString())) : null,
-            store.spectrumProgress?.running ? h('span', { class: 'muted small' }, _('Looking for transcodes… {done} / {total}', { done: store.spectrumProgress.done.toLocaleString(), total: store.spectrumProgress.total.toLocaleString() })) : null,
+            r.sum.suspect ? h('span', { class: 'legend-item', title: _('Suspected transcode: the sound stops where a lower bit rate cuts it (automatic estimate)') }, h('span', { class: 'qbadge-suspect' }, _('Suspect')), h('strong', { class: 'num' }, r.sum.suspect.toLocaleString())) : null,
+            store.spectrumProgress?.running ? h('span', { class: 'muted small' }, _('Checking for transcodes… {done} / {total}', { done: store.spectrumProgress.done.toLocaleString(), total: store.spectrumProgress.total.toLocaleString() })) : null,
             r.outsideCount ? h('span', { class: 'muted small', title: _('For example files on ~/Desktop or in the _Serato_ folder') }, _n(r.outsideCount, '{n} more Serato song is outside the scanned folders', '{n} more Serato songs are outside the scanned folders')) : null,
             r.outsideMissing ? h('span', { class: 'muted small' }, _n(r.outsideMissing, '· {n} missing song is outside them', '· {n} missing songs are outside them')) : null,
           )
@@ -180,9 +180,9 @@ export function createFoldersView({ navigate }) {
             h('button', { class: 'btn btn-sm btn-danger', onclick: () => openTrash(files) }, _('Review and move to Trash…')),
           ]
         : null,
-      viaPlan ? h('span', { class: 'muted small', title: _('These songs are in Serato. They must be removed from Serato before their files can go, so they wait in Plan') }, _n(viaPlan, '{n} more song in Serato is marked reject and is handled when you apply to Serato', '{n} more songs in Serato are marked reject and are handled when you apply to Serato')) : null,
+      viaPlan ? h('span', { class: 'muted small', title: _('These songs are in Serato; they are removed from Serato and moved to the Trash when the plan is applied') }, _n(viaPlan, '{n} more song in Serato is marked reject and is handled when the plan is applied', '{n} more songs in Serato are marked reject and are handled when the plan is applied')) : null,
       store.lastTrashed.length
-        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, _n(store.lastTrashed.length, '↩ Restore the {n} file just trashed', '↩ Restore the {n} files just trashed'))
+        ? h('button', { class: 'btn btn-sm btn-ghost push-right', onclick: () => restore(store.lastTrashed) }, _n(store.lastTrashed.length, '↩ Restore the {n} file just moved to the Trash', '↩ Restore the {n} files just moved to the Trash'))
         : null,
     );
   }
@@ -206,7 +206,7 @@ export function createFoldersView({ navigate }) {
         },
       },
       h('option', { value: 'name' }, _('By name')),
-      h('option', { value: 'todo' }, _('Most to do first')),
+      h('option', { value: 'todo' }, _('Most remaining first')),
     );
     sortSelect.value = sortBy;
     clear(
@@ -355,9 +355,9 @@ export function createFoldersView({ navigate }) {
       );
 
     const notes = [];
-    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, _('This folder no longer exists (it may have been moved or renamed), but Serato still has songs pointing here.')));
+    if (node.ghost) notes.push(h('div', { class: 'fnote fnote-danger' }, _('This folder no longer exists (it may have been moved or renamed), but Serato still has songs that point here.')));
     if (t.files && !todo && !t.missing)
-      notes.push(h('div', { class: 'fnote fnote-ok' }, _('✓ Finished: every song here is in a sorting crate'), t.copy ? _n(t.copy, ' ({n} more copy; Serato uses the one elsewhere)', ' ({n} more copies; Serato uses the ones elsewhere)') : '', _('.')));
+      notes.push(h('div', { class: 'fnote fnote-ok' }, _('✓ Finished: every song here is sorted'), t.copy ? _n(t.copy, ' ({n} more copy; Serato uses the one elsewhere)', ' ({n} more copies; Serato uses the ones elsewhere)') : '', _('.')));
     if (t.unsorted)
       notes.push(
         h(
@@ -380,7 +380,7 @@ export function createFoldersView({ navigate }) {
             h('strong', {}, _('Screen before importing: {done} / {total} screened', { done: screened.toLocaleString(), total: pool.toLocaleString() })),
             _(' (keep {kept}, reject {rejected})', { kept: t.kept.toLocaleString(), rejected: t.rejected.toLocaleString() }),
             h('br'),
-            h('span', { class: 'muted' }, _('Click a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. When done, move the rejects to the Trash, then add the rest to Serato (button on the right, or drag this folder into a crate under Inbox in Serato).')),
+            h('span', { class: 'muted' }, _('Select a song to start: ↑↓ change song, Space play, Q W E R jump to 0/25/50/75%, X reject, V keep. Then move the rejected files to the Trash and add the rest to Serato (button on the right, or drag this folder into a crate under Inbox in Serato).')),
           ),
           addButton(node),
         ),
@@ -388,16 +388,16 @@ export function createFoldersView({ navigate }) {
     }
     if (crates.length)
       notes.push(
-        h('div', { class: 'fnote' }, _('{crates} in Serato came from dragging this whole folder in, so it does not count as sorting. Once its songs are all sorted, you can delete that crate.', { crates: crates.map((name) => _('"{name}"', { name })).join(_(', ')) })),
+        h('div', { class: 'fnote' }, _('{crates} in Serato was created by dragging this folder in, so it does not count as sorted. Once its songs are sorted, the crate can be deleted.', { crates: crates.map((name) => _('"{name}"', { name })).join(_(', ')) })),
       );
     if (t.unreadable)
-      notes.push(h('div', { class: 'fnote fnote-danger' }, _n(t.unreadable, 'macOS cannot open {n} file. It may be damaged, or its extension may not match its real format. "Low quality only" lists it too; preview it to check.', 'macOS cannot open {n} files. They may be damaged, or their extensions may not match their real format. "Low quality only" lists them too; preview them to check.')));
+      notes.push(h('div', { class: 'fnote fnote-danger' }, _n(t.unreadable, 'macOS cannot open {n} file. It may be damaged, or its extension may not match its format. "Low quality only" lists it; preview it to check.', 'macOS cannot open {n} files. They may be damaged, or their extensions may not match their format. "Low quality only" lists them; preview them to check.')));
     if (t.low || t.unreadable)
       notes.push(
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', { title: LOW_QUALITY_TEXT }, t.low ? _n(t.low, '{n} low-quality song ({rule}). AAC 256 and MP3 320 are not low quality.', '{n} low-quality songs ({rule}). AAC 256 and MP3 320 are not low quality.', { rule: LOW_QUALITY_TEXT }) : _('Quality is fine apart from the unreadable files above.')),
+          h('span', { title: LOW_QUALITY_TEXT }, t.low ? _n(t.low, '{n} low-quality song ({rule}). AAC 256 and MP3 320 are not low quality.', '{n} low-quality songs ({rule}). AAC 256 and MP3 320 are not low quality.', { rule: LOW_QUALITY_TEXT }) : _('No low-quality files apart from the unreadable files above.')),
           h(
             'button',
             {
@@ -416,7 +416,7 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fnote fnote-warn' },
-          h('span', {}, _n(t.suspect, '{n} file looks like a transcode: its sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic guess; check the spectrum before deleting.', '{n} files look like transcodes: their sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic guess; check the spectrum before deleting.')),
+          h('span', {}, _n(t.suspect, '{n} file looks like a transcode: the sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic estimate; check the spectrum before deleting.', '{n} files look like transcodes: the sound stops where a lower bit rate cuts it (for example an MP3 320 made from a 128k file). This is an automatic estimate; check the spectrum before deleting.')),
           h(
             'button',
             {
@@ -435,7 +435,7 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'fnote fnote-danger' },
-          h('span', {}, _n(t.missing, '{n} song in Serato points here, but its file is gone.', '{n} songs in Serato point here, but their files are gone.')),
+          h('span', {}, _n(t.missing, '{n} song in Serato points here, but its file is missing.', '{n} songs in Serato point here, but their files are missing.')),
           h('button', { class: 'btn btn-sm', onclick: () => navigate('cleanup') }, _('Fix in Cleanup →')),
         ),
       );
@@ -577,7 +577,7 @@ export function createFoldersView({ navigate }) {
       store.setScreenMark([f.path], null);
       return;
     }
-    if (f.status === 'missing') return toast(_('This song\'s file is gone. Fix it in Cleanup'));
+    if (f.status === 'missing') return toast(_('This song\'s file is missing. Fix it in Cleanup'));
     if (f.assetId != null) {
       // In Serato: remove it there and trash the file when the plan is applied.
       store.commit(_('Reject: {track}', { track: store.trackLabel(f.assetId) }), [store.opReject(f.assetId)], { silent: true });
@@ -589,7 +589,7 @@ export function createFoldersView({ navigate }) {
 
   function markKeep(f) {
     if (!f) return;
-    if (f.assetId != null || f.status === 'missing') return toast(_('This song is already in Serato. Sort it in Sort'));
+    if (f.assetId != null || f.status === 'missing') return toast(_('This song is already in Serato; sort it in Sort'));
     const next = fileItems[fileIndex(f.path) + 1]?.path;
     const wasPlaying = isPlaying(f);
     if (f.kept) {
@@ -617,7 +617,7 @@ export function createFoldersView({ navigate }) {
       );
     }
     if (f.status === 'rejected')
-      return h('span', { class: 'muted' }, f.viaPlan ? _('Reject · removed and trashed when you apply to Serato') : _('Reject · not moved to the Trash yet'));
+      return h('span', { class: 'muted' }, f.viaPlan ? _('Reject · removed and moved to the Trash when the plan is applied') : _('Reject · not moved to the Trash yet'));
     if (f.status === 'copy') {
       const twin = store.base.tracks.get(f.twins[0]);
       const twinPath = twin ? effectivePath(eff, twin) : '';
@@ -764,7 +764,7 @@ export function createFoldersView({ navigate }) {
         h(
           'p',
           {},
-          _('{size} in total. The files go to the Mac Trash and are not deleted directly. Cratify remembers where each file was, so you can restore them with one click until you empty the Trash. None of these files are in Serato, so Serato is not affected.', { size: fmt.size(bytes) }),
+          _('{size} in total. The files go to the Trash and can be restored from Cratify until the Trash is emptied. None of them are in Serato.', { size: fmt.size(bytes) }),
         ),
         h(
           'div',
@@ -797,7 +797,7 @@ export function createFoldersView({ navigate }) {
     try {
       const results = await store.restoreFiles(paths);
       const failed = results.filter((r) => !r.ok);
-      toast(_n(results.length - failed.length, 'Restored {n} file to its original place', 'Restored {n} files to their original places'));
+      toast(_n(results.length - failed.length, 'Restored {n} file to its original location', 'Restored {n} files to their original locations'));
       if (failed.length) showFailures(_('Some files were not restored'), failed);
     } catch (e) {
       toast(_('Restore failed: {error}', { error: e.message }), { tone: 'danger', timeout: 8000 });
@@ -809,7 +809,7 @@ export function createFoldersView({ navigate }) {
       title,
       wide: true,
       body: h('div', { class: 'list trash-list' }, failed.map((r) => h('div', { class: 'trash-file', title: r.path }, fmt.shortPath(r.path), h('div', { class: 'muted small' }, r.error)))),
-      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('Got it'))],
+      actions: (close) => [h('button', { class: 'btn btn-primary', onclick: () => close() }, _('OK'))],
     });
   }
 

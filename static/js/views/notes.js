@@ -11,7 +11,7 @@ import { _, _n } from '../i18n.js';
 
 const SCOPES = [
   ['all', () => _('All')],
-  ['song', () => _('About a song')],
+  ['song', () => _('Linked to a song')],
   ['free', () => _('No song linked')],
 ];
 
@@ -26,7 +26,7 @@ export function createNotesView() {
   const composer = h('textarea', {
     class: 'input note-input',
     rows: 3,
-    placeholder: _('A thought about a song, or a song you want to remember… #tags work, for example #opener #to-buy'),
+    placeholder: _('A note about a song, or a song to remember. #tags are supported, e.g. #opener #to-buy'),
     oninput: (e) => prefs.set('notes.draft', e.target.value),
     onkeydown: (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -188,8 +188,8 @@ export function createNotesView() {
       'div',
       { class: 'empty note-empty' },
       h('p', {}, _('No notes yet.')),
-      h('p', { class: 'small' }, _('Write anything: what a song is good for, where to mix in or out, or a song you heard and want to find. Add #tags to group them.')),
-      h('p', { class: 'small' }, _('You can also right-click a song in Sort, Crates or Folders → "Add a note…" (in Sort press M).')),
+      h('p', { class: 'small' }, _('Notes can cover what a song works for, where to mix in or out, or a song to find. Add #tags to group them.')),
+      h('p', { class: 'small' }, _('Notes can also be added from the right-click menu of a song in Sort, Crates or Folders ("Add a note…"), or with M in Sort.')),
     );
   }
 
@@ -323,7 +323,7 @@ export function createNotesView() {
 
   renderComposeBar();
   renderList();
-  if (store.notesError) toast(_('Notes could not be read ({error}), so they are not saved. Reload the page to try again.', { error: store.notesError }), { tone: 'danger', timeout: 8000 });
+  if (store.notesError) toast(_('Notes could not be read ({error}); saving is disabled to avoid overwriting them. Reload the page to try again.', { error: store.notesError }), { tone: 'danger', timeout: 8000 });
 
   return {
     el,

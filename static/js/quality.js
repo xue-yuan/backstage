@@ -28,11 +28,11 @@ export function describeQuality(info, path, track) {
     const fmt = (track?.format || extOf(path || '')).toUpperCase();
     const kbps = track?.bitRate ? Math.round(track.bitRate / 1000) : null;
     const lossless = ['WAV', 'AIF', 'AIFF', 'FLAC'].includes(fmt);
-    return { label: lossless || !kbps ? fmt : `${fmt} ${kbps}`, codec: fmt, kbps, lossless, low: false, known: false, detail: _('Format as recorded by Serato (the file itself has not been read yet)') };
+    return { label: lossless || !kbps ? fmt : `${fmt} ${kbps}`, codec: fmt, kbps, lossless, low: false, known: false, detail: _('Format recorded by Serato (the file has not been read yet)') };
   }
   const [codec, bps, sampleRate, bitDepth] = info;
   if (!codec) {
-    return { label: _('Unreadable'), codec: '', kbps: null, lossless: false, low: false, unreadable: true, known: true, detail: _('macOS cannot open this file. It may be damaged, or its extension may not match its real format. Preview it to check.') };
+    return { label: _('Unreadable'), codec: '', kbps: null, lossless: false, low: false, unreadable: true, known: true, detail: _('macOS cannot open this file. It may be damaged, or its extension may not match its format. Preview it to check.') };
   }
   const lossless = LOSSLESS_CODECS.has(codec);
   const ext = extOf(path || '');
@@ -47,8 +47,8 @@ export function describeQuality(info, path, track) {
   const detail = [
     lossless ? `${_('{name} lossless', { name })}${bitDepth ? ` ${bitDepth}-bit` : ''}` : `${name}${bps ? ` ${_('actual {kbps} kbps', { kbps: Math.round(bps / 1000) })}` : ''}`,
     sampleRate ? `${sampleRate / 1000} kHz` : null,
-    ext === 'm4a' && codec === 'alac' ? _('(lossless ALAC inside the m4a)') : null,
-    ext === 'm4a' && codec.startsWith('aac') ? _('(AAC inside the m4a)') : null,
+    ext === 'm4a' && codec === 'alac' ? _('(lossless ALAC in an m4a file)') : null,
+    ext === 'm4a' && codec.startsWith('aac') ? _('(AAC in an m4a file)') : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -112,7 +112,7 @@ export function suspectText(q) {
   const s = q.suspect;
   const khz = s.cutoff.toFixed(1);
   const main = s.lossless
-    ? _('Suspect: the sound stops at {khz} kHz. Real lossless audio goes up to about 22 kHz, so this {label} was probably made from an MP3 or AAC file.', { khz, label: q.label })
+    ? _('Suspect: the sound stops at {khz} kHz. Genuine lossless audio reaches about 22 kHz, so this {label} was probably converted from an MP3 or AAC file.', { khz, label: q.label })
     : _('Suspect: the sound stops at {khz} kHz, where a {source}k encoder cuts it. This {label} was probably converted from a {source}k file.', { khz, source: s.source, label: q.label });
-  return `${main} ${_('This is an automatic guess: check the spectrum (right-click → Spectrum) before you delete or replace it.')}`;
+  return `${main} ${_('This is an automatic estimate; check the spectrum (right-click → Spectrum) before deleting or replacing the file.')}`;
 }

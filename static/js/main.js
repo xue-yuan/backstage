@@ -66,12 +66,12 @@ function renderHeader() {
     // On narrow windows only the dot stays (app.css); the full text is in the tooltip.
     h(
       'span',
-      { class: 'readonly-pill', title: _('Normally only a copy of the Serato database is read. Serato is written only when you press "Apply to Serato" in Plan (with Serato closed), after an automatic backup') },
+      { class: 'readonly-pill', title: _('Cratify reads a copy of the Serato database. It writes to Serato only through "Apply to Serato" in Plan, with Serato closed and after a backup') },
       '●',
-      h('span', { class: 'readonly-text' }, ` ${_('● Serato is written only when you press Apply').replace(/^●\s*/, '')}`),
+      h('span', { class: 'readonly-text' }, ` ${_('● Writes to Serato only on Apply').replace(/^●\s*/, '')}`),
     ),
     snap ? h('span', { class: 'muted small snap-time', title: _('Source: {path}', { path: snap.source }) }, _('Snapshot {time}', { time: fmt.time(new Date(snap.takenAt).getTime()) })) : null,
-    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: `${_('Copy the Serato database again (fine while Serato is open)')} ⌘R` }, _('↻ Reload')),
+    h('button', { class: 'btn btn-ghost btn-sm', onclick: refreshSnapshot, title: `${_('Copy the Serato database again (Serato can stay open)')} ⌘R` }, _('↻ Reload')),
     h('button', { class: 'btn btn-ghost btn-sm', onclick: showHelp, title: _('Keyboard shortcuts (?)') }, '?'),
     h('button', { class: 'btn btn-ghost btn-sm', onclick: () => setLang(switchTo.lang), title: switchTo.title }, switchTo.label),
   );
@@ -81,7 +81,7 @@ async function refreshSnapshot() {
   try {
     toast(_('Reading a new snapshot of the Serato database…'));
     await store.refreshSnapshot();
-    toast(store.eff.issues.length ? _n(store.eff.issues.length, 'Snapshot updated. {n} plan action no longer applies, see Plan', 'Snapshot updated. {n} plan actions no longer apply, see Plan') : _('Snapshot updated'), {
+    toast(store.eff.issues.length ? _n(store.eff.issues.length, 'Snapshot updated. {n} plan action no longer applies; see Plan', 'Snapshot updated. {n} plan actions no longer apply; see Plan') : _('Snapshot updated'), {
       tone: store.eff.issues.length ? 'danger' : 'info',
     });
   } catch (e) {
@@ -95,7 +95,7 @@ function showHelp() {
     wide: true,
     body: (close) => [
       shortcutTable(),
-      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('Open the Guide for how everything works →'))),
+      h('p', { class: 'muted small' }, h('a', { href: '#guide', onclick: () => close(null) }, _('See the Guide for details →'))),
     ],
   });
 }

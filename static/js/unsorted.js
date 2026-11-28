@@ -114,18 +114,18 @@ export async function consolidate() {
     return false;
   }
   const ok = await confirmDialog({
-    title: _('Tidy up everything unsorted into Inbox?'),
+    title: _('Consolidate everything unsorted into Inbox?'),
     message: [
       moved ? _n(moved, '{n} unsorted crate will move under "{inbox}"', '{n} unsorted crates will move under "{inbox}"', { inbox: INBOX }) : null,
       removed.length ? _('Delete {names} once empty', { names: removed.map((name) => _('"{name}"', { name })).join(_(', ')) }) : null,
       loose ? _n(loose, '{n} song in no crate goes into "{crate}"', '{n} songs in no crate go into "{crate}"', { crate: `${INBOX} / ${LOOSE}` }) : null,
     ]
       .filter(Boolean)
-      .join(_('; ')) + _('. This only adds to the plan; until you apply it to Serato you can adjust or undo it in Plan or Crates.'),
+      .join(_('; ')) + _('. The changes go into the plan and can be undone before applying.'),
     okText: _('Add to plan'),
   });
   if (!ok) return false;
-  return !!store.commit(_('Tidy up unsorted crates and songs into {inbox}', { inbox: INBOX }), ops);
+  return !!store.commit(_('Consolidate unsorted crates and songs into {inbox}', { inbox: INBOX }), ops);
 }
 
 async function createUnder() {
@@ -150,7 +150,7 @@ async function createUnder() {
   store.commit(_('New unsorted crate "{crate}"', { crate: `${INBOX} / ${name}` }), ops);
 }
 
-const REASON = { inbox: _('Inbox'), folder: _('Whole folder dragged in'), manual: _('Set by you') };
+const REASON = { inbox: _('Inbox'), folder: _('Folder dragged into Serato'), manual: _('Marked manually') };
 
 /** The editor: list / add / remove unsorted crates, create new ones under Inbox, tidy into Inbox. */
 export function openUnsortedEditor() {
@@ -197,7 +197,7 @@ export function openUnsortedEditor() {
     };
     clear(
       bodyEl,
-      h('p', { class: 'muted' }, _('Songs in these crates (including all child crates) count as "Unsorted". A song that is also in any other crate counts as "Sorted". New unsorted crates placed under "{inbox}" are included automatically.', { inbox: INBOX })),
+      h('p', { class: 'muted' }, _('Songs in these crates and their child crates count as "Unsorted" unless they are also in another crate. New crates under "{inbox}" are included automatically.', { inbox: INBOX })),
       moved || loose
         ? h(
             'div',
@@ -211,7 +211,7 @@ export function openUnsortedEditor() {
                   if (await consolidate()) render();
                 },
               },
-              _('Tidy up into {inbox}…', { inbox: INBOX }),
+              _('Consolidate into {inbox}…', { inbox: INBOX }),
             ),
           )
         : null,
@@ -236,7 +236,7 @@ export function openUnsortedEditor() {
           {
             class: 'btn btn-sm',
             onclick: async () => {
-              const id = await pickCrateDialog({ title: _('Which crate counts as unsorted?'), allowCreate: false, exclude: store.rules.skip });
+              const id = await pickCrateDialog({ title: _('Choose a crate to count as unsorted'), allowCreate: false, exclude: store.rules.skip });
               if (id != null) store.setClassifyOverride(id, rules.auto.has(id) ? null : 'skip');
               render();
             },
@@ -257,7 +257,7 @@ export function openUnsortedEditor() {
             )
           : null,
       ),
-      inbox == null ? h('p', { class: 'muted small' }, _('There is no "{inbox}" crate yet. It is created automatically when you add one or tidy up.', { inbox: INBOX })) : null,
+      inbox == null ? h('p', { class: 'muted small' }, _('"{inbox}" does not exist yet; it is created when needed.', { inbox: INBOX })) : null,
     );
   };
   render();

@@ -158,13 +158,13 @@ function groupTitle(g, items, eff) {
       const title = g.from != null
         ? _n(n, '{from} → {n} song into {to}', '{from} → {n} songs into {to}', { from: path(g.from), to: path(g.to) })
         : _n(n, '{n} song added to {to}', '{n} songs added to {to}', { to: path(g.to) });
-      const meta = !moved ? '' : moved === n ? _('taken out of the source crate') : _n(moved, '{n} taken out of the source crate', '{n} taken out of the source crate');
+      const meta = !moved ? '' : moved === n ? _('removed from the source crate') : _n(moved, '{n} removed from the source crate', '{n} removed from the source crate');
       return { title, meta };
     }
     case 'remove':
       return { title: _n(n, 'Removed {n} song from {crate}', 'Removed {n} songs from {crate}', { crate: path(g.crate) }) };
     case 'reject':
-      return { title: _n(n, 'Rejected {n} song: removed from Serato, file to the Trash', 'Rejected {n} songs: removed from Serato, files to the Trash') };
+      return { title: _n(n, 'Rejected {n} song (removed from Serato, file moved to the Trash)', 'Rejected {n} songs (removed from Serato, files moved to the Trash)') };
     case 'removeTrack':
       return { title: _n(n, 'Removed {n} song from the Serato library (file kept)', 'Removed {n} songs from the Serato library (files kept)') };
     case 'dupes':
@@ -178,7 +178,7 @@ function groupTitle(g, items, eff) {
         title: g.crate != null && eff.crates.has(g.crate)
           ? _n(n, 'Add {n} song to Serato, into {crate}', 'Add {n} songs to Serato, into {crate}', { crate: path(g.crate) })
           : _n(n, 'Add {n} song to Serato (no crate)', 'Add {n} songs to Serato (no crate)'),
-        meta: _('Serato analyses them after the plan is applied'),
+        meta: _('Analysed in Serato after the plan is applied'),
       };
     default: {
       if (n === 1) return { title: items[0].text };

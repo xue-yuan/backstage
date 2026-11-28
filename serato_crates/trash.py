@@ -110,7 +110,7 @@ def restore_from_trash(paths: list[str], log_path: Path) -> list[dict]:
     for p in paths:
         entry = trashed.get(p)
         if not entry:
-            results.append({"path": p, "ok": False, "error": tr("No record of Cratify moving this file to the Trash")})
+            results.append({"path": p, "ok": False, "error": tr("There is no record of Cratify moving this file to the Trash")})
             continue
         if os.path.exists(p):
             results.append({"path": p, "ok": False, "error": tr("A file with the same name is already at the original location")})

@@ -93,7 +93,7 @@ def take_snapshot(data_dir: Path, source: Path = DEFAULT_SOURCE, attempts: int =
         return meta
 
     shutil.rmtree(work, ignore_errors=True)
-    raise SnapshotError(tr("Could not get a consistent snapshot ({problem}). Please try again in a moment", problem=last_problem))
+    raise SnapshotError(tr("Could not get a consistent snapshot ({problem}). Try again in a moment", problem=last_problem))
 
 
 def source_signature(source: Path = DEFAULT_SOURCE) -> list:

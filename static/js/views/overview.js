@@ -147,7 +147,7 @@ export function createOverviewView({ navigate }) {
           'div',
           { class: `ov-card ov-plan ${nOps ? 'is-accent' : 'is-zero'}` },
           h('div', { class: 'ov-num num' }, nOps.toLocaleString()),
-          h('div', { class: 'ov-label' }, _n(nOps, 'staged action not in Serato yet', 'staged actions not in Serato yet')),
+          h('div', { class: 'ov-label' }, _n(nOps, 'action not yet written to Serato', 'actions not yet written to Serato')),
           h('div', { class: 'ov-sub muted small' }, nChanges ? _n(nChanges, 'from {n} change', 'from {n} changes') : _('The plan is empty')),
           h(
             'div',
@@ -183,10 +183,10 @@ export function createOverviewView({ navigate }) {
               num: store.suspects().filter((x) => !x.genuine).length,
               label: _('suspected transcodes (fake 320k, fake lossless)'),
               sub: spec?.running
-                ? _('Looking for transcodes… {done} / {total}', { done: spec.done.toLocaleString(), total: spec.total.toLocaleString() })
+                ? _('Checking for transcodes… {done} / {total}', { done: spec.done.toLocaleString(), total: spec.total.toLocaleString() })
                 : spec?.pending
                   ? _n(spec.pending, '{n} new file not checked yet', '{n} new files not checked yet')
-                  : _('Automatic guess: check the spectrum before deleting'),
+                  : _('Automatic estimate; check the spectrum before deleting'),
               tone: 'warn',
               onClick: () => navigate('quality'),
             }),

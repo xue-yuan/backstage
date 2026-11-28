@@ -8,7 +8,7 @@ function rows() {
       _('Sort'),
       [
         ['↑ ↓ / J K', _('Previous / next song')],
-        [_('Space'), _('Play / pause (new songs start at 30%, set in the player bar)')],
+        [_('Space'), _('Play / pause (new songs start at 30%; change it in the player bar)')],
         ['← →', _('Back / forward 10 s (⇧ 30 s)')],
         ['Q W E R', _('Play from 0% / 25% / 50% / 75%')],
         ['1–9', _('Add to / remove from a pinned crate')],
@@ -23,7 +23,7 @@ function rows() {
     [
       _('Folders'),
       [
-        ['↑ ↓', _('Select a folder (after clicking a song: change song)')],
+        ['↑ ↓', _('Select a folder (once a song is selected: change song)')],
         ['← →', _('Collapse / expand')],
         [_('Space'), _('Play / pause')],
         ['Q W E R', _('Play from 0% / 25% / 50% / 75%')],
@@ -41,7 +41,7 @@ function rows() {
         ['N', _('New child crate')],
         ['⌥↑ ⌥↓', _('Move the crate up / down within its level')],
         ['Delete', _('Delete crate (added to the plan)')],
-        ['⌘A', _('Select all songs (after clicking the song list)')],
+        ['⌘A', _('Select all songs (when the song list has focus)')],
       ],
     ],
     [
@@ -50,7 +50,7 @@ function rows() {
         ['↑ ↓ / J K', _('Previous / next file')],
         [_('Space'), _('Play / pause')],
         ['Enter', _('Show the spectrum')],
-        ['F', _('Sounds fine (moves on to the next file)')],
+        ['F', _('Mark as genuine (moves to the next file)')],
         ['X', _('Reject')],
       ],
     ],

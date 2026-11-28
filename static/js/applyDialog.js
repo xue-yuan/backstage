@@ -66,7 +66,7 @@ function trashNote(trashed) {
       {},
       ok ? _n(ok, '✓ {n} rejected file was moved to the Trash.', '✓ {n} rejected files were moved to the Trash.') : '',
       failed.length
-        ? [h('br'), _n(failed.length, '{n} file was not moved (it is already removed from Serato and still in place):', '{n} files were not moved (they are already removed from Serato and still in place):'), h('ul', {}, failed.slice(0, 5).map((r) => h('li', {}, fmt.shortPath(r.path), _(': '), r.error)))]
+        ? [h('br'), _n(failed.length, '{n} file was not moved (removed from Serato, but still in place):', '{n} files were not moved (removed from Serato, but still in place):'), h('ul', {}, failed.slice(0, 5).map((r) => h('li', {}, fmt.shortPath(r.path), _(': '), r.error)))]
         : null,
     ),
   );
@@ -100,7 +100,7 @@ export async function openApplyDialog() {
     const nOps = supported.reduce((n, ch) => n + ch.ops.length, 0);
     const nTrash = supported.reduce((n, ch) => n + ch.ops.filter((o) => o.type === 'removeTrack' && o.deleteFile).length, 0);
     if (phase === 'running') {
-      clear(bodyEl, h('div', { class: 'apply-progress' }, h('div', { class: 'mark-spin' }, '◐'), h('p', {}, _('Applying: rehearse → back up → write → check…')), h('p', { class: 'muted small' }, _('Do not open Serato DJ'))));
+      clear(bodyEl, h('div', { class: 'apply-progress' }, h('div', { class: 'mark-spin' }, '◐'), h('p', {}, _('Applying: test → back up → write → verify…')), h('p', { class: 'muted small' }, _('Do not open Serato DJ'))));
       return;
     }
     if (phase === 'done') {
@@ -113,11 +113,11 @@ export async function openApplyDialog() {
           ? h(
               'div',
               { class: 'fnote fnote-warn' },
-              h('span', {}, _n(Object.keys(result.imported).length, '{n} song was added to Serato, not analysed yet. In Serato DJ, select it (for example its crate) and choose "Analyze Files": Serato then reads its tags and works out BPM, key, beatgrid and waveform.', '{n} songs were added to Serato, not analysed yet. In Serato DJ, select them (for example their crate) and choose "Analyze Files": Serato then reads their tags and works out BPM, key, beatgrid and waveform.')),
+              h('span', {}, _n(Object.keys(result.imported).length, '{n} song was added to Serato, not analysed yet. In Serato DJ, select it (for example its crate) and choose "Analyze Files": Serato then reads its tags and works out BPM, key, beatgrid and waveform.', '{n} songs were added to Serato and are not analysed yet. In Serato DJ, select them (for example through their crate) and choose "Analyze Files" to read their tags and detect BPM, key, beatgrid and waveform.')),
             )
           : null,
         h('p', { class: 'muted small' }, _('Database backup from before applying: '), h('code', {}, fmt.shortPath(result.backup))),
-        h('p', {}, _('Open Serato DJ and check that the crates look right. If something is wrong, quit Serato, then press "Restore the backup from before the last apply" in Plan.')),
+        h('p', {}, _('Open Serato DJ and check the crates. If something is wrong, quit Serato and use "Restore the backup from before the last apply" in Plan.')),
         h('div', { class: 'modal-actions' }, h('button', { class: 'btn btn-primary', onclick: () => closeFn?.() }, _('Done'))),
       );
       return;
@@ -125,7 +125,7 @@ export async function openApplyDialog() {
     const blocked = !status || status.seratoRunning || status.inUse?.length;
     clear(
       bodyEl,
-      phase === 'failed' ? h('div', { class: 'fnote fnote-danger' }, h('span', {}, h('strong', {}, _('Nothing was applied. Serato was not changed.')), h('br'), result?.error || '')) : null,
+      phase === 'failed' ? h('div', { class: 'fnote fnote-danger' }, h('span', {}, h('strong', {}, _('Nothing was applied; Serato is unchanged.')), h('br'), result?.error || '')) : null,
       nOps
         ? [
             h('p', {}, _n(nOps, 'Changes to write to Serato ({n} action):', 'Changes to write to Serato ({n} actions):')),
@@ -133,9 +133,9 @@ export async function openApplyDialog() {
           ]
         : h('p', {}, _('The plan has nothing that can be applied.')),
       later.length
-        ? h('p', { class: 'muted small' }, _('Not supported yet, stays in the plan: {list}', { list: Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join(_(', ')) }))
+        ? h('p', { class: 'muted small' }, _('Not supported yet; stays in the plan: {list}', { list: Object.entries(count([{ ops: later }])).map(([k, n]) => `${KIND[k] || k} ${n}`).join(_(', ')) }))
         : null,
-      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, '{n} of them (a reject, or a duplicate merged with "Merge and Trash") also has its file moved to the Trash after the write succeeds (restore it from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.', '{n} of them (rejects, or duplicates merged with "Merge and Trash") also have their files moved to the Trash after the write succeeds (restore them from the Trash or the Folders view). Other removed songs are only removed from Serato; their files stay.')) : null,
+      nTrash ? h('p', { class: 'muted small' }, _n(nTrash, '{n} of them (a rejected song, or a duplicate merged with "Merge and Trash") also has its file moved to the Trash after a successful write. Other removed songs keep their files.', '{n} of them (rejected songs, or duplicates merged with "Merge and Trash") also have their files moved to the Trash after a successful write. Other removed songs keep their files.')) : null,
       h(
         'div',
         { class: `fnote ${!status ? '' : blocked ? 'fnote-danger' : 'fnote-ok'}` },
@@ -145,7 +145,7 @@ export async function openApplyDialog() {
           !status
             ? _('Checking whether Serato DJ is running…')
             : status.seratoRunning
-              ? _('Serato DJ is still open. Quit it first. ({list})', { list: (status.seratoProcesses || []).join(_(', ')) })
+              ? _('Serato DJ is open. Quit it first. ({list})', { list: (status.seratoProcesses || []).join(_(', ')) })
               : status.inUse?.length
                 ? _('Another program is using the Serato database: {list}', { list: status.inUse.map(fmt.shortPath).join(_(', ')) })
                 : _('✓ Serato DJ is closed'),
@@ -155,10 +155,10 @@ export async function openApplyDialog() {
       h(
         'ol',
         { class: 'apply-steps muted small' },
-        h('li', {}, _('Rehearse on a copy of the Serato database first, and stop at any problem')),
+        h('li', {}, _('Test the changes on a copy of the Serato database; stop at any problem')),
         h('li', {}, [_('Back up the Serato database to '), h('code', {}, fmt.shortPath(status?.backupsDir || '~/Cratify Backups'))]),
-        h('li', {}, _('Write, then check again: database integrity, master and root match, and every crate holds exactly the expected songs')),
-        h('li', {}, _('The write only counts if everything passes; otherwise nothing is written')),
+        h('li', {}, _('Write, then verify database integrity, that master and root match, and that every crate holds the expected songs')),
+        h('li', {}, _('If any check fails, nothing is written')),
       ),
       h(
         'div',
@@ -223,7 +223,7 @@ export async function openApplyDialog() {
 export async function restoreLastBackup(backup) {
   const ok = await confirmDialog({
     title: _('Restore the backup from before the last apply?'),
-    message: _('This replaces Serato\'s current database with {path}. Changes made in Serato after the apply (crates, analysis, play history) go back to how they were too. Quit Serato DJ first.', { path: fmt.shortPath(backup) }),
+    message: _('This replaces Serato\'s current database with {path}. Changes made in Serato since the apply (crates, analysis, play history) are also undone. Quit Serato DJ first.', { path: fmt.shortPath(backup) }),
     okText: _('Restore'),
     danger: true,
   });
@@ -234,7 +234,7 @@ export async function restoreLastBackup(backup) {
     return false;
   }
   await store.refreshSnapshot();
-  toast(_('Serato database restored. Open Serato DJ to check'));
+  toast(_('Serato database restored. Open Serato DJ to check it'));
   return true;
 }
 

@@ -36,7 +36,7 @@ export function createStructureView({ navigate } = {}) {
     },
   });
   const treeEl = h('div', { class: 'tree', onmousedown: () => (focusArea = 'tree') });
-  const rootDrop = h('div', { class: 'tree-rootdrop' }, _('Drop here → move to the top level'));
+  const rootDrop = h('div', { class: 'tree-rootdrop' }, _('Drop here to move to the top level'));
   wireDrop(rootDrop, () => store.eff.rootId);
   const treePanel = h(
     'aside',
@@ -46,11 +46,11 @@ export function createStructureView({ navigate } = {}) {
       { class: 'toolbar' },
       treeFilterInput,
       h('button', { class: 'btn btn-sm', onclick: () => createCrate(store.eff.rootId) }, _('+ New crate')),
-      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted, and tidy up into Inbox') }, _('Unsorted…')),
+      h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates count as unsorted, and consolidate into Inbox') }, _('Unsorted…')),
     ),
     rootDrop,
     treeEl,
-    h('div', { class: 'tree-hint muted small' }, _('Drag crates to rearrange them. Drag songs from the right onto a crate to add them (hold ⌥ to move)')),
+    h('div', { class: 'tree-hint muted small' }, _('Drag crates to rearrange them. Drag songs onto a crate to add them; hold ⌥ to move them')),
   );
 
   const headEl = h('div', { class: 'panel-head crate-head' });
@@ -344,7 +344,7 @@ export function createStructureView({ navigate } = {}) {
     if (op.reorder && prev?.type === 'moveCrate' && prev.reorder && prev.crate === id && prev.parent === parent) {
       store.undo(last.id);
       if (isAt(id, parent, before)) {
-        toast(_('"{name}" is back in its original place', { name: c.name }));
+        toast(_('"{name}" is back in its original position', { name: c.name }));
         selectCrate(id);
         return;
       }
@@ -379,7 +379,7 @@ export function createStructureView({ navigate } = {}) {
       wide: true,
       body: (close) => [
         h('button', { class: 'btn btn-block', disabled: eff.crates.get(id).parent === eff.rootId, onclick: () => close(eff.rootId) }, _('Move to the top level')),
-        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: _('Or pick the crate to put it under'), onPick: (t) => close(t) }).el,
+        createCratePicker({ inline: true, autofocus: true, exclude: () => exclude, placeholder: _('Or choose a parent crate'), onPick: (t) => close(t) }).el,
       ],
     });
     if (target != null) moveCrateTo(id, target);
@@ -398,8 +398,8 @@ export function createStructureView({ navigate } = {}) {
     const nTracks = new Set(ids.flatMap((c) => eff.members.get(c) || [])).size;
     const ok = await confirmDialog({
       title: _('Delete "{crate}"?', { crate: eff.pathOf(id) }),
-      message: `${ids.length > 1 ? _n(ids.length - 1, 'Includes {n} child crate. ', 'Includes {n} child crates. ') : ''}${_n(nTracks, '{n} song loses this sorting (the song stays in the library). This only goes into the plan and can be undone.', '{n} songs lose this sorting (the songs stay in the library). This only goes into the plan and can be undone.')}`,
-      okText: _('Stage in plan'),
+      message: `${ids.length > 1 ? _n(ids.length - 1, 'Includes {n} child crate. ', 'Includes {n} child crates. ') : ''}${_n(nTracks, '{n} song is removed from it (it stays in the library). The change goes into the plan and can be undone.', '{n} songs are removed from it (they stay in the library). The change goes into the plan and can be undone.')}`,
+      okText: _('Add to plan'),
       danger: true,
     });
     if (!ok) return;
@@ -538,7 +538,7 @@ export function createStructureView({ navigate } = {}) {
       ),
     );
     renderSelBar();
-    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? _('This crate only holds child crates, no songs directly') : _('Empty crate')));
+    vlist.setItems(tracks, h('div', { class: 'empty' }, kids.length ? _('This crate holds only child crates') : _('Empty crate')));
   }
 
   function unsortedToggle(id) {
@@ -576,7 +576,7 @@ export function createStructureView({ navigate } = {}) {
             h('button', { class: 'btn btn-sm btn-danger-ghost', onclick: removeSelected }, _('Remove from this crate')),
             h('button', { class: 'btn btn-ghost btn-sm', onclick: () => { selTracks.clear(); renderSelBar(); vlist.render(); } }, _('Deselect')),
           ]
-        : h('span', { class: 'muted small' }, _('Click songs (⇧ range, ⌘ multiple, ⌘A all) and drag them onto a crate on the left')),
+        : h('span', { class: 'muted small' }, _('Select songs (⇧ range, ⌘ multiple, ⌘A all) and drag them onto a crate')),
     );
   }
 
@@ -601,7 +601,7 @@ export function createStructureView({ navigate } = {}) {
           }
           dragging = { kind: 'tracks', ids: [...selTracks], from: selected };
           e.dataTransfer.effectAllowed = 'copyMove';
-          e.dataTransfer.setData('text/plain', _n(selTracks.size, '{n} track', '{n} tracks'));
+          e.dataTransfer.setData('text/plain', _n(selTracks.size, '{n} song', '{n} songs'));
         },
         ondragend: () => (dragging = null),
       },

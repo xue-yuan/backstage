@@ -290,7 +290,7 @@ class Store {
   }
   setNotes(notes) {
     if (this.notesError) {
-      toast(_('Notes could not be read ({error}), so they are not saved. Reload the page to try again.', { error: this.notesError }), { tone: 'danger', timeout: 8000 });
+      toast(_('Notes could not be read ({error}); saving is disabled to avoid overwriting them. Reload the page to try again.', { error: this.notesError }), { tone: 'danger', timeout: 8000 });
       return;
     }
     this.notes = notes;
@@ -580,7 +580,7 @@ class Store {
     return touched;
   }
   opReject(asset) {
-    return { type: 'removeTrack', asset, reason: _('Reject'), deleteFile: true, text: _('Reject: remove from Serato and move the file to the Trash: {track}', { track: this.trackLabel(asset) }) };
+    return { type: 'removeTrack', asset, reason: _('Reject'), deleteFile: true, text: _('Reject (remove from Serato, move the file to the Trash): {track}', { track: this.trackLabel(asset) }) };
   }
   opRelocate(asset, path) {
     return { type: 'relocate', asset, path, text: _('Relocate file: {track} → {path}', { track: this.trackLabel(asset), path }) };
