@@ -194,7 +194,9 @@ export async function openApplyDialog() {
     phase = 'running';
     render();
     try {
-      result = await api2.apply({ changes: supported, expected, expectedOrder });
+      // Each op carries its description for the server's error messages (the plan itself stores none).
+      const changes = supported.map((ch) => ({ ...ch, ops: ch.ops.map((op) => ({ ...op, text: store.opText(op) })) }));
+      result = await api2.apply({ changes, expected, expectedOrder });
     } catch (e) {
       result = { ok: false, error: e.message };
     }

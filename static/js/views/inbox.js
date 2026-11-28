@@ -1,10 +1,11 @@
 // Sort view: pick a source (uncategorised / recent / an inbox crate / a disk folder), listen, assign crates fast.
 import { createCratePicker, pickCrateDialog } from '../cratePicker.js';
-import { addedInPlan, baseName, effectivePath, isClassified, liveTracks, norm, pathKey, suggestCrates, trackMatches } from '../model.js';
+import { addedInPlan, baseName, effectivePath, norm, suggestCrates, trackMatches } from '../model.js';
 import { player } from '../player.js';
 import { qualityBadge } from '../quality.js';
 import { noteDialog, noteMark, noteMenuItem, noteText, when } from '../notes.js';
 import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
+import { crateOrder, isDoneIn, nextCrate as nextCrateIn, orderCrateTree, sortSongs, sourceSongs, staleSongs, unsortedCrates, unsortedCrateTree } from '../sortSources.js';
 import { store } from '../store.js';
 import { clear, contextMenu, fmt, h, prefs, revealInFinder, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
@@ -18,14 +19,12 @@ export function createInboxView({ navigate } = {}) {
   let autoAdvance = prefs.get('inbox.autoAdvance', true);
   let moveOut = prefs.get('inbox.moveOut', false); // sorting from an already-sorted crate
   let moveOutInbox = prefs.get('inbox.moveOutInbox', true); // sorting from an unsorted crate: on, so the Inbox shrinks
-  let pinned = prefs.get('inbox.pinned', []);
   let collapsed = new Set(prefs.get('inbox.collapsed', []));
   let crateFilter = '';
   const openDone = new Set(); // parents whose finished crates are listed (this visit only)
   // Crate order is fixed while the view is open (biggest backlog first, decided when a crate is first
   // listed), so rows do not jump while you sort and "next crate" walks a stable order.
-  const rank = new Map();
-  let nextRank = 0;
+  const rank = { ids: new Map(), next: 0 }; // list position of each unsorted crate, kept while sorting
   let selectedId = null;
   let items = [];
   let suggestions = [];
@@ -201,100 +200,18 @@ export function createInboxView({ navigate } = {}) {
   // ---------- data ----------
   const selected = () => store.base.tracks.get(selectedId);
 
-  // Songs of a source. A crate keeps listing songs moved out of it in the plan (shown as sorted).
-  function sourceList(src = source) {
-    const { base, eff } = store;
-    let list;
-    if (src.kind === 'uncategorized') {
-      list = [...base.tracks.values()].filter((t) => !(base.baseCratesOf.get(t.id) || []).length);
-    } else if (src.kind === 'recent') {
-      const cutoff = Date.now() / 1000 - src.days * 86400;
-      list = [...base.tracks.values()].filter((t) => t.addedAt >= cutoff);
-    } else if (src.kind === 'folder') {
-      const prefix = `${pathKey(src.path)}/`;
-      list = liveTracks(eff).filter((t) => pathKey(effectivePath(eff, t)).startsWith(prefix));
-    } else {
-      const ids = [...new Set([...(base.members.get(src.id) || []), ...(eff.members.get(src.id) || [])])];
-      list = ids.map((id) => base.tracks.get(id)).filter(Boolean);
-    }
-    return list.filter((t) => !eff.removedTracks.has(t.id));
-  }
-
-  function doneIn(src, t) {
-    const eff = store.eff;
-    // Same rule as the Folders report: a song is done once it sits in a crate that is not unsorted.
-    // (Only when reorganising an already-sorted crate does "got another crate / left this one" count.)
-    if (src.kind !== 'crate' || store.rules.skip.has(src.id)) return isClassified(eff, store.rules, t.id);
-    if (addedInPlan(eff, t.id).some((c) => c !== src.id)) return true;
-    return !(eff.members.get(src.id) || []).includes(t.id);
-  }
+  // Data for the lists (sortSources.js), bound to the current source and the view's state.
+  const sourceList = (src = source) => sourceSongs(store.base, store.eff, src);
+  const doneIn = (src, t) => isDoneIn(store.eff, store.rules, src, t);
   const isDone = (t) => doneIn(source, t);
   const leftIn = (src) => sourceList(src).filter((t) => !doneIn(src, t)).length;
   const fromUnsorted = () => source.kind === 'crate' && store.rules.skip.has(source.id);
   const moveOutOn = () => (fromUnsorted() ? moveOutInbox : moveOut);
-
-  function sorted(list) {
-    const by = {
-      added: (a, b) => b.addedAt - a.addedAt || a.id - b.id,
-      bpm: (a, b) => (a.bpm || 999) - (b.bpm || 999),
-      artist: (a, b) => (a.artist || '￿').localeCompare(b.artist || '￿') || (a.title || '').localeCompare(b.title || ''),
-      title: (a, b) => (a.title || a.fileName).localeCompare(b.title || b.fileName),
-      order: null,
-    }[sort];
-    return by ? list.slice().sort(by) : list;
-  }
-
-  // Crates whose songs still need sorting (Inbox and everything under it, plus any crate marked unsorted).
-  const inboxCrateIds = () => [...store.rules.skip].filter((id) => store.eff.crates.has(id));
-
-  /** The unsorted crates as a tree: { id, total, left, leftIds (whole subtree), children, active, hasActive }. */
-  function crateTree() {
-    const eff = store.eff;
-    const skip = store.rules.skip;
-    const build = (id) => {
-      const src = { kind: 'crate', id };
-      const tracks = sourceList(src);
-      const left = tracks.filter((t) => !doneIn(src, t));
-      const children = (eff.children.get(id) || []).filter((c) => skip.has(c)).map(build).filter(Boolean);
-      const leftIds = new Set(left.map((t) => t.id));
-      for (const c of children) for (const a of c.leftIds) leftIds.add(a);
-      const active = source.kind === 'crate' && source.id === id;
-      const node = { id, total: tracks.length, left: left.length, leftIds, children, active, hasActive: active || children.some((c) => c.hasActive) };
-      return node.total || children.length || active ? node : null;
-    };
-    const roots = inboxCrateIds().filter((id) => !skip.has(eff.crates.get(id).parent));
-    return ordered(roots.map(build).filter(Boolean));
-  }
-
-  function ordered(nodes) {
-    const eff = store.eff;
-    const fresh = nodes
-      .filter((n) => !rank.has(n.id))
-      .sort((a, b) => b.leftIds.size - a.leftIds.size || eff.pathOf(a.id).localeCompare(eff.pathOf(b.id), undefined, { numeric: true }));
-    for (const n of fresh) rank.set(n.id, nextRank++);
-    for (const n of nodes) n.children = ordered(n.children);
-    return nodes.sort((a, b) => rank.get(a.id) - rank.get(b.id));
-  }
-
-  /** Crates with songs of their own, in list order (collapsed and finished ones included). */
-  function crateOrder(nodes, out = []) {
-    for (const n of nodes) {
-      if (n.total) out.push(n);
-      crateOrder(n.children, out);
-    }
-    return out;
-  }
-
-  /** The next crate after the current one (in list order, wrapping) that still has songs to sort. */
-  function nextCrate(tree = crateTree()) {
-    const list = crateOrder(tree);
-    const i = list.findIndex((n) => n.active);
-    for (let k = 1; k <= list.length; k++) {
-      const n = list[(i + k) % list.length];
-      if (!n.active && n.left) return n;
-    }
-    return null;
-  }
+  const sorted = (list) => sortSongs(list, sort);
+  const inboxCrateIds = () => unsortedCrates(store.eff, store.rules);
+  /** The unsorted crates as a tree, kept in a stable order (see orderCrateTree). */
+  const crateTree = () => orderCrateTree(unsortedCrateTree(store.base, store.eff, store.rules, source.kind === 'crate' ? source.id : null), store.eff, rank);
+  const nextCrate = (tree = crateTree()) => nextCrateIn(tree);
 
   function goNextCrate() {
     const n = nextCrate();
@@ -499,20 +416,13 @@ export function createInboxView({ navigate } = {}) {
   function staleInSource() {
     return source.kind === 'crate' ? staleIn(source.id) : [];
   }
-  function staleIn(crateId) {
-    const eff = store.eff;
-    if (!store.rules.skip.has(crateId)) return [];
-    return (eff.members.get(crateId) || []).filter((a) => isClassified(eff, store.rules, a));
-  }
+  const staleIn = (crateId) => staleSongs(store.eff, store.rules, crateId);
 
   function cleanOut(crateId = source.id) {
     const ids = staleIn(crateId);
     if (!ids.length) return;
     const crate = store.eff.pathOf(crateId);
-    store.commit(
-      _n(ids.length, 'sort.removedSorted', { crate }),
-      ids.map((a) => store.opRemove(crateId, a)),
-    );
+    store.commit({ key: 'sort.removedSorted', n: ids.length, params: { crate } }, ids.map((a) => store.opRemove(crateId, a)));
   }
 
   function renderRow(t) {
@@ -614,7 +524,7 @@ export function createInboxView({ navigate } = {}) {
         : h('div', { class: 'muted small' }, _('sort.noCrates')),
     );
 
-    pinned = pinned.filter((id) => eff.crates.has(id));
+    const pinned = store.pinnedCrates.filter((id) => eff.crates.has(id));
     const inSet = new Set(crates);
     clear(
       pinnedEl,
@@ -639,9 +549,7 @@ export function createInboxView({ navigate } = {}) {
                   title: _('sort.unpin'),
                   onclick: (e) => {
                     e.stopPropagation();
-                    pinned.splice(i, 1);
-                    prefs.set('inbox.pinned', pinned);
-                    renderDetail();
+                    store.setPinnedCrates(pinned.filter((_id, j) => j !== i));
                   },
                 }, '×'),
               ),
@@ -670,9 +578,7 @@ export function createInboxView({ navigate } = {}) {
                       title: _('sort.pin'),
                       onclick: (e) => {
                         e.stopPropagation();
-                        pinned.push(s.id);
-                        prefs.set('inbox.pinned', pinned);
-                        renderDetail();
+                        store.setPinnedCrates([...pinned, s.id]);
                       },
                     }, '📌')
                   : null,
@@ -688,11 +594,9 @@ export function createInboxView({ navigate } = {}) {
   }
 
   async function addPin() {
-    const id = await pickCrateDialog({ title: _('sort.pinCrate'), exclude: new Set(pinned) });
+    const id = await pickCrateDialog({ title: _('sort.pinCrate'), exclude: new Set(store.pinnedCrates) });
     if (id == null) return;
-    pinned.push(id);
-    prefs.set('inbox.pinned', pinned);
-    renderDetail();
+    store.setPinnedCrates([...store.pinnedCrates, id]);
   }
 
   // Notes about the song (Notes tab), newest first; M writes a new one.
@@ -766,14 +670,14 @@ export function createInboxView({ navigate } = {}) {
     const crate = eff.pathOf(crateId);
     const inIt = (eff.members.get(crateId) || []).includes(t.id);
     if (inIt && !forceAdd) {
-      const label = _('sort.removedFrom', { name, crate });
+      const title = { key: 'sort.removedFrom', params: { name, crate } };
       if (addedInPlan(eff, t.id).includes(crateId)) {
         // Added earlier in this plan: take that back instead of staging an add and a remove.
         const reverted = store.revertAdd(crateId, t.id);
-        if (reverted.length) toast(label, { action: () => store.commit(_('sort.addedTo', { name, crate }), reverted, { silent: true }) });
+        if (reverted.length) toast(_(title.key, title.params), { action: () => store.commit({ key: 'sort.addedTo', params: { name, crate } }, reverted, { silent: true }) });
         return;
       }
-      store.commit(label, [store.opRemove(crateId, t.id)]);
+      store.commit(title, [store.opRemove(crateId, t.id)]);
       return;
     }
     if (inIt) return;
@@ -783,7 +687,7 @@ export function createInboxView({ navigate } = {}) {
     const ops = [add];
     const leaveSource = moveOutOn() && source.kind === 'crate' && source.id !== crateId && (eff.members.get(source.id) || []).includes(t.id);
     if (leaveSource) ops.push(store.opRemove(source.id, t.id));
-    const change = store.commit(`${_('sort.addedTo', { name, crate })}${leaveSource ? _('sort.removedFromSource') : ''}`, ops);
+    const change = store.commit({ key: 'sort.addedTo', params: { name, crate }, extra: leaveSource ? [{ key: 'sort.removedFromSource' }] : [] }, ops);
     if (change && autoAdvance) advance();
     if (change) celebrate(leftBefore);
   }
@@ -813,7 +717,7 @@ export function createInboxView({ navigate } = {}) {
     const leftBefore = source.kind === 'crate' ? leftIn(source) : 0;
     const name = t.title || t.fileName;
     const ops = keepFile ? [store.opRemoveTrack(t.id, '')] : [store.opReject(t.id)];
-    if (!store.commit(keepFile ? _('op.removeTrack', { track: name }) : _('common.rejectTrack', { track: name }), ops)) return;
+    if (!store.commit({ key: keepFile ? 'op.removeTrack' : 'common.rejectTrack', params: { track: name } }, ops)) return;
     if (next) {
       select(next.id);
       if (wasPlaying) player.play(next);
@@ -846,7 +750,10 @@ export function createInboxView({ navigate } = {}) {
         const n = Number(digit[1]) - 1;
         if (e.shiftKey) {
           if (suggestions[n]) toggleCrate(suggestions[n].id, { forceAdd: true });
-        } else if (pinned[n] != null) toggleCrate(pinned[n]);
+        } else {
+          const pinned = store.pinnedCrates.filter((id) => store.eff.crates.has(id)); // as listed in the panel
+          if (pinned[n] != null) toggleCrate(pinned[n]);
+        }
         return true;
       }
       switch (e.key) {

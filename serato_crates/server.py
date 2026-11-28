@@ -17,6 +17,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .apply import ApplyError, apply_changes, backup as backup_serato, files_in_use, restore as restore_serato, serato_processes, serato_running
 from .audioinfo import AudioInfoProber
+from .documents import Conflict, documents
 from .spectrum import SpectrumProber
 from .folders import scan_folders
 from .library import load_library, scan_audio_files
@@ -74,10 +75,7 @@ class AppState:
         self.audio_info = AudioInfoProber(data_dir / "audio_info.json")
         self.spectrum = SpectrumProber(data_dir / "spectrum.json")
         self.apply_lock = threading.Lock()
-
-    @property
-    def plan_path(self) -> Path:
-        return self.data_dir / "plan.json"
+        self.documents = documents(data_dir)  # plan, screen, notes, rules, marks (see documents.py)
 
     def ensure_library(self, refresh: bool = False) -> dict:
         with self.lock:
@@ -99,71 +97,6 @@ class AppState:
             "signature": signature,
             "libraryChanged": meta is not None and meta.get("sourceSignature") != signature,
         }
-
-    def read_plan(self) -> dict:
-        if self.plan_path.exists():
-            return json.loads(self.plan_path.read_text())
-        return {"version": 1, "changes": []}
-
-    def write_plan(self, plan: dict) -> None:
-        tmp = self.plan_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(plan, ensure_ascii=False, indent=1))
-        os.replace(tmp, self.plan_path)
-
-    # ---- screening marks (reject / keep) for files not in Serato; kept here so they survive restarts ----
-    @property
-    def screen_path(self) -> Path:
-        return self.data_dir / "screen.json"
-
-    def read_screen(self) -> dict:
-        if self.screen_path.exists():
-            return json.loads(self.screen_path.read_text())
-        return {"reject": [], "keep": []}
-
-    def write_screen(self, screen: dict) -> None:
-        if not all(isinstance(screen.get(k), list) for k in ("reject", "keep")):
-            raise ValueError(tr("request.invalidScreen"))
-        tmp = self.screen_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"reject": screen["reject"], "keep": screen["keep"]}, ensure_ascii=False))
-        os.replace(tmp, self.screen_path)
-
-    # ---- notes about songs (the Notes tab). Only Cratify keeps them; Serato is never written ----
-    @property
-    def notes_path(self) -> Path:
-        return self.data_dir / "notes.json"
-
-    def read_notes(self) -> dict:
-        if self.notes_path.exists():
-            return json.loads(self.notes_path.read_text())
-        return {"version": 1, "notes": []}
-
-    def write_notes(self, body: dict) -> None:
-        notes = body.get("notes") if isinstance(body, dict) else None
-        if not isinstance(notes, list) or not all(isinstance(n, dict) and isinstance(n.get("id"), str) and isinstance(n.get("text"), str) for n in notes):
-            raise ValueError(tr("request.invalidNotes"))
-        if self.notes_path.exists():
-            shutil.copy2(self.notes_path, self.data_dir / "notes.prev.json")  # the version before the last save, in case of a mistake
-        tmp = self.notes_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"version": 1, "notes": notes}, ensure_ascii=False, indent=1))
-        os.replace(tmp, self.notes_path)
-
-    # ---- which crates count as unsorted (per-crate overrides; see classificationRules in model.js) ----
-    @property
-    def rules_path(self) -> Path:
-        return self.data_dir / "rules.json"
-
-    def read_rules(self) -> dict:
-        if self.rules_path.exists():
-            return json.loads(self.rules_path.read_text())
-        return {"overrides": {}, "saved": False}
-
-    def write_rules(self, rules: dict) -> None:
-        overrides = rules.get("overrides")
-        if not isinstance(overrides, dict) or any(v not in ("count", "skip") for v in overrides.values()):
-            raise ValueError(tr("request.invalidRules"))
-        tmp = self.rules_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps({"overrides": overrides, "saved": True}, ensure_ascii=False))
-        os.replace(tmp, self.rules_path)
 
     # ---- apply the plan to Serato (Serato closed; rehearse on a copy, back up, write, verify) ----
     def apply_status(self) -> dict:
@@ -496,14 +429,8 @@ def make_handler(state: AppState, port: int):
                     return self._json({"lang": i18n.lang(), "langSaved": i18n.saved(), "version": VERSION})
                 if p == "/api/music-folders":
                     return self._json(state.music_folder_settings())
-                if p == "/api/plan":
-                    return self._json(state.read_plan())
-                if p == "/api/screen":
-                    return self._json(state.read_screen())
-                if p == "/api/notes":
-                    return self._json(state.read_notes())
-                if p == "/api/rules":
-                    return self._json(state.read_rules())
+                if p.startswith("/api/") and p[len("/api/"):] in state.documents:
+                    return self._json(state.documents[p[len("/api/"):]].read())
                 if p == "/api/apply/status":
                     return self._json(state.apply_status())
                 if p == "/api/relocate-candidates":
@@ -588,23 +515,14 @@ def make_handler(state: AppState, port: int):
                 return self._error(HTTPStatus.FORBIDDEN, "bad host")
             try:
                 body = self._read_json()
-                if self.path == "/api/plan":
-                    if not isinstance(body, dict) or not isinstance(body.get("changes"), list):
-                        raise ValueError(tr("request.invalidPlan"))
-                    state.write_plan(body)
-                    return self._json({"ok": True})
-                if self.path == "/api/screen":
-                    state.write_screen(body)
-                    return self._json({"ok": True})
-                if self.path == "/api/notes":
-                    state.write_notes(body)
-                    return self._json({"ok": True})
-                if self.path == "/api/rules":
-                    state.write_rules(body)
-                    return self._json({"ok": True})
+                name = self.path[len("/api/"):] if self.path.startswith("/api/") else ""
+                if name in state.documents:
+                    return self._json({"rev": state.documents[name].write(body)})
                 if self.path == "/api/music-folders":
                     return self._json(state.save_music_folders(body.get("folders") if isinstance(body, dict) else None))
                 return self._error(HTTPStatus.NOT_FOUND, "not found")
+            except Conflict as e:
+                return self._json({"error": str(e), "rev": e.rev}, HTTPStatus.CONFLICT)
             except SnapshotError as e:
                 return self._error(HTTPStatus.SERVICE_UNAVAILABLE, str(e))
             except ValueError as e:

@@ -101,19 +101,23 @@ export function applyPlan(base, changes) {
         return null;
       }
       case 'createCrate': {
+        const name = String(op.name).trim(); // as Apply writes it
         if (crates.has(op.id)) return _('model.crateExists');
         if (!validParent(op.parent)) return _('model.parentCrateGone');
-        if (nameTaken(op.parent, op.name)) return _('model.nameTakenAtLevel', { name: op.name });
-        crates.set(op.id, { id: op.id, parent: op.parent, name: op.name, order: ++maxOrder, status: { created: true } });
+        if (!name) return _('model.emptyName');
+        if (nameTaken(op.parent, name)) return _('model.nameTakenAtLevel', { name });
+        crates.set(op.id, { id: op.id, parent: op.parent, name, order: ++maxOrder, status: { created: true } });
         members.set(op.id, []);
         return null;
       }
       case 'renameCrate': {
         const c = crates.get(op.crate);
+        const name = String(op.name).trim();
         if (!c) return _('model.crateGone');
-        if (nameTaken(c.parent, op.name, c.id)) return _('model.nameTakenAtLevel', { name: op.name });
+        if (!name) return _('model.emptyName');
+        if (nameTaken(c.parent, name, c.id)) return _('model.nameTakenAtLevel', { name });
         if (!c.status.created && c.status.originalName == null) c.status.originalName = c.name;
-        c.name = op.name;
+        c.name = name;
         if (c.status.originalName === c.name) delete c.status.originalName;
         return null;
       }

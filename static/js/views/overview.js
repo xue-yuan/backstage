@@ -90,8 +90,7 @@ export function createOverviewView({ navigate }) {
 
     // ---- health ----
     const missing = [...eff.base.tracks.values()].filter((t) => !t.exists && !eff.relocated.has(t.id) && !eff.removedTracks.has(t.id)).length;
-    const dismissed = new Set(prefs.get('dupes.dismissed', []));
-    const dupes = findDuplicates(eff, scoreOf).filter((g) => !dismissed.has(g.key)).length;
+    const dupes = findDuplicates(eff, scoreOf).filter((g) => !store.dismissedDuplicates.has(g.key)).length;
     const empty = findEmptyCrates(eff).length;
     const low = r ? r.sum.low : waiting;
     const unreadable = r ? r.sum.unreadable : 0;

@@ -12,8 +12,9 @@ Requirements:
 
 - macOS 12 or later. Release builds are for Apple silicon.
 - Serato DJ Pro 4.0. "Apply to Serato" writes only to the database version Cratify has been verified with (version 202) and refuses other versions.
-- [uv](https://docs.astral.sh/uv/), which provides the Python that runs Cratify's local server: `brew install uv`, then `uv python install 3.14` (any uv-managed Python 3.12 or later works). Without it, the app shows installation instructions instead of starting.
 - Optional: ffmpeg, for the transcode check in Quality (`brew install ffmpeg`).
+
+The app includes the Python it runs on; nothing else needs to be installed.
 
 Steps:
 
@@ -30,20 +31,33 @@ pnpm install          # first time only: installs the Tauri CLI
 pnpm app:build        # builds src-tauri/target/release/bundle/macos/Cratify.app
 ```
 
-The Mac app is a Tauri window. On launch it starts the Python server in the background on `127.0.0.1:47615` and stops it on quit. If the port is in use, the app reports whether the old Backstage app, another copy of Cratify or another program holds it.
+Building requires [uv](https://docs.astral.sh/uv/) and a uv-managed Python 3.12 or later (`brew install uv`, then `uv python install 3.14`). `pnpm app:build` first runs `tools/bundle_python.sh`, which copies that Python (a python-build-standalone runtime) into `src-tauri/python`, leaving out what the server does not use (pip, Tk, IDLE, headers); the app bundles it as `Contents/Resources/python`. A build without it (for example `pnpm tauri build` on its own) falls back to the uv-managed Python on the user's Mac.
 
-The app runs the uv-managed interpreter returned by `uv python find --managed-python ">=3.12"`, never the system Python.
+The Mac app is a Tauri window. On launch it starts the Python server in the background on `127.0.0.1:47615` and stops it on quit. The server runs with `-B -E -s`: it writes no bytecode into the app bundle and ignores `PYTHON*` variables and user site-packages. If the port is in use, the app reports whether the old Backstage app, another copy of Cratify or another program holds it.
 
 Data is stored in `~/Library/Application Support/Cratify/`:
 
-- the Serato snapshot and the plan
-- screening marks
+- the Serato snapshot and the plan (`plan.json`)
+- screening marks (`screen.json`)
 - notes (`notes.json`; `notes.prev.json` holds the version before the last save)
 - unsorted-crate rules (`rules.json`)
+- marks (`marks.json`): files marked genuine in Quality, duplicate groups marked as not duplicates, crates pinned in Sort
 - settings (`settings.json`: interface language and music folders)
 - the audio format cache (`audio_info.json`) and transcode-check cache (`spectrum.json`)
 - the Trash log (`trash_log.jsonl`)
 - `app.log` and `server.log`
+
+The page edits `plan.json`, `screen.json`, `notes.json`, `rules.json` and `marks.json` as whole documents (`serato_crates/documents.py`). Each carries a revision number, and a write must name the revision it was based on. If another window changed the file in the meantime, the write is refused and the page asks to be reloaded, so two windows cannot overwrite each other's changes. The plan stores only data (op types, ids, names and i18n keys); its text is made when shown (`static/js/planText.js`), so it follows the interface language and current crate names.
+
+### Tests
+
+```bash
+pnpm test             # server tests (unittest) and front-end tests (node --test); no packages to install
+```
+
+- `tests/cases/plan_cases.json` lists plan cases (crate edits, songs, refused edits) that run against both the page's model (`tests/js/plan_cases.test.mjs`) and Apply to Serato (`tests/test_plan_cases.py`), so the preview and the real write agree.
+- Apply is tested on a fresh, empty library built with the schema of the Serato DJ on the Mac. Serato's schema is not stored in this repository; it is read from byte copies of the local library, whose live files are never opened. These tests are skipped on a Mac without Serato DJ 4.
+- `tools/check_i18n.py` (also run by the tests) checks the translation files against the code.
 
 ### Releasing
 
@@ -51,11 +65,11 @@ The version number is set in `package.json`. The Mac app reads it through `"vers
 
 1. Add the release notes as a `## <version>` section at the top of `CHANGELOG.md`.
 2. Set the version in `package.json` and `src-tauri/Cargo.toml`.
-3. Run `pnpm app:release` (`tools/package_release.sh`). It checks that the versions match, the notes exist and the translations are consistent, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (preserving the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It does not publish anything.
+3. Run `pnpm app:release` (`tools/package_release.sh`). It checks that the versions match and the notes exist, runs the tests, builds the app, zips it with `ditto` into `dist/Cratify-<version>-mac-arm64.zip` (preserving the signature and attributes), writes `dist/release-notes.md`, and prints the checksum and the `gh release create` command. It does not publish anything.
 4. Test the zip: unzip it, open the app and check the version in the Guide, preferably on a Mac or user account that has never run Cratify.
 5. Commit, tag `v<version>` and run the printed `gh release create` command.
 
-Builds target the architecture of the build machine. For a universal build, run `rustup target add x86_64-apple-darwin`, then `pnpm tauri build --bundles app --target universal-apple-darwin`. Signing with a Developer ID and notarizing (Apple Developer Program) removes the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
+Builds target the architecture of the build machine, and so does the bundled Python. A universal build (`rustup target add x86_64-apple-darwin`, then `tools/bundle_python.sh` and `pnpm tauri build --bundles app --target universal-apple-darwin`) also needs a universal Python in `src-tauri/python`, which the script does not make. Signing with a Developer ID and notarizing (Apple Developer Program) removes the "Open Anyway" step: set `signingIdentity` in `tauri.conf.json` and `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` when building.
 
 ## Running in a browser
 
@@ -64,7 +78,7 @@ uv run --no-project app.py            # opens http://127.0.0.1:8765 (uses the Ma
 uv run --no-project app.py --port 9000 --no-browser
 ```
 
-The server uses only the Python standard library, and the front end is plain JavaScript, so there is nothing to install. Do not run the browser version and the Mac app at the same time; both write the same plan.
+The server uses only the Python standard library, and the front end is plain JavaScript, so there is nothing to install. The browser version and the Mac app share the data folder; when both are open, a change saved in one makes the other ask to be reloaded before it saves again.
 
 ## Watching Serato
 

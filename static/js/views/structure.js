@@ -296,7 +296,7 @@ export function createStructureView({ navigate } = {}) {
     });
     if (!name) return;
     const op = store.opCreate(name, parent);
-    if (store.commit(_('common.createCrate', { path: name }), [op])) {
+    if (store.commit({ key: 'common.createCrate', params: { path: name } }, [op])) {
       if (parent !== eff.rootId) expanded.add(parent);
       selectCrate(op.id);
     }
@@ -312,7 +312,7 @@ export function createStructureView({ navigate } = {}) {
       okText: _('crates.saveName'),
       validate: (v) => (v === c.name ? _('crates.nameDidNotChange') : siblingNameTaken(c.parent, v, id) ? _('crates.nameTaken') : null),
     });
-    if (name) store.commit(_('crates.renameChange', { from: c.name, to: name }), [store.opRename(id, name)]);
+    if (name) store.commit({ key: 'crates.renameChange', params: { from: c.name, to: name } }, [store.opRename(id, name)]);
   }
 
   function moveCrateTo(id, parent) {
@@ -322,7 +322,7 @@ export function createStructureView({ navigate } = {}) {
       toast(_('crates.nameTakenUseMerge', { name: c.name }), { tone: 'danger' });
       return;
     }
-    if (store.commit(parent === eff.rootId ? _('crates.moveTopChange', { name: c.name }) : _('crates.moveChange', { name: c.name, parent: eff.pathOf(parent) }), [store.opMove(id, parent)])) {
+    if (store.commit(parent === eff.rootId ? { key: 'crates.moveTopChange', params: { name: c.name } } : { key: 'crates.moveChange', params: { name: c.name, parent: eff.pathOf(parent) } }, [store.opMove(id, parent)])) {
       if (parent !== eff.rootId) expanded.add(parent);
       saveExpanded();
       selectCrate(id);
@@ -349,7 +349,7 @@ export function createStructureView({ navigate } = {}) {
         return;
       }
     }
-    if (store.commit(op.text, [op])) {
+    if (store.commit({ fromOp: true }, [op])) {
       if (parent !== store.eff.rootId) expanded.add(parent);
       saveExpanded();
       selectCrate(id);
@@ -389,7 +389,7 @@ export function createStructureView({ navigate } = {}) {
     const eff = store.eff;
     const target = await pickCrateDialog({ title: _('crates.mergeDialogTitle', { crate: eff.pathOf(id) }), exclude: new Set(subtreeIds(eff, id)), allowCreate: false });
     if (target == null) return;
-    if (store.commit(_('crates.mergeChange', { from: eff.pathOf(id), into: eff.pathOf(target) }), [store.opMerge(id, target)])) selectCrate(target);
+    if (store.commit({ key: 'crates.mergeChange', params: { from: eff.pathOf(id), into: eff.pathOf(target) } }, [store.opMerge(id, target)])) selectCrate(target);
   }
 
   async function deleteCrate(id) {
@@ -404,7 +404,7 @@ export function createStructureView({ navigate } = {}) {
     });
     if (!ok) return;
     const parent = eff.crates.get(id).parent;
-    if (store.commit(_('op.deleteCrate', { crate: eff.pathOf(id) }), [store.opDelete(id)])) {
+    if (store.commit({ key: 'op.deleteCrate', params: { crate: eff.pathOf(id) } }, [store.opDelete(id)])) {
       selected = store.eff.crates.has(parent) ? parent : null;
       renderAll();
     }
@@ -643,7 +643,7 @@ export function createStructureView({ navigate } = {}) {
       toast(_('crates.alreadyInCrate', { crate: eff.pathOf(target) }));
       return;
     }
-    store.commit(moveFrom != null ? _n(ids.length, 'crates.moveSongsTo', { crate: eff.pathOf(target) }) : _n(ids.length, 'crates.addSongsTo', { crate: eff.pathOf(target) }), ops);
+    store.commit({ key: moveFrom != null ? 'crates.moveSongsTo' : 'crates.addSongsTo', n: ids.length, params: { crate: eff.pathOf(target) } }, ops);
   }
 
   async function tracksTo(mode) {
@@ -657,7 +657,7 @@ export function createStructureView({ navigate } = {}) {
   function removeSelected() {
     const ids = [...selTracks];
     selTracks.clear();
-    store.commit(_n(ids.length, 'crates.removeSongsFrom', { crate: store.eff.pathOf(selected) }), ids.map((a) => store.opRemove(selected, a)));
+    store.commit({ key: 'crates.removeSongsFrom', n: ids.length, params: { crate: store.eff.pathOf(selected) } }, ids.map((a) => store.opRemove(selected, a)));
   }
 
   function renderAll() {

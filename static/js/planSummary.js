@@ -2,6 +2,7 @@
 // Each group lists its items (one song, one duplicate merge, one crate edit…) so any of them can be undone alone.
 // Pure data: takes the plan's changes and the effective library, returns groups for the Plan view.
 import { _, _n } from './i18n.js';
+import { reasonText } from './planText.js';
 
 const STRUCTURE = ['createCrate', 'renameCrate', 'moveCrate', 'deleteCrate', 'mergeCrate'];
 
@@ -50,10 +51,10 @@ export function dependentOps(changes, ops) {
 
 /**
  * changes: the plan's changes; eff: effective library (applyPlan); skip: ids of unsorted crates;
- * trackLabel(id): display name of a song; issues: eff.issues.
+ * trackLabel(id): display name of a song; opText(op): what an op does; issues: eff.issues.
  * Returns [{ key, title, meta, at, items: [{ key, text, tag, ops, at, issue }] }], most recent first.
  */
-export function summarizePlan({ changes, eff, skip, trackLabel, issues = [] }) {
+export function summarizePlan({ changes, eff, skip, trackLabel, opText, issues = [] }) {
   const issueOf = new Map(issues.map((i) => [i.op, i.message]));
   const groups = new Map();
   const groupFor = (key, info) => {
@@ -114,7 +115,7 @@ export function summarizePlan({ changes, eff, skip, trackLabel, issues = [] }) {
   for (const g of groups.values()) {
     const items = [...g.items.values()].sort((a, b) => b.at - a.at);
     for (const it of items) {
-      it.text = itemText(g, it, trackLabel);
+      it.text = itemText(g, it, trackLabel, opText);
       it.issue = it.ops.map((o) => issueOf.get(o)).find(Boolean) || null;
     }
     const { title, meta } = groupTitle(g, items, eff);
@@ -123,14 +124,14 @@ export function summarizePlan({ changes, eff, skip, trackLabel, issues = [] }) {
   return out.sort((a, b) => b.at - a.at);
 }
 
-function itemText(g, it, trackLabel) {
+function itemText(g, it, trackLabel, opText) {
   switch (g.kind) {
     case 'add':
     case 'remove':
       return trackLabel(it.asset);
     case 'reject':
     case 'removeTrack':
-      return it.reason ? _('summary.trackReason', { track: trackLabel(it.asset), reason: it.reason }) : trackLabel(it.asset);
+      return it.reason ? _('summary.trackReason', { track: trackLabel(it.asset), reason: reasonText(it.reason) }) : trackLabel(it.asset);
     case 'dupes': {
       const keeper = it.ops.find((o) => o.keeper != null)?.keeper;
       const removed = it.ops.filter((o) => o.type === 'removeTrack');
@@ -145,7 +146,7 @@ function itemText(g, it, trackLabel) {
       return relocate ? _('summary.trackRelocated', { track: trackLabel(it.asset), path: relocate.path }) : _('summary.trackMerged', { track: trackLabel(it.asset) });
     }
     default:
-      return it.ops.map((o) => o.text || o.type).join(' · ');
+      return it.ops.map(opText).join(' · ');
   }
 }
 

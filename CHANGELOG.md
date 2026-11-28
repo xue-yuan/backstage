@@ -4,6 +4,12 @@ Each section is also used as the release notes for that version on GitHub (`tool
 
 ## Unreleased
 
+- The app includes its own Python: uv no longer needs to be installed.
+- Changes saved in another window (or in the browser version) are no longer overwritten: the page asks to be reloaded first.
+- Files marked genuine, duplicate groups marked as not duplicates and pinned crates are kept in the data folder (`marks.json`) instead of the page's storage, so they are the same in the Mac app and the browser version. Existing marks move over on first start.
+- The plan follows the interface language and current crate names; plans from earlier versions still read. Crates pinned before Apply keep their pin afterwards.
+- Apply to Serato now refuses to merge a crate into itself, refuses empty names, and compares crate names ignoring letter case in any alphabet, as the plan preview does.
+- Before a language is chosen, the Mac app's menus and startup messages follow the Mac's language, as the page does.
 - Interface text, the Guide and the README rewritten in a more formal, concise style in both English and Traditional Chinese. "Sounds fine" in Quality is now "Mark as genuine".
 
 ## 0.1.0

@@ -3,6 +3,7 @@ import { APPLY_SUPPORTED, applyPlan, baseName, buildBase, buildProfiles, classif
 import { describeQuality, suspicionOf } from './quality.js';
 import { prefs, toast } from './ui.js';
 import { _, _n } from './i18n.js';
+import { changeTitle, crateName, opText, trackName } from './planText.js';
 
 async function request(method, url, body) {
   const res = await fetch(url, {
@@ -11,15 +12,17 @@ async function request(method, url, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `${res.status} ${res.statusText}`), { status: res.status });
   return data;
 }
+
+const withoutRev = ({ rev, ...rest }) => rest;
 
 export const api = {
   library: () => request('GET', '/api/library'),
   refreshSnapshot: () => request('POST', '/api/snapshot', {}),
-  plan: () => request('GET', '/api/plan'),
-  savePlan: (plan) => request('PUT', '/api/plan', plan),
+  /** A document the page edits as a whole: plan, screen, notes, rules or marks (see documents.py). */
+  doc: (name) => request('GET', `/api/${name}`),
   relocateCandidates: () => request('GET', '/api/relocate-candidates'),
   folders: (refresh = false) => request('GET', `/api/folders${refresh ? '?refresh=1' : ''}`),
   reveal: (path) => request('POST', '/api/reveal', { path }),
@@ -27,12 +30,6 @@ export const api = {
   startAudioInfo: () => request('POST', '/api/audio-info', {}),
   spectrum: (items = false) => request('GET', `/api/spectrum${items ? '?items=1' : ''}`),
   spectrumAction: (body) => request('POST', '/api/spectrum', body),
-  screen: () => request('GET', '/api/screen'),
-  notes: () => request('GET', '/api/notes'),
-  saveNotes: (notes) => request('PUT', '/api/notes', { notes }),
-  saveScreen: (screen) => request('PUT', '/api/screen', screen),
-  rules: () => request('GET', '/api/rules'),
-  saveRules: (rules) => request('PUT', '/api/rules', rules),
   trash: (paths) => request('POST', '/api/trash', { paths }),
   untrash: (paths) => request('POST', '/api/untrash', { paths }),
 };
@@ -61,32 +58,114 @@ class Store {
     this.notes = []; // [{ id, text, song: { id?, path, title, artist } | null, created, updated }] newest first (notes.json)
     this.notesError = null; // set when notes.json could not be read: saving is then refused, so nothing is lost
     this.ruleOverrides = {}; // crateId -> 'count' | 'skip' (saved on the server in rules.json)
+    // Saved on the server in marks.json: files marked genuine (path keys), dismissed duplicate groups, pinned crates.
+    this.marks = { genuine: new Set(), dismissedDuplicates: new Set(), pinnedCrates: [] };
+    this.revs = {}; // document name -> revision this page last read or wrote
+    this.conflicts = new Set(); // documents another window changed: no longer saved from here
+    this._saves = {}; // document name -> promise of the last save (saves of one document run in order)
+    this._conflictToastAt = 0;
     this._screenTimer = null;
     this._saveTimer = null;
     this.saving = false;
   }
 
   async load() {
-    const [lib, plan, screen, rules, notes] = await Promise.all([
+    const [lib, plan, screen, rules, notes, marks] = await Promise.all([
       api.library(),
-      api.plan(),
-      api.screen(),
-      api.rules(),
-      api.notes().catch((e) => ({ error: e.message })),
+      api.doc('plan'),
+      api.doc('screen'),
+      api.doc('rules'),
+      api.doc('notes').catch((e) => ({ error: e.message })),
+      api.doc('marks'),
     ]);
+    for (const [name, doc] of Object.entries({ plan, screen, rules, notes, marks })) {
+      if (typeof doc.rev === 'number') this.revs[name] = doc.rev;
+    }
     this.base = buildBase(lib);
     this.notes = Array.isArray(notes.notes) ? notes.notes : [];
     this.notesError = notes.error || null;
-    this.plan = { version: 1, changes: [], ...plan };
+    this.plan = { version: 1, changes: [], ...withoutRev(plan) };
     this.screen = { reject: new Set(screen.reject || []), keep: new Set(screen.keep || []) };
     this.ruleOverrides = rules.overrides || {};
     // One-time move of overrides saved by older versions in this browser's storage.
     const legacy = prefs.get('classify.overrides', null);
     if (!rules.saved && legacy && Object.keys(legacy).length) {
       this.ruleOverrides = legacy;
-      api.saveRules({ overrides: legacy }).catch(() => {});
+      this.saveDoc('rules', { overrides: legacy }, 'store.saveRulesFailed');
     }
+    this.marks = { genuine: new Set(marks.genuine || []), dismissedDuplicates: new Set(marks.dismissedDuplicates || []), pinnedCrates: marks.pinnedCrates || [] };
+    if (!marks.rev) this.moveLegacyMarks();
     this.recompute();
+  }
+
+  /** Until 2026-11-28 these marks were kept in the page's storage: move them to marks.json once. */
+  moveLegacyMarks() {
+    const genuine = prefs.get('quality.genuine', []);
+    const dismissed = prefs.get('dupes.dismissed', []);
+    const pinned = prefs.get('inbox.pinned', []);
+    if (!genuine.length && !dismissed.length && !pinned.length) return;
+    this.marks = { genuine: new Set(genuine), dismissedDuplicates: new Set(dismissed), pinnedCrates: pinned };
+    this.saveMarks().then(() => {
+      if (this.revs.marks) for (const key of ['quality.genuine', 'dupes.dismissed', 'inbox.pinned']) prefs.remove(key);
+    });
+  }
+
+  /**
+   * Save a document the page edits as a whole (plan, screen, notes, rules, marks). Saves of one
+   * document run one after another, each naming the revision it was based on. If another window
+   * changed the document, the server refuses and this page stops saving it until it is reloaded,
+   * so neither window silently overwrites the other.
+   */
+  saveDoc(name, body, failKey) {
+    this._saves[name] = (this._saves[name] || Promise.resolve()).then(async () => {
+      if (this.conflicts.has(name)) return this.warnConflict();
+      try {
+        const { rev } = await request('PUT', `/api/${name}`, { ...body, rev: this.revs[name] ?? 0 });
+        this.revs[name] = rev;
+      } catch (e) {
+        if (e.status !== 409) return toast(_(failKey, { error: e.message }), { tone: 'danger', timeout: 8000 });
+        this.conflicts.add(name);
+        this.warnConflict();
+      }
+    });
+    return this._saves[name];
+  }
+
+  warnConflict() {
+    if (Date.now() - this._conflictToastAt < 10000) return;
+    this._conflictToastAt = Date.now();
+    toast(_('store.conflict'), { tone: 'danger', timeout: 600000, action: () => location.reload(), actionLabel: _('store.reloadPage') });
+  }
+
+  saveMarks() {
+    const { genuine, dismissedDuplicates, pinnedCrates } = this.marks;
+    return this.saveDoc('marks', { genuine: [...genuine], dismissedDuplicates: [...dismissedDuplicates], pinnedCrates }, 'store.saveMarksFailed');
+  }
+
+  // ---- duplicate groups the user dismissed, crates pinned in Sort (marks.json) ----
+  get dismissedDuplicates() {
+    return this.marks.dismissedDuplicates;
+  }
+  setDuplicatesDismissed(keys, on = true) {
+    for (const k of keys) {
+      if (on) this.marks.dismissedDuplicates.add(k);
+      else this.marks.dismissedDuplicates.delete(k);
+    }
+    this.notify();
+    this.saveMarks();
+  }
+  clearDismissedDuplicates() {
+    this.marks.dismissedDuplicates = new Set();
+    this.notify();
+    this.saveMarks();
+  }
+  get pinnedCrates() {
+    return this.marks.pinnedCrates;
+  }
+  setPinnedCrates(ids) {
+    this.marks.pinnedCrates = [...ids];
+    this.notify();
+    this.saveMarks();
   }
 
   async refreshSnapshot() {
@@ -130,7 +209,7 @@ class Store {
     this.ruleOverrides = overrides;
     this._rules = null;
     this.notify();
-    api.saveRules({ overrides }).catch((e) => toast(_('store.saveRulesFailed', { error: e.message }), { tone: 'danger', timeout: 8000 }));
+    this.saveDoc('rules', { overrides }, 'store.saveRulesFailed');
   }
 
   // ---- real codec / bit rate per file (read with afinfo on the server, cached there) ----
@@ -217,12 +296,20 @@ class Store {
     if (items) this.spectrum = new Map(Object.entries(items).map(([path, v]) => [pathKey(path), [...v, path]])); // [cutoff, kind, path]
   }
 
+  /** Whether the values that `deps` lists are the same objects as on the last call for `name` (memo helper). */
+  unchanged(name, deps) {
+    const prev = (this._deps ||= {})[name];
+    this._deps[name] = deps;
+    return !!prev && prev.length === deps.length && prev.every((d, i) => d === deps[i]);
+  }
+
   /**
    * Every file the transcode check flagged, including the ones marked fine:
-   * [{ key, path, dir, track, q (with suspect), s, genuine }]. Recomputed when anything changes.
+   * [{ key, path, dir, track, q (with suspect), s, genuine }]. Recomputed only when the plan, the
+   * check results, the audio formats or the genuine marks change (not on every update of the page).
    */
   suspects() {
-    if (this._suspectsFor === this.version) return this._suspects;
+    if (this.unchanged('suspects', [this.eff, this.spectrum, this.audioInfo, this.marks.genuine, this._genuineRev])) return this._suspects;
     const eff = this.eff;
     // All songs, also those removed in the plan, so a rejected song still shows as a Serato song.
     const byPath = new Map([...eff.base.tracks.values()].map((t) => [pathKey(effectivePath(eff, t)), t]));
@@ -235,7 +322,6 @@ class Store {
       if (s) out.push({ key, path, dir: dirOf(path), track, q: { ...q, suspect: s }, s, genuine });
     }
     this._suspects = out;
-    this._suspectsFor = this.version;
     return out;
   }
 
@@ -259,11 +345,11 @@ class Store {
     const track = this.notesIndex().byPath.get(pathKey(path));
     return track ? this.notesFor(track) : this.notes.filter((n) => !n.song?.id && n.song?.path && pathKey(n.song.path) === pathKey(path));
   }
+  /** Notes by library song, and library songs by file. Recomputed when the notes or the plan change. */
   notesIndex() {
-    if (this._notesIndexFor === this.version) return this._notesIndex;
+    if (this.unchanged('notesIndex', [this.notes, this.eff])) return this._notesIndex;
     const byPath = new Map([...this.base.tracks.values()].map((t) => [pathKey(effectivePath(this.eff, t)), t]));
     this._notesIndex = { byPath, byTrack: new Map() };
-    this._notesIndexFor = this.version;
     for (const n of this.notes) {
       const t = this.noteTrack(n.song);
       if (!t) continue;
@@ -295,24 +381,20 @@ class Store {
     }
     this.notes = notes;
     this.notify();
-    // Saved right away (no debounce), one request after another so the last state always wins.
-    const snapshot = notes;
-    this._notesSave = (this._notesSave || Promise.resolve()).then(() =>
-      api.saveNotes(snapshot).catch((e) => toast(_('store.saveNotesFailed', { error: e.message }), { tone: 'danger', timeout: 8000 })),
-    );
+    this.saveDoc('notes', { notes }, 'store.saveNotesFailed'); // right away, no debounce
   }
 
-  // ---- files the user checked and found fine: no "Suspect" mark (saved in this browser / the app) ----
+  // ---- files the user checked and marked genuine: no "Suspect" mark (marks.json) ----
   get genuine() {
-    this._genuine ||= new Set(prefs.get('quality.genuine', []));
-    return this._genuine;
+    return this.marks.genuine;
   }
   setGenuine(path, on) {
     const k = pathKey(path);
-    if (on) this.genuine.add(k);
-    else this.genuine.delete(k);
-    prefs.set('quality.genuine', [...this.genuine]);
+    if (on) this.marks.genuine.add(k);
+    else this.marks.genuine.delete(k);
+    this._genuineRev = (this._genuineRev || 0) + 1;
     this.notify();
+    this.saveMarks();
   }
 
   /** Quality of the file at `path` (a Serato track's file when `track` is given). */
@@ -342,6 +424,9 @@ class Store {
       }
     }
     if (moved) this.saveClassifyOverrides(overrides);
+    // Crates pinned before they existed in Serato keep their pin under the id Serato gave them.
+    const pinned = this.marks.pinnedCrates.map((id) => newIds[id] ?? id);
+    if (pinned.some((id, i) => id !== this.marks.pinnedCrates[i])) this.setPinnedCrates(pinned);
     this.persist();
     await this.refreshSnapshot();
   }
@@ -356,13 +441,7 @@ class Store {
     }
     this.notify();
     clearTimeout(this._screenTimer);
-    this._screenTimer = setTimeout(async () => {
-      try {
-        await api.saveScreen({ reject: [...this.screen.reject], keep: [...this.screen.keep] });
-      } catch (e) {
-        toast(_('store.saveScreenFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
-      }
-    }, 250);
+    this._screenTimer = setTimeout(() => this.saveDoc('screen', { reject: [...this.screen.reject], keep: [...this.screen.keep] }, 'store.saveScreenFailed'), 250);
   }
 
   /** Move files marked reject to the macOS Trash. Returns the server's per-file results. */
@@ -399,10 +478,14 @@ class Store {
     return () => this.listeners.delete(fn);
   }
 
-  commit(label, ops, { silent = false } = {}) {
+  /**
+   * Stage `ops` as one change. title: { key, n?, params?, extra? } (see planText.changeTitle), or
+   * { fromOp: true } to name the change after its only op. Only data is stored; text is made when shown.
+   */
+  commit(title, ops, { silent = false } = {}) {
     ops = ops.filter(Boolean);
     if (!ops.length) return null;
-    const change = { id: uid(), at: Date.now(), label, ops };
+    const change = { id: uid(), at: Date.now(), title, ops };
     const issuesBefore = this.eff.issues.length;
     this.plan.changes.push(change);
     this.recompute();
@@ -415,8 +498,19 @@ class Store {
       return null;
     }
     this.persist();
-    if (!silent) toast(label, { action: () => this.undo(change.id) });
+    if (!silent) toast(this.changeTitle(change), { action: () => this.undo(change.id) });
     return change;
+  }
+
+  // ---- text for the plan, made when shown (planText.js) ----
+  textContext() {
+    return { eff: this.eff, changes: this.plan.changes, quality: (id) => this.trackQuality(this.base.tracks.get(id)).label };
+  }
+  changeTitle(change) {
+    return changeTitle(this.textContext(), change);
+  }
+  opText(op) {
+    return opText(this.textContext(), op);
   }
 
   undo(changeId) {
@@ -481,84 +575,58 @@ class Store {
 
   persist() {
     clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(async () => {
-      try {
-        await api.savePlan({ ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt });
-      } catch (e) {
-        toast(_('store.savePlanFailed', { error: e.message }), { tone: 'danger', timeout: 8000 });
-      }
-    }, 250);
+    this._saveTimer = setTimeout(() => this.saveDoc('plan', { ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt }, 'store.savePlanFailed'), 250);
   }
 
-  // ---- naming helpers used when recording ops (text stays readable even after later ops) ----
+  // ---- display names ----
   trackLabel(id) {
-    const t = this.base.tracks.get(id);
-    if (!t) return `#${id}`;
-    return t.artist ? `${t.artist} – ${t.title || t.fileName}` : t.title || t.fileName;
+    return trackName(this.textContext(), id);
   }
   crateLabel(id) {
-    return this.eff.pathOf(id);
+    return crateName(this.textContext(), id);
   }
 
   // ---- op builders ----
   opAdd(crate, asset) {
-    return { type: 'add', crate, asset, text: _('op.addToCrate', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
+    return { type: 'add', crate, asset };
   }
   opRemove(crate, asset) {
-    return { type: 'remove', crate, asset, text: _('op.removeFromCrate', { crate: this.crateLabel(crate), track: this.trackLabel(asset) }) };
+    return { type: 'remove', crate, asset };
   }
   opCreate(name, parent) {
-    const id = newCrateId();
-    const text =
-      parent === this.eff.rootId
-        ? _('op.createCrateTop', { name })
-        : _('op.createCrateUnder', { name, parent: this.crateLabel(parent) });
-    return { type: 'createCrate', id, name, parent, text };
+    return { type: 'createCrate', id: newCrateId(), name, parent };
   }
+  /** from: the crate's name before the rename, so the plan can show "old → new" later. */
   opRename(crate, name) {
-    return { type: 'renameCrate', crate, name, text: _('op.renameCrate', { crate: this.crateLabel(crate), name }) };
+    return { type: 'renameCrate', crate, name, from: this.eff.crates.get(crate)?.name };
   }
   /** before: undefined = last (the original move), a sibling id = just before it, null = last of that level. */
   opMove(crate, parent, before) {
-    if (before === undefined) {
-      const text =
-        parent === this.eff.rootId
-          ? _('op.moveCrateTop', { crate: this.crateLabel(crate) })
-          : _('op.moveCrateUnder', { crate: this.crateLabel(crate), parent: this.crateLabel(parent) });
-      return { type: 'moveCrate', crate, parent, text };
-    }
-    const reorder = this.eff.crates.get(crate)?.parent === parent;
-    const level = parent === this.eff.rootId ? _('store.levelTop') : _('store.levelCrate', { name: this.crateLabel(parent) });
-    const text = reorder
-      ? before != null
-        ? _('op.reorderBefore', { crate: this.crateLabel(crate), before: this.eff.crates.get(before)?.name ?? '' })
-        : _('op.reorderEnd', { crate: this.crateLabel(crate), level })
-      : before != null
-        ? _('op.moveBefore', { crate: this.crateLabel(crate), level, before: this.eff.crates.get(before)?.name ?? '' })
-        : _('op.moveEnd', { crate: this.crateLabel(crate), level });
-    return { type: 'moveCrate', crate, parent, before, reorder, text };
+    if (before === undefined) return { type: 'moveCrate', crate, parent };
+    return { type: 'moveCrate', crate, parent, before, reorder: this.eff.crates.get(crate)?.parent === parent };
   }
-  /** Add a file on disk to the Serato library (optionally into a crate). Serato analyses it later. */
+  /**
+   * Add a file on disk to the Serato library (optionally into a crate). Serato analyses it later.
+   * crateName: the path of a crate created in the same change, shown until that crate exists.
+   */
   opImport(path, crate = null, crateName = null) {
-    const file = baseName(path);
-    const text = crate != null ? _('op.importInto', { file, crate: crateName ?? this.crateLabel(crate) }) : _('op.import', { file });
-    return { type: 'importTrack', id: `imp-${uid()}`, path, crate, text };
+    const op = { type: 'importTrack', id: `imp-${uid()}`, path, crate };
+    if (crateName != null) op.crateName = crateName;
+    return op;
   }
   /** Is this file already planned to be added to Serato? */
   planned(path) {
     return this.eff.imports.get(pathKey(path)) ?? null;
   }
   opDelete(crate) {
-    return { type: 'deleteCrate', crate, text: _('op.deleteCrate', { crate: this.crateLabel(crate) }) };
+    return { type: 'deleteCrate', crate };
   }
   opMerge(from, into) {
-    return { type: 'mergeCrate', from, into, text: _('op.mergeCrate', { from: this.crateLabel(from), into: this.crateLabel(into) }) };
+    return { type: 'mergeCrate', from, into };
   }
-  /** deleteFile: also move the file to the Trash once the removal is written to Serato. */
+  /** reason: an i18n key ('' for none). deleteFile: also move the file to the Trash once the removal is written to Serato. */
   opRemoveTrack(asset, reason, { deleteFile = false } = {}) {
-    const track = this.trackLabel(asset);
-    const main = deleteFile ? _('op.removeAndTrash', { track }) : _('op.removeTrack', { track });
-    const op = { type: 'removeTrack', asset, reason, text: `${main}${reason ? _('sep.reason', { reason }) : ''}` };
+    const op = { type: 'removeTrack', asset, reason };
     if (deleteFile) op.deleteFile = true;
     return op;
   }
@@ -569,7 +637,7 @@ class Store {
       ch.ops = ch.ops.map((op) => {
         if (op.type !== 'removeTrack' || op.asset !== asset || !op.deleteFile) return op;
         touched++;
-        const { deleteFile, ...rest } = op; // keep group / keeper / missing tags
+        const { deleteFile, text, ...rest } = op; // keep group / keeper / missing tags
         return { ...rest, ...this.opRemoveTrack(asset, op.reason) };
       });
     }
@@ -580,10 +648,10 @@ class Store {
     return touched;
   }
   opReject(asset) {
-    return { type: 'removeTrack', asset, reason: _('common.reject'), deleteFile: true, text: _('op.rejectTrack', { track: this.trackLabel(asset) }) };
+    return { type: 'removeTrack', asset, reason: 'common.reject', deleteFile: true };
   }
   opRelocate(asset, path) {
-    return { type: 'relocate', asset, path, text: _('op.relocate', { track: this.trackLabel(asset), path }) };
+    return { type: 'relocate', asset, path };
   }
 }
 

@@ -2,7 +2,7 @@
 // Disk files are matched to Serato tracks by path; "classified" follows store.rules.
 // Screening: mark files reject (X) / keep (V) while listening. Files Serato does not use can then be
 // moved to the macOS Trash (with one-click restore); tracks in Serato are staged in the plan instead.
-import { BAR, buildReport, byName, HINT, LABEL, STATUSES } from '../folderReport.js';
+import { BAR, buildReport, fileMatches as fileMatchesQuery, folderChildren, folderFiles, HINT, LABEL, STATUSES } from '../folderReport.js';
 import { dirOf, effectivePath, isClassified } from '../model.js';
 import { player } from '../player.js';
 import { LOW_QUALITY_TEXT, qualityBadge } from '../quality.js';
@@ -188,11 +188,7 @@ export function createFoldersView({ navigate }) {
   }
 
   // ---------- tree ----------
-  function sortedChildren(node) {
-    let list = node.children.slice();
-    if (hideDone) list = list.filter((c) => !c.done || c.total.missing || c.key === selectedKey);
-    return list.sort(sortBy === 'todo' ? (a, b) => b.todo - a.todo || b.total.missing - a.total.missing || byName(a, b) : byName);
-  }
+  const sortedChildren = (node) => folderChildren(node, { sortBy, hideDone, keepKey: selectedKey });
 
   function renderTreeToolbar() {
     const sortSelect = h(
@@ -305,26 +301,8 @@ export function createFoldersView({ navigate }) {
   }
 
   // ---------- detail ----------
-  function subtreeFiles(node) {
-    if (!includeSub) return node.files;
-    const out = [];
-    const walk = (n) => {
-      out.push(...n.files);
-      n.children.slice().sort(byName).forEach(walk);
-    };
-    walk(node);
-    return out;
-  }
-
-  function fileMatches(f, q) {
-    if (!q) return true;
-    const t = f.assetId != null ? store.base.tracks.get(f.assetId) : null;
-    const hay = `${f.name} ${t?.title || ''} ${t?.artist || ''}`.toLowerCase();
-    return q
-      .toLowerCase()
-      .split(/\s+/)
-      .every((w) => hay.includes(w));
-  }
+  const subtreeFiles = (node) => folderFiles(node, includeSub);
+  const fileMatches = (f, q) => fileMatchesQuery(f, f.assetId != null ? store.base.tracks.get(f.assetId) : null, q);
 
   function renderDetail() {
     const node = selected();
@@ -580,7 +558,7 @@ export function createFoldersView({ navigate }) {
     if (f.status === 'missing') return toast(_('folders.fileMissingHint'));
     if (f.assetId != null) {
       // In Serato: remove it there and trash the file when the plan is applied.
-      store.commit(_('common.rejectTrack', { track: store.trackLabel(f.assetId) }), [store.opReject(f.assetId)], { silent: true });
+      store.commit({ key: 'common.rejectTrack', params: { track: store.trackLabel(f.assetId) } }, [store.opReject(f.assetId)], { silent: true });
     } else {
       store.setScreenMark([f.path], 'reject');
     }

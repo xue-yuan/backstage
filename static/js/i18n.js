@@ -53,6 +53,11 @@ function entry(key) {
   return value ?? key;
 }
 
+/** Whether `key` is a known text (data saved by older versions may hold text instead of a key). */
+export function has(key) {
+  return typeof key === 'string' && key in en;
+}
+
 /** Text for `key` with {placeholders} filled from `params`. A counted entry gives its "other" form. */
 export function _(key, params) {
   const value = entry(key);

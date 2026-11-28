@@ -21,7 +21,8 @@
       "../app.py": "server/app.py",
       "../package.json": "server/package.json",
       "../serato_crates/*.py": "server/serato_crates/",
-      "../static/": "server/static/"
+      "../static/": "server/static/",
+      "python/": "python/"
     },
     "macOS": {
       "minimumSystemVersion": "12.0",

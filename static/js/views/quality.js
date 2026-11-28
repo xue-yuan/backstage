@@ -298,7 +298,7 @@ export function createQualityView({ navigate } = {}) {
   function reject(r) {
     if (r.track) {
       if (store.eff.removedTracks.has(r.track.id)) return;
-      store.commit(_('common.rejectTrack', { track: titleOf(r) }), [store.opReject(r.track.id)]);
+      store.commit({ key: 'common.rejectTrack', params: { track: titleOf(r) } }, [store.opReject(r.track.id)]);
     } else {
       store.setScreenMark([r.path], 'reject');
       toast(_('quality.markedReject'), { timeout: 6000 });

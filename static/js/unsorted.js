@@ -125,7 +125,7 @@ export async function consolidate() {
     okText: _('common.addToPlan'),
   });
   if (!ok) return false;
-  return !!store.commit(_('unsorted.consolidateChange', { inbox: INBOX }), ops);
+  return !!store.commit({ key: 'unsorted.consolidateChange', params: { inbox: INBOX } }, ops);
 }
 
 async function createUnder() {
@@ -146,8 +146,8 @@ async function createUnder() {
     ops.push(op);
     parent = op.id;
   }
-  ops.push({ ...store.opCreate(name, parent), text: _('op.createCrateUnder', { name, parent: INBOX }) });
-  store.commit(_('unsorted.newCrateChange', { crate: `${INBOX} / ${name}` }), ops);
+  ops.push(store.opCreate(name, parent));
+  store.commit({ key: 'unsorted.newCrateChange', params: { crate: `${INBOX} / ${name}` } }, ops);
 }
 
 const REASON = { inbox: _('unsorted.reasonInbox'), folder: _('unsorted.reasonFolder'), manual: _('unsorted.reasonManual') };

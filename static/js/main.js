@@ -129,7 +129,7 @@ document.addEventListener('keydown', (e) => {
   if (isTyping(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
     const undone = store.undo();
-    toast(undone ? _('common.undone', { label: undone.label }) : _('app.nothingToUndo'));
+    toast(undone ? _('common.undone', { label: store.changeTitle(undone) }) : _('app.nothingToUndo'));
     e.preventDefault();
     return;
   }

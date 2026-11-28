@@ -137,7 +137,7 @@ export function createPlanView() {
                     },
                     h('span', { class: 'caret' }, h('span', { class: `chev ${isOpen ? 'is-open' : ''}` })),
                     h('span', { class: 'muted num' }, fmt.time(ch.at)),
-                    h('span', { class: 'grow' }, ch.label),
+                    h('span', { class: 'grow' }, store.changeTitle(ch)),
                     h('span', { class: 'muted small' }, _n(ch.ops.length, 'plan.actionCount')),
                     h('button', {
                       class: 'btn btn-ghost btn-xs',
@@ -153,7 +153,7 @@ export function createPlanView() {
                         { class: 'change-ops' },
                         ch.ops.map((op) => {
                           const issue = issues.find((i) => i.op === op);
-                          return h('li', { class: issue ? 'op-issue' : '' }, op.text || op.type, issue ? h('span', { class: 'tag tag-danger' }, issue.message) : null);
+                          return h('li', { class: issue ? 'op-issue' : '' }, store.opText(op), issue ? h('span', { class: 'tag tag-danger' }, issue.message) : null);
                         }),
                       )
                     : null,
@@ -170,6 +170,7 @@ export function createPlanView() {
       eff: store.eff,
       skip: store.rules.skip,
       trackLabel: (id) => store.trackLabel(id),
+      opText: (op) => store.opText(op),
       issues: store.eff.issues,
     });
     return h(
@@ -213,7 +214,7 @@ export function createPlanView() {
                     'li',
                     { class: it.issue ? 'op-issue' : '' },
                     h('span', { class: 'grow' }, it.text, it.movedOut && mixed ? h('span', { class: 'tag tag-edit' }, _('plan.removedFromSource')) : null, it.issue ? h('span', { class: 'tag tag-danger' }, it.issue) : null),
-                    h('button', { class: 'btn btn-ghost btn-xs', title: it.ops.map((o) => o.text || o.type).join('\n'), onclick: () => undoItems([it], it.text) }, _('common.undo')),
+                    h('button', { class: 'btn btn-ghost btn-xs', title: it.ops.map((o) => store.opText(o)).join('\n'), onclick: () => undoItems([it], it.text) }, _('common.undo')),
                   ),
                 ),
               )
@@ -252,8 +253,8 @@ export function createPlanView() {
   function exportMarkdown() {
     const lines = [_('plan.exportTitle'), '', _('plan.exportGenerated', { time: new Date().toLocaleString() }), _('plan.exportSnapshot', { time: store.base.snapshot?.takenAt ?? '–' }), ''];
     for (const ch of store.plan.changes) {
-      lines.push(`## ${fmt.time(ch.at)} ${ch.label}`, '');
-      for (const op of ch.ops) lines.push(`- [ ] ${op.text || op.type}`);
+      lines.push(`## ${fmt.time(ch.at)} ${store.changeTitle(ch)}`, '');
+      for (const op of ch.ops) lines.push(`- [ ] ${store.opText(op)}`);
       lines.push('');
     }
     download('crate-plan.md', lines.join('\n'), 'text/markdown');

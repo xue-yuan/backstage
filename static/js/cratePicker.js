@@ -82,7 +82,7 @@ export function createCratePicker({ onPick, allowCreate = false, exclude, active
     if (!r) return;
     if (r.create) {
       const op = store.opCreate(r.name, r.parent);
-      const change = store.commit(_('common.createCrate', { path: r.path }), [op], { silent: true });
+      const change = store.commit({ key: 'common.createCrate', params: { path: r.path } }, [op], { silent: true });
       if (!change) return;
       onPick(op.id, { created: true });
     } else {

@@ -18,6 +18,38 @@ export const BAR = ['classified', 'unsorted', 'notImported', 'copy', 'rejected']
 const zero = () => ({ classified: 0, unsorted: 0, notImported: 0, copy: 0, rejected: 0, missing: 0, files: 0, low: 0, unreadable: 0, suspect: 0, kept: 0 });
 export const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
+/**
+ * Child folders of a report node for the folder tree: sorted by name, or with the most left to do
+ * first ('todo'); hideDone leaves out finished folders except those with missing files and `keepKey`.
+ */
+export function folderChildren(node, { sortBy = 'name', hideDone = false, keepKey = null } = {}) {
+  let list = node.children.slice();
+  if (hideDone) list = list.filter((c) => !c.done || c.total.missing || c.key === keepKey);
+  return list.sort(sortBy === 'todo' ? (a, b) => b.todo - a.todo || b.total.missing - a.total.missing || byName(a, b) : byName);
+}
+
+/** Files of a folder, with those of its subfolders (by name, depth first) when includeSub. */
+export function folderFiles(node, includeSub) {
+  if (!includeSub) return node.files;
+  const out = [];
+  const walk = (n) => {
+    out.push(...n.files);
+    n.children.slice().sort(byName).forEach(walk);
+  };
+  walk(node);
+  return out;
+}
+
+/** Whether a file matches a search: every word appears in its file name or its song's title or artist. */
+export function fileMatches(file, track, query) {
+  if (!query) return true;
+  const hay = `${file.name} ${track?.title || ''} ${track?.artist || ''}`.toLowerCase();
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .every((w) => hay.includes(w));
+}
+
 // "Serato already has this song": for a file Serato does not use, find live Serato tracks that are
 // the same song by name, so importing the file would make a duplicate (Serato writes its analysis
 // into the tags, so such copies are rarely byte-identical). A match is the same file name; or

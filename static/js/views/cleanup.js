@@ -6,6 +6,7 @@ import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
 import { clear, confirmDialog, fmt, h, prefs } from '../ui.js';
 import { _, _n } from '../i18n.js';
+import { reasonText } from '../planText.js';
 
 // Real-codec score for picking which duplicate to keep; undefined falls back to Serato's data.
 const scoreOf = (t) => {
@@ -20,7 +21,6 @@ export function createCleanupView({ navigate }) {
   let scanning = false;
   const chosen = new Map(); // assetId -> chosen candidate path
   const keepers = new Map(); // dup group key -> asset id
-  let dismissed = new Set(prefs.get('dupes.dismissed', []));
   let closeLengthOnly = prefs.get('dupes.closeLengthOnly', false);
   let qualityDiffOnly = prefs.get('dupes.qualityDiffOnly', false);
   const emptySelected = new Set();
@@ -41,7 +41,7 @@ export function createCleanupView({ navigate }) {
   function renderTabs() {
     const eff = store.eff;
     const missingOpen = missingAll().filter((t) => !eff.relocated.has(t.id) && !eff.removedTracks.has(t.id)).length;
-    const dupes = findDuplicates(eff, scoreOf).filter((g) => !dismissed.has(g.key)).length;
+    const dupes = findDuplicates(eff, scoreOf).filter((g) => !store.dismissedDuplicates.has(g.key)).length;
     const empty = findEmptyCrates(eff).length;
     const uncategorized = findUncategorized(eff).length;
     const seg = (id, label, n) =>
@@ -147,7 +147,7 @@ export function createCleanupView({ navigate }) {
           'div',
           { class: 'staged' },
           h('span', { class: 'tag tag-ok' }, _('cleanup.inPlan')),
-          relocatedTo ? ` ${_('cleanup.movedTo', { path: fmt.shortPath(relocatedTo) })}` : ` ${_('cleanup.removedFromLibrary', { reason: eff.removedTracks.get(t.id) || _('common.missingFile') })}`,
+          relocatedTo ? ` ${_('cleanup.movedTo', { path: fmt.shortPath(relocatedTo) })}` : ` ${_('cleanup.removedFromLibrary', { reason: reasonText(eff.removedTracks.get(t.id)) || _('common.missingFile') })}`,
           h('button', {
             class: 'btn btn-ghost btn-xs',
             onclick: () => store.revertOps((op) => op.missing === t.id || ((op.type === 'relocate' || op.type === 'removeTrack') && op.asset === t.id)),
@@ -194,7 +194,7 @@ export function createCleanupView({ navigate }) {
                   libraryTrackAt(pick) != null ? _('cleanup.mergeIntoRecord') : _('cleanup.useLocation'),
                 )
               : null,
-            h('button', { class: 'btn btn-sm', onclick: () => store.commit(_('cleanup.removeTrackChange', { track: t.title || t.fileName }), [store.opRemoveTrack(t.id, _('common.missingFile'))]) }, _('cleanup.removeFromLibrary')),
+            h('button', { class: 'btn btn-sm', onclick: () => store.commit({ key: 'cleanup.removeTrackChange', params: { track: t.title || t.fileName } }, [store.opRemoveTrack(t.id, 'common.missingFile')]) }, _('cleanup.removeFromLibrary')),
           ),
         );
       }
@@ -236,15 +236,15 @@ export function createCleanupView({ navigate }) {
     const eff = store.eff;
     const have = new Set(eff.cratesOf.get(existing) || []);
     const ops = (eff.cratesOf.get(t.id) || []).filter((c) => !have.has(c)).map((c) => ({ ...store.opAdd(c, existing), missing: t.id }));
-    ops.push({ ...store.opRemoveTrack(t.id, _('cleanup.mergedNote')), missing: t.id });
+    ops.push({ ...store.opRemoveTrack(t.id, 'cleanup.mergedNote'), missing: t.id });
     return ops;
   }
   function resolve(t, path) {
     const merge = libraryTrackAt(path) != null;
-    store.commit(merge ? _('cleanup.mergeChange', { track: t.title || t.fileName }) : _('cleanup.relocateChange', { track: t.title || t.fileName }), resolveOps(t, path));
+    store.commit({ key: merge ? 'cleanup.mergeChange' : 'cleanup.relocateChange', params: { track: t.title || t.fileName } }, resolveOps(t, path));
   }
   function resolveAll(list) {
-    store.commit(_n(list.length, 'cleanup.fixMissingChange'), list.flatMap((t) => resolveOps(t, candidates[t.id][0].path)));
+    store.commit({ key: 'cleanup.fixMissingChange', n: list.length }, list.flatMap((t) => resolveOps(t, candidates[t.id][0].path)));
   }
   async function removeAll(list) {
     const ok = await confirmDialog({
@@ -252,7 +252,7 @@ export function createCleanupView({ navigate }) {
       message: _('cleanup.removeMissingWarning'),
       okText: _('common.addToPlan'),
     });
-    if (ok) store.commit(_n(list.length, 'cleanup.removeMissing'), list.map((t) => store.opRemoveTrack(t.id, _('common.missingFile'))));
+    if (ok) store.commit({ key: 'cleanup.removeMissing', n: list.length }, list.map((t) => store.opRemoveTrack(t.id, 'common.missingFile')));
   }
 
   // ---------- duplicates ----------
@@ -265,7 +265,7 @@ export function createCleanupView({ navigate }) {
       if (!staged.has(op.group)) staged.set(op.group, []);
       staged.get(op.group).push(op);
     }
-    let groups = findDuplicates(eff, scoreOf).filter((g) => !dismissed.has(g.key) && !staged.has(g.key));
+    let groups = findDuplicates(eff, scoreOf).filter((g) => !store.dismissedDuplicates.has(g.key) && !staged.has(g.key));
     if (closeLengthOnly) groups = groups.filter((g) => g.spreadMs <= 2000);
     if (qualityDiffOnly) groups = groups.filter((g) => bestQuality(g) != null);
     const keepOf = (g) => {
@@ -316,15 +316,8 @@ export function createCleanupView({ navigate }) {
           }),
           _('cleanup.qualityDiffersOnly'),
         ),
-        dismissed.size
-          ? h('button', {
-              class: 'btn btn-ghost btn-sm',
-              onclick: () => {
-                dismissed = new Set();
-                prefs.set('dupes.dismissed', []);
-                render();
-              },
-            }, _n(dismissed.size, 'cleanup.showDismissedGroups'))
+        store.dismissedDuplicates.size
+          ? h('button', { class: 'btn btn-ghost btn-sm', onclick: () => store.clearDismissedDuplicates() }, _n(store.dismissedDuplicates.size, 'cleanup.showDismissedGroups'))
           : null,
       ),
       sameVersion.length > 1
@@ -427,11 +420,7 @@ export function createCleanupView({ navigate }) {
             : null,
           h('button', {
             class: 'btn btn-sm btn-ghost',
-            onclick: () => {
-              dismissed.add(g.key);
-              prefs.set('dupes.dismissed', [...dismissed]);
-              render();
-            },
+            onclick: () => store.setDuplicatesDismissed([g.key]),
           }, _('cleanup.notDuplicates')),
         ),
       );
@@ -494,18 +483,18 @@ export function createCleanupView({ navigate }) {
           ops.push({ ...store.opAdd(c, keepId), group: g.key, keeper: keepId });
         }
       }
-      ops.push({ ...store.opRemoveTrack(t.id, _('cleanup.duplicate'), { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
+      ops.push({ ...store.opRemoveTrack(t.id, 'cleanup.duplicate', { deleteFile: toTrash.has(t.id) }), group: g.key, keeper: keepId });
     }
     return { ops, trashed: toTrash.size };
   }
 
-  const withTrash = (label, n) => (n ? `${label}${_n(n, 'cleanup.filesToTrashSuffix')}` : label);
+  const withTrash = (title, n) => (n ? { ...title, extra: [{ key: 'cleanup.filesToTrashSuffix', n }] } : title);
 
   function mergeDupes(g, keepId, { trash = false } = {}) {
     const { ops, trashed } = dupeOps(g, keepId, { trash });
     if (!ops.length) return;
     const keeper = store.base.tracks.get(keepId);
-    store.commit(withTrash(_('cleanup.mergeDuplicatesChange', { title: keeper.title || keeper.fileName, quality: store.trackQuality(keeper).label }), trashed), ops);
+    store.commit(withTrash({ key: 'cleanup.mergeDuplicatesChange', params: { title: keeper.title || keeper.fileName, quality: { quality: keepId } } }, trashed), ops);
   }
 
   // Merge every listed group at once, each keeping its selected copy. One change in the plan; each
@@ -528,7 +517,7 @@ export function createCleanupView({ navigate }) {
       okText: trash ? _('cleanup.mergeAndTrash') : _('cleanup.mergeAll'),
       danger: trash,
     });
-    if (ok) store.commit(withTrash(_n(list.length, 'cleanup.mergeGroupsChange'), trashed), ops);
+    if (ok) store.commit(withTrash({ key: 'cleanup.mergeGroupsChange', n: list.length }, trashed), ops);
   }
 
   // ---------- empty crates ----------
@@ -577,7 +566,7 @@ export function createCleanupView({ navigate }) {
   function deleteSelected() {
     const ids = [...emptySelected];
     emptySelected.clear();
-    store.commit(_n(ids.length, 'cleanup.deleteEmptyCrates'), ids.map((id) => store.opDelete(id)));
+    store.commit({ key: 'cleanup.deleteEmptyCrates', n: ids.length }, ids.map((id) => store.opDelete(id)));
   }
 
   function render() {

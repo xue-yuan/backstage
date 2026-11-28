@@ -86,15 +86,33 @@ fn app_log(message: &str) {
     }
 }
 
-/// The language chosen in the page; the server stores it in settings.json. English unless "zh".
+/// Whether to show Chinese: the language chosen in the page (the server stores it in settings.json),
+/// or, until one is chosen, the Mac's first preferred language, as the server does. Read on each
+/// call because the page can switch while the app runs.
 fn lang_is_zh() -> bool {
-    let Ok(text) = std::fs::read_to_string(data_dir().join("settings.json")) else {
-        return false;
-    };
-    let Some(i) = text.find("\"lang\"") else {
-        return false;
-    };
-    text[i + 6..].trim_start().trim_start_matches(':').trim_start().starts_with("\"zh\"")
+    let chosen = std::fs::read_to_string(data_dir().join("settings.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .and_then(|v| v.get("lang")?.as_str().map(str::to_string));
+    match chosen.as_deref() {
+        Some("zh") => true,
+        Some("en") => false,
+        _ => mac_prefers_chinese(),
+    }
+}
+
+/// The Mac's first preferred language is Chinese (`defaults read -g AppleLanguages`), read once.
+fn mac_prefers_chinese() -> bool {
+    static ZH: OnceLock<bool> = OnceLock::new();
+    *ZH.get_or_init(|| {
+        let Ok(out) = Command::new("defaults").args(["read", "-g", "AppleLanguages"]).stdin(Stdio::null()).output() else {
+            return false;
+        };
+        // e.g. ( "zh-Hant-TW", "en-TW" ): the first quoted or bare language tag
+        let text = String::from_utf8_lossy(&out.stdout);
+        let first = text.trim_start_matches(|c: char| c == '(' || c.is_whitespace()).trim_start_matches('"');
+        first.to_ascii_lowercase().starts_with("zh")
+    })
 }
 
 // Interface text shared with the page and the server, embedded at build time.
@@ -159,8 +177,13 @@ fn find_uv() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-/// A uv-managed Python interpreter (never the system one).
-fn find_python() -> Result<PathBuf, String> {
+/// The Python that runs the server: the one bundled in the app (Resources/python, copied by
+/// tools/bundle_python.sh), or, for a build without it, a uv-managed interpreter (never the system one).
+fn find_python(resource_dir: &Path) -> Result<PathBuf, String> {
+    let bundled = resource_dir.join("python/bin/python3");
+    if bundled.is_file() {
+        return Ok(bundled);
+    }
     let uv = find_uv().ok_or_else(|| tr("startup.uvMissing", &[]))?;
     let out = Command::new(&uv)
         .args(["python", "find", "--no-project", "--managed-python", PYTHON_REQUEST])
@@ -181,7 +204,7 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
     if port_open() {
         return Err(port_in_use_message());
     }
-    let python = find_python()?;
+    let python = find_python(server_dir.parent().unwrap_or(server_dir))?;
     app_log(&format!("python: {}", python.display()));
     std::fs::create_dir_all(data_dir).map_err(|e| tr("startup.createFolderFailed", &[("path", &data_dir.display()), ("error", &e)]))?;
     let log = OpenOptions::new()
@@ -191,6 +214,7 @@ fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
         .map_err(|e| tr("startup.logFailed", &[("error", &e)]))?;
     Command::new(&python)
         .arg("-B") // never write __pycache__ into the app bundle
+        .args(["-E", "-s"]) // ignore PYTHON* variables and the user's site-packages: only the bundled standard library
         .arg(server_dir.join("app.py"))
         .args(["--port", &PORT.to_string(), "--no-browser", "--exit-with-parent", "--data-dir"])
         .arg(data_dir)

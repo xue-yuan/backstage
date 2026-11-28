@@ -255,14 +255,16 @@ class _Writer:
             raise ApplyError(tr("applyError.songNotInLibrary", id=aid))
         return rasset, msa, rsa
 
+    def _sibling_named(self, mparent: int, name: str, except_mid: int | None = None) -> int | None:
+        """The crate under `mparent` with this name, ignoring letter case of any alphabet (as the page does)."""
+        key = name.casefold()
+        for cid, cname in self.con.execute("SELECT id, name FROM main.container WHERE parent_id = ? AND type = 1", (mparent,)):
+            if cid != except_mid and cname.casefold() == key:
+                return cid
+        return None
+
     def _name_taken(self, mparent: int, name: str, except_mid: int | None = None) -> bool:
-        return (
-            self._one(
-                "SELECT COUNT(*) FROM main.container WHERE parent_id = ? AND type = 1 AND name = ? COLLATE NOCASE AND id IS NOT ?",
-                (mparent, name, except_mid),
-            )
-            > 0
-        )
+        return self._sibling_named(mparent, name, except_mid) is not None
 
     def _next_order(self, schema: str, parent: int) -> int:
         return (self._one(f"SELECT MAX(list_order) FROM {schema}.container WHERE parent_id = ?", (parent,)) or 0) + 1
@@ -305,6 +307,8 @@ class _Writer:
     def rename(self, op: dict) -> None:
         mid = self.crate(op["crate"])
         name = str(op["name"]).strip()
+        if not name:
+            raise ApplyError(tr("applyError.emptyName"))
         mparent = self._one("SELECT parent_id FROM main.container WHERE id = ?", (mid,))
         if self._name_taken(mparent, name, mid):
             raise ApplyError(tr("applyError.nameTakenAtLevel", name=name))
@@ -360,7 +364,10 @@ class _Writer:
         self.con.execute(f"DELETE FROM main.container WHERE id IN ({','.join('?' * len(mids))})", mids)
 
     def merge(self, op: dict) -> None:
-        self._merge(self.crate(op["from"]), self.crate(op["into"]))
+        src, dst = self.crate(op["from"]), self.crate(op["into"])
+        if dst in self._subtree(src):  # itself or one of its child crates: merging would delete the target
+            raise ApplyError(tr("applyError.cannotMergeIntoItself"))
+        self._merge(src, dst)
 
     def _merge(self, src: int, dst: int) -> None:
         have = set(self._members(dst))
@@ -369,7 +376,7 @@ class _Writer:
                 self._add(dst, aid)
                 have.add(aid)
         for (child, name) in self.con.execute("SELECT id, name FROM main.container WHERE parent_id = ? AND type = 1", (src,)).fetchall():
-            clash = self._one("SELECT id FROM main.container WHERE parent_id = ? AND type = 1 AND name = ? COLLATE NOCASE", (dst, name))
+            clash = self._sibling_named(dst, name)
             if clash is not None:
                 self._merge(child, clash)
             else:

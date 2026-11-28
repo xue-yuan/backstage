@@ -82,6 +82,13 @@ export const prefs = {
       /* storage unavailable: preference just isn't remembered */
     }
   },
+  remove(key) {
+    try {
+      localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
+    } catch {
+      /* storage unavailable: nothing to remove */
+    }
+  },
 };
 
 // ---------- Virtual list (fixed row height) ----------

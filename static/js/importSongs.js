@@ -76,10 +76,7 @@ export async function addToSerato(files, { folderName } = {}) {
     where = `${store.crateLabel(inbox)} / ${folderName}`;
   }
   ops.push(...add.map((f) => store.opImport(f.path, crate, where)));
-  const label = where
-    ? _n(add.length, 'import.buttonInto', { crate: where })
-    : _n(add.length, 'import.title');
-  store.commit(label, ops);
+  store.commit(where ? { key: 'import.buttonInto', n: add.length, params: { crate: where } } : { key: 'import.title', n: add.length }, ops);
 }
 
 /** Take files out of the plan's "add to Serato". */
