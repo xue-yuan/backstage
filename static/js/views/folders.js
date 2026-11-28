@@ -10,6 +10,7 @@ import { addToSerato, dontAdd, importable } from '../importSongs.js';
 import { noteMark, noteMenuItem } from '../notes.js';
 import { showSpectrum, spectrumAvailable } from '../spectrogram.js';
 import { api, store } from '../store.js';
+import { editMusicFolders } from '../musicFolders.js';
 import { openUnsortedEditor, unsortedRoots } from '../unsorted.js';
 import { clear, confirmDialog, contextMenu, fmt, h, modal, prefs, toast, VirtualList } from '../ui.js';
 import { _, _n } from '../i18n.js';
@@ -129,6 +130,7 @@ export function createFoldersView({ navigate }) {
         h(
           'div',
           { class: 'toolbar' },
+          h('button', { class: 'btn btn-sm', onclick: () => editMusicFolders(), title: _('Choose which folders are scanned') }, _('Music folders · {n}', { n: store.folderScan?.roots.length ?? 0 })),
           h('button', { class: 'btn btn-sm', onclick: openUnsortedEditor, title: _('Choose which crates make their songs "Unsorted"') }, _('Unsorted crates · {n}', { n: unsortedCount })),
           h('button', { class: 'btn btn-sm', disabled: loading, onclick: () => load(true) }, loading ? _('Scanning…') : _('↻ Rescan')),
         ),
@@ -762,7 +764,7 @@ export function createFoldersView({ navigate }) {
         h(
           'p',
           {},
-          _('{size} in total. The files go to the Mac Trash and are not deleted directly. Backstage remembers where each file was, so you can restore them with one click until you empty the Trash. None of these files are in Serato, so Serato is not affected.', { size: fmt.size(bytes) }),
+          _('{size} in total. The files go to the Mac Trash and are not deleted directly. Cratify remembers where each file was, so you can restore them with one click until you empty the Trash. None of these files are in Serato, so Serato is not affected.', { size: fmt.size(bytes) }),
         ),
         h(
           'div',

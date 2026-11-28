@@ -22,10 +22,21 @@ from .folders import scan_folders
 from .library import load_library, scan_audio_files
 from .snapshot import DEFAULT_SOURCE, SnapshotError, load_meta, source_signature, take_snapshot
 from .trash import move_to_trash, restore_from_trash
-from . import i18n
+from . import i18n, musicfolders
 from .i18n import tr
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+def _version() -> str:
+    """The app version from package.json (next to app.py, also in the Mac app's bundle)."""
+    try:
+        return str(json.loads((STATIC_DIR.parent / "package.json").read_text())["version"])
+    except (OSError, ValueError, KeyError):
+        return "dev"
+
+
+VERSION = _version()
 AUDIO_TYPES = {
     ".mp3": "audio/mpeg",
     ".m4a": "audio/mp4",
@@ -37,15 +48,11 @@ AUDIO_TYPES = {
     ".aiff": "audio/aiff",
     ".ogg": "audio/ogg",
 }
-# All DJ music lives in ~/Music/DJ (since 2026-11-26); the folder report only looks there.
-# Finding lost files searches all of ~/Music. ~/Downloads is left out on purpose: the Mac app
-# would need an extra macOS permission prompt for it.
-SCAN_ROOTS = [Path.home() / "Music" / "DJ"]
-RELOCATE_ROOTS = [Path.home() / "Music"]
 SERATO_LIBRARY = DEFAULT_SOURCE.parent
-# Folder names below are existing names on disk (the restore button lists backups by them), so they stay as is.
-SERATO_BACKUPS = Path.home() / "Backstage Backups" / "Serato 資料庫"
-BEFORE_APPLY = "套用前"  # suffix of the backup folder made before each apply
+BACKUPS_DIR = Path.home() / "Cratify Backups"
+SERATO_BACKUPS = BACKUPS_DIR / "Serato Library"
+BEFORE_APPLY = "before apply"  # suffix of the backup folder made before each apply
+OLD_BEFORE_APPLY = "套用前"  # the same suffix before 2026-11-28; the restore button still finds those backups
 
 
 def path_key(p: str) -> str:
@@ -120,7 +127,7 @@ class AppState:
         tmp.write_text(json.dumps({"reject": screen["reject"], "keep": screen["keep"]}, ensure_ascii=False))
         os.replace(tmp, self.screen_path)
 
-    # ---- notes about songs (the Notes tab). Only Backstage keeps them; Serato is never written ----
+    # ---- notes about songs (the Notes tab). Only Cratify keeps them; Serato is never written ----
     @property
     def notes_path(self) -> Path:
         return self.data_dir / "notes.json"
@@ -160,7 +167,8 @@ class AppState:
 
     # ---- apply the plan to Serato (Serato closed; rehearse on a copy, back up, write, verify) ----
     def apply_status(self) -> dict:
-        backups = sorted((p for p in SERATO_BACKUPS.glob(f"*{BEFORE_APPLY}") if (p / "master.sqlite").exists()), reverse=True) if SERATO_BACKUPS.is_dir() else []
+        found = (p for suffix in (BEFORE_APPLY, OLD_BEFORE_APPLY) for p in SERATO_BACKUPS.glob(f"*{suffix}") if (p / "master.sqlite").exists())
+        backups = sorted(found, key=lambda p: p.name, reverse=True)  # names start with the time
         procs = serato_processes()
         return {
             "seratoRunning": bool(procs),
@@ -209,7 +217,7 @@ class AppState:
     def restore_serato(self, backup_dir: str) -> dict:
         target = Path(backup_dir).resolve()
         if not target.is_relative_to(SERATO_BACKUPS.resolve()):
-            raise ApplyError(tr("Can only restore from a Backstage backup"))
+            raise ApplyError(tr("Can only restore from a Cratify backup"))
         busy = files_in_use(SERATO_LIBRARY)
         if busy:
             raise ApplyError(tr("Another program is using the Serato database: {files}", files=", ".join(busy)))
@@ -251,7 +259,8 @@ class AppState:
 
     def relocate_candidates(self) -> dict:
         lib = self.ensure_library()
-        index = scan_audio_files(RELOCATE_ROOTS)
+        roots = musicfolders.relocate_roots(self.music_folders())
+        index = scan_audio_files(roots)
         result: dict[str, list[dict]] = {}
         allowed: set[str] = set()
         for t in lib["tracks"]:
@@ -262,14 +271,40 @@ class AppState:
             allowed.update(c["path"] for c in found)
         with self.lock:
             self.extra_audio_paths = allowed
-        return {"roots": [str(r) for r in RELOCATE_ROOTS], "candidates": result}
+        return {"roots": [str(r) for r in roots], "candidates": result}
+
+    # ---- music folders: what the Folders view scans (settings.json; suggested until confirmed) ----
+    def music_folders(self) -> list[Path]:
+        chosen = musicfolders.saved(self.data_dir)
+        return chosen if chosen is not None else self.suggested_music_folders()
+
+    def suggested_music_folders(self) -> list[Path]:
+        lib = self.ensure_library()
+        return musicfolders.suggest([t["path"] for t in lib["tracks"] if t["exists"]])
+
+    def music_folder_settings(self) -> dict:
+        chosen = musicfolders.saved(self.data_dir)
+        suggested = self.suggested_music_folders()
+        folders = chosen if chosen is not None else suggested
+        return {
+            "folders": [str(p) for p in folders],
+            "saved": chosen is not None,
+            "suggested": [str(p) for p in suggested],
+            "missing": [str(p) for p in folders if not p.is_dir()],  # e.g. a drive that is not connected
+        }
+
+    def save_music_folders(self, values) -> dict:
+        musicfolders.save(self.data_dir, musicfolders.clean(values))
+        with self.lock:
+            self.folder_scan = None  # rescan on the next request
+        return self.music_folder_settings()
 
     def folders(self, refresh: bool = False) -> dict:
         lib = self.ensure_library()
         with self.lock:
             if self.folder_scan is not None and not refresh:
                 return self.folder_scan
-        scan = scan_folders(SCAN_ROOTS, [t["path"] for t in lib["tracks"] if t["exists"]])
+        scan = scan_folders(self.music_folders(), [t["path"] for t in lib["tracks"] if t["exists"]])
         # Folders that Serato still points at but that no longer exist (moved or renamed).
         scan["goneDirs"] = sorted(d for d in {os.path.dirname(t["path"]) for t in lib["tracks"] if not t["exists"]} if not os.path.isdir(d))
         dirs = scan["dirs"]
@@ -341,7 +376,7 @@ def make_handler(state: AppState, port: int):
     allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "Backstage/0.1"
+        server_version = f"Cratify/{VERSION}"
 
         def log_message(self, fmt, *args):  # quieter console
             if not self.path.startswith("/api/audio"):
@@ -458,7 +493,9 @@ def make_handler(state: AppState, port: int):
                 if p == "/api/watch":
                     return self._json(state.watch())
                 if p == "/api/settings":
-                    return self._json({"lang": i18n.lang()})
+                    return self._json({"lang": i18n.lang(), "langSaved": i18n.saved(), "version": VERSION})
+                if p == "/api/music-folders":
+                    return self._json(state.music_folder_settings())
                 if p == "/api/plan":
                     return self._json(state.read_plan())
                 if p == "/api/screen":
@@ -509,7 +546,9 @@ def make_handler(state: AppState, port: int):
                     return self._json(state.ensure_library(refresh=True))
                 if self.path == "/api/settings":
                     i18n.save(state.data_dir, str(body.get("lang")))
-                    return self._json({"lang": i18n.lang()})
+                    return self._json({"lang": i18n.lang(), "langSaved": i18n.saved(), "version": VERSION})
+                if self.path == "/api/music-folders/choose":
+                    return self._json({"path": musicfolders.choose_folder()})
                 if self.path == "/api/audio-info":
                     return self._json(state.start_audio_info())
                 if self.path == "/api/spectrum":
@@ -563,7 +602,11 @@ def make_handler(state: AppState, port: int):
                 if self.path == "/api/rules":
                     state.write_rules(body)
                     return self._json({"ok": True})
+                if self.path == "/api/music-folders":
+                    return self._json(state.save_music_folders(body.get("folders") if isinstance(body, dict) else None))
                 return self._error(HTTPStatus.NOT_FOUND, "not found")
+            except SnapshotError as e:
+                return self._error(HTTPStatus.SERVICE_UNAVAILABLE, str(e))
             except ValueError as e:
                 return self._error(HTTPStatus.BAD_REQUEST, str(e))
 

@@ -114,7 +114,7 @@ export function createQualityView({ navigate } = {}) {
       clear(
         statusEl,
         h('h2', {}, _('Quality check')),
-        h('div', { class: 'notice notice-warn' }, _('This check needs ffmpeg. Run "brew install ffmpeg" in Terminal, then open Backstage again.')),
+        h('div', { class: 'notice notice-warn' }, _('This check needs ffmpeg. Run "brew install ffmpeg" in Terminal, then open Cratify again.')),
       );
       return;
     }

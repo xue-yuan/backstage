@@ -1,4 +1,4 @@
-// Adding files on disk to Serato from Backstage (plan op importTrack). Applying the plan writes what
+// Adding files on disk to Serato from Cratify (plan op importTrack). Applying the plan writes what
 // Serato's own import writes (file details and title); Serato reads the other tags and analyses the
 // songs afterwards ("Analyze Files"). Used by the Folders view.
 import { createCratePicker } from './cratePicker.js';
@@ -37,7 +37,7 @@ export async function addToSerato(files, { folderName } = {}) {
     wide: true,
     className: 'modal-import',
     body: (close) => [
-      h('p', {}, _('They go into the plan. When you apply it (Serato closed), Backstage adds them the way Serato\'s own import does. Then select them in Serato DJ and choose "Analyze Files": Serato reads their tags and works out BPM, key, beatgrid and waveform.')),
+      h('p', {}, _('They go into the plan. When you apply it (Serato closed), Cratify adds them the way Serato\'s own import does. Then select them in Serato DJ and choose "Analyze Files": Serato reads their tags and works out BPM, key, beatgrid and waveform.')),
       lookalikes.length
         ? h(
             'label',

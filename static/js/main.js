@@ -12,7 +12,8 @@ import { createGuideView } from './views/guide.js';
 import { createNotesView } from './views/notes.js';
 import { shortcutTable } from './shortcuts.js';
 import { startWatch } from './watch.js';
-import { _, _n, lang, setLang, switchTo, syncServerLang } from './i18n.js';
+import { _, _n, adoptServerLanguage, lang, setLang, switchTo, syncServerLang } from './i18n.js';
+import { askMusicFoldersOnce } from './musicFolders.js';
 
 // Tab order = ⌘1–9 (the Mac app's View menu lists the same ids in src-tauri/src/main.rs).
 const VIEWS = {
@@ -146,11 +147,12 @@ window.addEventListener('hashchange', () => {
 });
 
 async function boot() {
+  if (await adoptServerLanguage()) return; // first start: the page reloads in the Mac's language
   document.documentElement.lang = lang === 'zh' ? 'zh-Hant' : 'en';
   document.documentElement.style.setProperty('--kept-label', JSON.stringify(_('Keep'))); // badge text in app.css
   syncServerLang(); // server messages and the Mac app's startup dialogs follow the page's language
   app.append(
-    h('header', { class: 'header' }, h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, '◐'), 'Backstage'), tabsEl, snapEl),
+    h('header', { class: 'header' }, h('div', { class: 'brand' }, h('img', { class: 'brand-mark', src: '/static/icon.svg', alt: '' }), 'Cratify'), tabsEl, snapEl),
     mainEl,
     playerEl,
   );
@@ -168,8 +170,9 @@ async function boot() {
   });
   store.loadAudioInfo(); // background: reads each file's real codec / bit rate
   navigate(location.hash.slice(1) || 'home'); // the app opens on the Overview
+  askMusicFoldersOnce(); // first start: confirm which folders are scanned
   startWatch(); // reload after Serato changes its library; offer to apply when Serato closes
 }
 
-window.__crateDesk = { store, player, toast, command }; // the Mac app calls toast (download finished) and command (menu bar)
+window.__cratify = { store, player, toast, command }; // the Mac app calls toast (download finished) and command (menu bar)
 boot();

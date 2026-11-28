@@ -80,7 +80,7 @@ export function createOverviewView({ navigate }) {
     const snap = store.base?.snapshot;
 
     // ---- to do ----
-    // Counted from Serato like the Sort view (the folder report only sees files under ~/Music/DJ).
+    // Counted from Serato like the Sort view (the folder report only sees files in the music folders).
     const unsorted = liveTracks(eff).filter((t) => !isClassified(eff, store.rules, t.id)).length;
     const loose = findUncategorized(eff).length;
     const folders = r ? r.roots.flatMap((root) => (root.children.length ? root.children : [root])) : [];

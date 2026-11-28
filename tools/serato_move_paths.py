@@ -1,7 +1,10 @@
 """Rewrite Serato 4 file paths after moving music folders (Serato must be closed).
 
     uv run --no-project tools/serato_move_paths.py --library <dir with master.sqlite + root.sqlite> \
-        --from Users/ares/Music/ --to Users/ares/Music/DJ/ --top 2025 --top 2026 --top Serato [--apply]
+        --from Users/me/Music/ --to Users/me/Music/DJ/ --top House --top Techno [--apply]
+
+This moves the paths of songs in ~/Music/House and ~/Music/Techno to ~/Music/DJ/House and ~/Music/DJ/Techno
+(move the folders on disk the same way first).
 
 Serato keeps the local drive's tracks twice: root.sqlite (the drive's own database) and
 master.sqlite (location_id = 1 mirrors root.sqlite, same ids). Paths are `portable_id`

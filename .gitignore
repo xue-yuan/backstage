@@ -12,3 +12,6 @@ data/
 # local-only
 .claude/settings.local.json
 PLAN.md
+
+# release packages (tools/package_release.sh)
+dist/

@@ -1,4 +1,4 @@
-// Guide: how Backstage works and the suggested workflow. Long prose is written per language (below)
+// Guide: how Cratify works and the suggested workflow. Long prose is written per language (below)
 // instead of string by string; UI names inside it come from _() so they always match the buttons.
 import { _, lang } from '../i18n.js';
 import { shortcutTable } from '../shortcuts.js';
@@ -12,10 +12,10 @@ function zhContent() {
   return [
     {
       id: 'about',
-      title: 'Backstage 是什麼',
+      title: 'Cratify 是什麼',
       blocks: [
-        'Backstage 幫你整理 Serato DJ 的曲庫：篩選新歌、把歌分到 crate、清理重複和找不到的檔案、整理 crate 結構。',
-        `**平常只讀資料。** Backstage 讀的是 Serato 資料庫的複本，Serato 開著也可以用。你做的每個修改都先放進${q('Plan')}，**只有按${q('Apply to Serato…')}才會真的寫進 Serato**。`,
+        'Cratify 幫你整理 Serato DJ 的曲庫：篩選新歌、把歌分到 crate、清理重複和找不到的檔案、整理 crate 結構。',
+        `**平常只讀資料。** Cratify 讀的是 Serato 資料庫的複本，Serato 開著也可以用。你做的每個修改都先放進${q('Plan')}，**只有按${q('Apply to Serato…')}才會真的寫進 Serato**。`,
         '唯一會動到檔案的是「丟到垃圾桶」：檔案進 Mac 的垃圾桶，不會直接刪除，清空垃圾桶前都可以還原。',
       ],
     },
@@ -88,7 +88,7 @@ function zhContent() {
       blocks: [
         '有些檔案標的是 MP3 320 或 WAV，其實是從比較差的檔案轉出來的，例如把 128k 的 MP3 轉存成 320k。檔案變大了，聲音不會變好。',
         '**怎麼看出來**：編碼器會把高頻切掉，位元率越低切得越多：128k 大約切在 16.5 kHz、192k 在 19 kHz、320k 在 20 kHz，真的無損會到 22 kHz。轉檔救不回被切掉的部分，所以標 320 卻在 16.5 kHz 以上完全沒聲音，就是 128k 轉的。',
-        `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。Serato 分析或加 cue 點時會把資料寫進音樂檔，但聲音沒變，Backstage 會比對聲音指紋認出來，不會再檢查一次。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
+        `**用${q('Quality')}分頁檢查**：為了省電，檢查**不會自動跑**，要在${q('Quality')}分頁按「檢查 N 個新檔案」才會開始。檢查過的檔案會記住，之後每次只檢查新加入或改過的檔案。Serato 分析或加 cue 點時會把資料寫進音樂檔，但聲音沒變，Cratify 會比對聲音指紋認出來，不會再檢查一次。速度可以選（省電一次 1 個檔案），都用低優先權跑，不會搶 Serato 的資源，也可以隨時停止。看起來像轉檔的，音質旁邊會標橘色的${q('Suspect')}；${q('Quality')}分頁會列出全部，可以試聽、看頻譜、標記「聽起來沒問題」或「不要」。合併重複曲目時也會優先保留不可疑的那份。`,
         { tip: '「可疑」只是工具自動判斷的參考，不是定論。刪除或換掉檔案之前，一定要用頻譜工具看過、用耳朵聽過再決定。有些歌本來就沒什麼高頻（老錄音、lo-fi、部分爵士），也可能被標到；反過來，沒被標到也不保證是真的。下載新歌之後，記得到「音質檢查」分頁按一次檢查（它不會自己跑），有疑問就照下面的步驟手動檢查。看過覺得沒問題的，按「聽起來沒問題」就不會再標可疑。' },
         '**手動檢查的步驟**：',
         {
@@ -122,20 +122,20 @@ function zhContent() {
       blocks: [
         {
           steps: [
-            '先**關掉 Serato DJ**。Backstage 會檢查，開著就不能套用。',
+            '先**關掉 Serato DJ**。Cratify 會檢查，開著就不能套用。',
             `在${q('Plan')}按${q('Apply to Serato…')}。`,
-            'Backstage 會先在複本上預演、自動備份 Serato 的資料庫，寫入後再檢查一次。**任何一步失敗，就什麼都不會寫入。**',
+            'Cratify 會先在複本上預演、自動備份 Serato 的資料庫，寫入後再檢查一次。**任何一步失敗，就什麼都不會寫入。**',
             `打開 Serato DJ 確認。如果有問題，關掉 Serato，到${q('Plan')}按${q('Restore the backup from before the last apply')}。`,
           ],
         },
-        '每次套用前的備份放在 `~/Backstage Backups/Serato 資料庫/`。「不要」的歌，檔案要等套用成功後才會丟到垃圾桶。',
+        '每次套用前的備份放在 `~/Cratify Backups/Serato Library/`。「不要」的歌，檔案要等套用成功後才會丟到垃圾桶。',
       ],
     },
     {
       id: 'notes',
       title: _('Notes'),
       blocks: [
-        '想到什麼就記下來：這首歌適合開場、從第二段 drop 接出去、在誰的 set 聽到想找的歌……筆記只存在 Backstage（`notes.json`），**不會寫進 Serato**。',
+        '想到什麼就記下來：這首歌適合開場、從第二段 drop 接出去、在誰的 set 聽到想找的歌……筆記只存在 Cratify（`notes.json`），**不會寫進 Serato**。',
         {
           list: [
             `**連結歌曲**：寫筆記時按${q('Link a song…')}，或一鍵連結正在播放的歌。也可以在${q('Sort')}按 M，或在歌上按右鍵 →${q('Add a note…')}。`,
@@ -155,11 +155,12 @@ function zhContent() {
       blocks: [
         {
           list: [
-            '變更計畫、篩選標記、筆記、設定：`~/Library/Application Support/Backstage/`',
-            '套用前的備份：`~/Backstage Backups/`',
+            '變更計畫、篩選標記、筆記、設定：`~/Library/Application Support/Cratify/`',
+            '套用前的備份：`~/Cratify Backups/`',
           ],
         },
-        'Backstage 不會修改音樂檔本身，只會在你按「丟到垃圾桶」或套用「不要」的歌時，把檔案移到垃圾桶。',
+        'Cratify 不會修改音樂檔本身，只會在你按「丟到垃圾桶」或套用「不要」的歌時，把檔案移到垃圾桶。',
+        `**音樂資料夾**：${q('Folders')}只掃描你選的資料夾，找不到的檔案也在這些資料夾和 ~/Music 裡找。第一次打開時會依 Serato 資料庫裡的歌放在哪裡建議，之後在${q('Folders')}右上角的「音樂資料夾」可以改。`,
       ],
     },
   ];
@@ -169,10 +170,10 @@ function enContent() {
   return [
     {
       id: 'about',
-      title: 'What Backstage does',
+      title: 'What Cratify does',
       blocks: [
-        'Backstage helps you organise your Serato DJ library: screen new songs, sort songs into crates, clean up duplicates and missing files, and tidy the crate structure.',
-        `**It only reads, normally.** Backstage works on a copy of the Serato database, so Serato can stay open. Every edit goes into the ${qe('Plan')} first, and **only ${qe('Apply to Serato…')} writes to Serato**.`,
+        'Cratify helps you organise your Serato DJ library: screen new songs, sort songs into crates, clean up duplicates and missing files, and tidy the crate structure.',
+        `**It only reads, normally.** Cratify works on a copy of the Serato database, so Serato can stay open. Every edit goes into the ${qe('Plan')} first, and **only ${qe('Apply to Serato…')} writes to Serato**.`,
         'The only thing that touches files is moving them to the Trash: they go to the Mac Trash, are not deleted, and can be restored until you empty it.',
       ],
     },
@@ -245,7 +246,7 @@ function enContent() {
       blocks: [
         'Some files say MP3 320 or WAV but were converted from something worse, for example a 128k MP3 saved again as 320k. The file gets bigger; the sound does not get better.',
         '**How it shows**: encoders cut the highest frequencies, more at lower bit rates: about 16.5 kHz at 128k, 19 kHz at 192k, 20 kHz at 320k, while real lossless reaches 22 kHz. Converting cannot bring the cut part back, so an "MP3 320" with nothing above 16.5 kHz was made from a 128k file.',
-        `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. Serato writes its analysis and cue points into the music file without changing the sound; Backstage compares an audio fingerprint, so those files are not checked again. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
+        `**Check them in the ${qe('Quality')} tab**: to save power the check **never runs on its own**; press "Check N new files" in ${qe('Quality')}. Checked files are remembered, so each run only looks at new or changed files. Serato writes its analysis and cue points into the music file without changing the sound; Cratify compares an audio fingerprint, so those files are not checked again. You can pick the speed (power saving does 1 file at a time); every speed runs at low priority so Serato is not affected, and you can stop at any time. Files that look converted get an orange ${qe('Suspect')} mark next to their quality; the ${qe('Quality')} tab lists them all so you can listen, look at the spectrum, and mark each one "Sounds fine" or reject it. Merging duplicates prefers the copy that is not suspect.`,
         { tip: '"Suspect" is an automatic guess, not proof. Before you delete or replace a file, always look at its spectrum and listen to it. Songs with little high end (old or lo-fi recordings, some jazz) can be marked too, and a file without the mark is not guaranteed to be real. After downloading new songs, remember to run the check in the Quality tab (it does not run by itself), and check by hand when in doubt. Files you checked and found fine can be marked "Sounds fine" so they are no longer flagged.' },
         '**Checking by hand**:',
         {
@@ -279,20 +280,20 @@ function enContent() {
       blocks: [
         {
           steps: [
-            '**Quit Serato DJ.** Backstage checks and will not apply while it is open.',
+            '**Quit Serato DJ.** Cratify checks and will not apply while it is open.',
             `In ${qe('Plan')}, press ${qe('Apply to Serato…')}.`,
-            'Backstage rehearses on a copy, backs up the Serato database, writes, then checks everything again. **If any step fails, nothing is written.**',
+            'Cratify rehearses on a copy, backs up the Serato database, writes, then checks everything again. **If any step fails, nothing is written.**',
             `Open Serato DJ and check. If something is wrong, quit Serato and press ${qe('Restore the backup from before the last apply')} in ${qe('Plan')}.`,
           ],
         },
-        'Backups from before each apply are in `~/Backstage Backups/Serato 資料庫/`. Files of rejected songs go to the Trash only after the apply succeeds.',
+        'Backups from before each apply are in `~/Cratify Backups/Serato Library/`. Files of rejected songs go to the Trash only after the apply succeeds.',
       ],
     },
     {
       id: 'notes',
       title: _('Notes'),
       blocks: [
-        'Write down anything: a song that makes a good opener, where to mix out, a song you heard in someone\'s set and want to find. Notes are kept by Backstage only (`notes.json`) and **never written to Serato**.',
+        'Write down anything: a song that makes a good opener, where to mix out, a song you heard in someone\'s set and want to find. Notes are kept by Cratify only (`notes.json`) and **never written to Serato**.',
         {
           list: [
             `**Linking a song**: press ${qe('Link a song…')} while writing, or link the song that is playing in one click. You can also press M in ${qe('Sort')}, or right-click a song → ${qe('Add a note…')}.`,
@@ -310,8 +311,9 @@ function enContent() {
       id: 'data',
       title: 'Where things are stored',
       blocks: [
-        { list: ['Plan, screening marks, notes, settings: `~/Library/Application Support/Backstage/`', 'Backups from before applying: `~/Backstage Backups/`'] },
-        'Backstage never edits your music files. It only moves files to the Trash when you ask it to, or when an applied plan rejects a song.',
+        { list: ['Plan, screening marks, notes, settings: `~/Library/Application Support/Cratify/`', 'Backups from before applying: `~/Cratify Backups/`'] },
+        'Cratify never edits your music files. It only moves files to the Trash when you ask it to, or when an applied plan rejects a song.',
+        `**Music folders**: ${qe('Folders')} scans only the folders you choose, and missing files are looked for there and in ~/Music. On the first start Cratify suggests them from where the songs in your Serato library are; change them with "Music folders" at the top right of ${qe('Folders')}.`,
       ],
     },
   ];
@@ -330,6 +332,11 @@ const VIEW_LABELS = { home: 'Overview', folders: 'Folders', inbox: 'Sort', quali
 
 export function createGuideView({ navigate } = {}) {
   const sections = lang === 'zh' ? zhContent() : enContent();
+  const version = h('div', { class: 'guide-version muted small' });
+  fetch('/api/settings')
+    .then((r) => r.json())
+    .then((s) => (version.textContent = _('Cratify {version}', { version: s.version })))
+    .catch(() => {});
   const block = (b) => {
     if (typeof b === 'string') return h('p', {}, rich(b));
     if (b.list) return h('ul', {}, b.list.map((x) => h('li', {}, rich(x))));
@@ -349,6 +356,7 @@ export function createGuideView({ navigate } = {}) {
     { class: 'guide-toc' },
     h('div', { class: 'section-label' }, _('Guide')),
     sections.map((s) => h('a', { href: `#guide-${s.id}`, onclick: (e) => (e.preventDefault(), body.querySelector(`#guide-${s.id}`).scrollIntoView({ behavior: 'smooth', block: 'start' })) }, s.title)),
+    version,
   );
   const el = h('div', { class: 'view guide' }, h('div', { class: 'guide-inner' }, toc, body));
   return { el, title: _('Guide'), update() {}, onKey: () => false, destroy() {} };

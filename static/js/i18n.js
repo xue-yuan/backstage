@@ -3,8 +3,22 @@
 // _() at module level (for constant labels) is fine.
 import { NATIVE, zh } from './locales/zh-Hant.js';
 
-// Same "crate-desk:" prefix as prefs in ui.js (kept on purpose so saved settings survive renames).
-const STORAGE_KEY = 'crate-desk:lang';
+/** Prefix of every saved setting in localStorage (prefs in ui.js too). */
+export const STORAGE_PREFIX = 'cratify:';
+const STORAGE_KEY = `${STORAGE_PREFIX}lang`;
+
+// Until 2026-11-28 (when the app was Backstage) the prefix was "crate-desk:". Move those settings once.
+// Every module that reads settings imports this one, so this runs before any of them reads.
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith('crate-desk:')) continue;
+    const renamed = STORAGE_PREFIX + key.slice('crate-desk:'.length);
+    if (localStorage.getItem(renamed) == null) localStorage.setItem(renamed, localStorage.getItem(key));
+    localStorage.removeItem(key);
+  }
+} catch {
+  // storage unavailable: nothing to move
+}
 
 function saved() {
   try {
@@ -38,6 +52,31 @@ export function _n(n, one, other, params) {
   const p = { ...params, n: Number(n).toLocaleString() };
   if (lang === 'zh') return fill(zh[other] ?? other, p);
   return fill(n === 1 ? one : other, p);
+}
+
+/**
+ * First start only (no language saved in the page yet): use the server's, which follows the Mac's
+ * preferred language until one is chosen. True when the page reloads to switch.
+ */
+export async function adoptServerLanguage() {
+  if (saved() != null) return false;
+  try {
+    const server = await (await fetch('/api/settings')).json();
+    if ((server.lang === 'en' || server.lang === 'zh') && server.lang !== lang) {
+      // Reload only if the choice can be remembered; otherwise every load would reload again.
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(server.lang));
+      location.reload();
+      return true;
+    }
+  } catch {
+    return false; // server or storage unavailable: keep the default
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(lang));
+  } catch {
+    // storage unavailable: asked again next time
+  }
+  return false;
 }
 
 /** Tell the server (its messages, the Mac app's startup dialogs) which language to use. */

@@ -72,7 +72,7 @@ async function poll() {
     toast(
       issues
         ? _n(issues, 'Snapshot updated. {n} plan action no longer applies, see Plan', 'Snapshot updated. {n} plan actions no longer apply, see Plan')
-        : _("Serato's library changed, so Backstage reloaded it"),
+        : _("Serato's library changed, so Cratify reloaded it"),
       { tone: issues ? 'danger' : 'info' },
     );
   } catch {

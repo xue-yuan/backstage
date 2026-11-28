@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Backstage</title>
+    <title>Cratify</title>
     <style>
       :root { --bg: #0e1014; --text: #e7eaf0; --muted: #8a93a3; --accent: #4da3ff; --danger: #ff6b6b; color-scheme: dark; }
       @media (prefers-color-scheme: light) {
@@ -13,18 +13,18 @@
         background: var(--bg); color: var(--text); display: grid; place-content: center; text-align: center; gap: 10px;
         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang TC", system-ui, sans-serif; -webkit-user-select: none; cursor: default;
       }
-      .mark { font-size: 40px; color: var(--accent); animation: spin 2.4s linear infinite; }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      .mark { width: 88px; height: 88px; margin: 0 auto; animation: breathe 1.2s ease-in-out infinite alternate; }
+      @keyframes breathe { from { opacity: 0.55; } to { opacity: 1; } }
       .muted { color: var(--muted); font-size: 13px; }
       #error { display: none; max-width: 560px; color: var(--danger); white-space: pre-wrap; -webkit-user-select: text; }
-      body.failed .mark { animation: none; color: var(--danger); }
+      body.failed .mark { animation: none; filter: grayscale(1); opacity: 0.5; }
       body.failed #error { display: block; }
       body.failed #status { display: none; }
     </style>
   </head>
   <body>
-    <div class="mark">◐</div>
-    <div><strong>Backstage</strong></div>
+    <img class="mark" src="icon.svg" alt="" />
+    <div><strong>Cratify</strong></div>
     <div id="status" class="muted">Starting…</div>
     <div id="error"></div>
     <script>

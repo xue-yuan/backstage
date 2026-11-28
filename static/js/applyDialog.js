@@ -156,7 +156,7 @@ export async function openApplyDialog() {
         'ol',
         { class: 'apply-steps muted small' },
         h('li', {}, _('Rehearse on a copy of the Serato database first, and stop at any problem')),
-        h('li', {}, [_('Back up the Serato database to '), h('code', {}, fmt.shortPath(status?.backupsDir || '~/Backstage Backups'))]),
+        h('li', {}, [_('Back up the Serato database to '), h('code', {}, fmt.shortPath(status?.backupsDir || '~/Cratify Backups'))]),
         h('li', {}, _('Write, then check again: database integrity, master and root match, and every crate holds exactly the expected songs')),
         h('li', {}, _('The write only counts if everything passes; otherwise nothing is written')),
       ),

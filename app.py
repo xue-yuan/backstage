@@ -1,41 +1,40 @@
 #!/usr/bin/env python3
-"""Backstage — organise your Serato DJ library: folders, crates, screening and applying changes.
+"""Cratify — organise your Serato DJ library: folders, crates, screening and applying changes.
 
     uv run --no-project app.py            # opens http://127.0.0.1:8765
     uv run --no-project app.py --port 9000 --no-browser
 
 The Mac app (src-tauri/) starts this same server in the background and shares
-its data folder (~/Library/Application Support/Backstage).
+its data folder (~/Library/Application Support/Cratify).
 """
 
 import argparse
 import os
-import shutil
 import threading
 import time
 import webbrowser
 from pathlib import Path
 
-from serato_crates.server import serve
+from serato_crates.server import BACKUPS_DIR, SERATO_BACKUPS, serve
 
-DEFAULT_DATA_DIR = Path.home() / "Library/Application Support/Backstage"
-OLD_DATA_DIR = Path.home() / "Library/Application Support/Crate Desk"  # name before 2026-11-26
-LEGACY_DATA_DIR = Path(__file__).resolve().parent / "data"
+DEFAULT_DATA_DIR = Path.home() / "Library/Application Support/Cratify"
+# Until 2026-11-28 the app was called Backstage. Its folders are moved over once (renamed, not copied).
+OLD_DATA_DIR = Path.home() / "Library/Application Support/Backstage"
+OLD_BACKUPS_DIR = Path.home() / "Backstage Backups"
+OLD_SERATO_BACKUPS = "Serato 資料庫"
 
 
-def migrate_legacy_data(data_dir: Path) -> None:
-    """One-time moves of older data folders into the current one."""
-    if data_dir == DEFAULT_DATA_DIR and not data_dir.exists() and OLD_DATA_DIR.is_dir():
-        OLD_DATA_DIR.rename(data_dir)  # the app used to be called "Crate Desk"
+def migrate_from_backstage(data_dir: Path) -> None:
+    """Move the old app's folders to the new names once. Only for the real data folder, never a test one."""
+    if data_dir != DEFAULT_DATA_DIR:
         return
-    # Very first version kept the plan and caches in ./data next to app.py.
-    if data_dir == LEGACY_DATA_DIR or not LEGACY_DATA_DIR.is_dir() or (data_dir / "plan.json").exists():
-        return
-    data_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("plan.json", "audio_info.json"):
-        src = LEGACY_DATA_DIR / name
-        if src.exists():
-            shutil.copy2(src, data_dir / name)
+    if not data_dir.exists() and OLD_DATA_DIR.is_dir():
+        OLD_DATA_DIR.rename(data_dir)  # the Mac app (main.rs) usually did this already
+    if not BACKUPS_DIR.exists() and OLD_BACKUPS_DIR.is_dir():
+        OLD_BACKUPS_DIR.rename(BACKUPS_DIR)
+        old_serato = BACKUPS_DIR / OLD_SERATO_BACKUPS
+        if old_serato.is_dir() and not SERATO_BACKUPS.exists():
+            old_serato.rename(SERATO_BACKUPS)
 
 
 def exit_with_parent() -> None:
@@ -59,14 +58,14 @@ def main() -> None:
     parser.add_argument("--exit-with-parent", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    migrate_legacy_data(args.data_dir)
+    migrate_from_backstage(args.data_dir)
     args.data_dir.mkdir(parents=True, exist_ok=True)
     if args.exit_with_parent:
         exit_with_parent()
 
     httpd = serve(args.data_dir, args.port)
     url = f"http://127.0.0.1:{args.port}/"
-    print(f"Backstage running at {url}  (Serato is only written when you press Apply to Serato)", flush=True)
+    print(f"Cratify running at {url}  (Serato is only written when you press Apply to Serato)", flush=True)
     if not args.no_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try:

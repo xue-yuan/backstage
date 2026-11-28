@@ -116,7 +116,7 @@ export function createCleanupView({ navigate }) {
       h(
         'p',
         {},
-        _n(list.length, '{n} song in the Serato library is not on disk. Files with the same name in ~/Music are offered as candidate locations.', '{n} songs in the Serato library are not on disk. Files with the same name in ~/Music are offered as candidate locations.'),
+        _n(list.length, '{n} song in the Serato library is not on disk. Files with the same name in your music folders or ~/Music are offered as candidate locations.', '{n} songs in the Serato library are not on disk. Files with the same name in your music folders or ~/Music are offered as candidate locations.'),
         _('If a candidate file already has its own record in Serato (usually because the folder was moved and imported again), this song\'s crates are merged into that record instead of adding a second record for the same file.'),
       ),
       scanning ? h('p', { class: 'muted' }, _('Scanning…')) : null,

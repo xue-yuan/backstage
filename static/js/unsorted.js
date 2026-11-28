@@ -7,7 +7,10 @@ import { clear, confirmDialog, h, modal, promptDialog, toast } from './ui.js';
 import { _, _n } from './i18n.js';
 
 export const INBOX = 'Inbox';
-export const LOOSE = '未分類單曲';
+// The crate under Inbox for songs in no crate. Its name follows the interface language; an existing one
+// in either language is reused.
+export const LOOSE = _('Unsorted songs');
+const LOOSE_NAMES = ['Unsorted songs', '未分類單曲'];
 
 export function inboxCrateId(eff = store.eff) {
   return (eff.children.get(eff.rootId) || []).find((id) => norm(eff.crates.get(id).name) === norm(INBOX)) ?? null;
@@ -84,15 +87,15 @@ export function consolidateOps() {
   }
   for (const id of emptied) ops.push(store.opDelete(id));
 
-  // Only real songs from the DJ library (~/Music/DJ): not rekordbox samples, demo tracks or Desktop files.
+  // Only songs in the music folders (the Folders view): not rekordbox samples, demo tracks or Desktop files.
   const libRoots = (store.folderScan?.roots || []).map((r) => `${pathKey(r)}/`);
   const inLibrary = (t) => {
     const p = pathKey(effectivePath(eff, t));
-    return libRoots.length ? libRoots.some((r) => p.startsWith(r)) : p.includes("/music/dj/");
+    return libRoots.some((r) => p.startsWith(r));
   };
   const loose = liveTracks(eff).filter((t) => !(eff.cratesOf.get(t.id) || []).length && (t.exists || eff.relocated.has(t.id)) && inLibrary(t));
   if (loose.length) {
-    let target = taken.get(norm(LOOSE));
+    let target = LOOSE_NAMES.map((n) => taken.get(norm(n))).find((id) => id != null);
     if (target == null) {
       const op = { ...store.opCreate(LOOSE, inbox), text: _('Create crate "{name}" under "{parent}"', { name: LOOSE, parent: INBOX }) };
       ops.push(op);
@@ -104,6 +107,7 @@ export function consolidateOps() {
 }
 
 export async function consolidate() {
+  if (!store.folderScan) await store.loadFolders().catch(() => {}); // songs in no crate are counted only inside the music folders
   const { ops, moved, removed, loose } = consolidateOps();
   if (!moved && !loose) {
     toast(_('All unsorted crates are already under Inbox'));
@@ -257,6 +261,8 @@ export function openUnsortedEditor() {
     );
   };
   render();
+  // The count of songs in no crate needs the music folders' scan (opened from Crates it may not be loaded yet).
+  if (!store.folderScan) store.loadFolders().then(() => bodyEl.isConnected && render(), () => {});
   return modal({
     title: _('Unsorted crates'),
     wide: true,

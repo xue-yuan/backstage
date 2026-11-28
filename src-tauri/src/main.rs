@@ -1,4 +1,4 @@
-// Backstage Mac app: a native window around the existing local server.
+// Cratify Mac app: a native window around the existing local server.
 //
 // On launch it starts the bundled Python server (app.py) on a fixed local port, waits until it
 // answers, then points the window at it. Python is a uv-managed interpreter located with
@@ -11,7 +11,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -53,15 +53,29 @@ fn home() -> PathBuf {
 }
 
 fn data_dir() -> PathBuf {
-    home().join("Library/Application Support/Backstage")
+    home().join("Library/Application Support/Cratify")
 }
 
-/// The app used to be called "Crate Desk": move its data folder over once.
-fn migrate_old_data_dir() {
-    let old = home().join("Library/Application Support/Crate Desk");
+/// Until 2026-11-28 the app was called Backstage, with the bundle id local.cratedesk.app. Carry its data
+/// over once, when the old data folder exists and the new one does not: the data folder is moved (the
+/// server's app.py moves the backups folder), and WebKit's website data is copied, because macOS keeps
+/// it per bundle id and it holds the page's saved settings (localStorage). Called only while the old
+/// app is not running, and before the window (and so WebKit) starts.
+fn migrate_from_backstage(identifier: &str) {
+    let old = home().join("Library/Application Support/Backstage");
     let new = data_dir();
-    if !new.exists() && old.is_dir() {
-        let _ = std::fs::rename(&old, &new);
+    if new.exists() || !old.is_dir() {
+        return;
+    }
+    let _ = std::fs::rename(&old, &new);
+    // Cratify never ran with data yet, so a WebKit folder of its own (left by a start that failed)
+    // holds no page data: the old folder's contents are copied into it.
+    let old_webkit = home().join("Library/WebKit/local.cratedesk.app");
+    let new_webkit = home().join("Library/WebKit").join(identifier);
+    if old_webkit.is_dir() {
+        let _ = std::fs::create_dir_all(&new_webkit);
+        let copied = Command::new("/bin/cp").arg("-Rp").arg(old_webkit.join(".")).arg(&new_webkit).stdin(Stdio::null()).status();
+        app_log(&format!("copied {} to {}: {copied:?}", old_webkit.display(), new_webkit.display()));
     }
 }
 
@@ -98,6 +112,26 @@ fn tr(en: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
     out
 }
 
+/// The Server header of whatever answers on the app's port, e.g. "Cratify/0.1.0 Python/3.14.7".
+fn port_owner() -> Option<String> {
+    let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(300)).ok()?;
+    stream.set_read_timeout(Some(Duration::from_millis(800))).ok()?;
+    stream.write_all(format!("HEAD / HTTP/1.0\r\nHost: 127.0.0.1:{PORT}\r\n\r\n").as_bytes()).ok()?;
+    let mut reply = Vec::new();
+    let _ = stream.take(4096).read_to_end(&mut reply);
+    String::from_utf8_lossy(&reply).lines().find_map(|line| line.strip_prefix("Server: ").map(|v| v.trim().to_string()))
+}
+
+/// Why the app's port is taken, in words the user can act on.
+fn port_in_use_message() -> String {
+    match port_owner() {
+        Some(s) if s.starts_with("Backstage/") => tr("Backstage (this app's old name) is still open.\nQuit Backstage, then open Cratify again.", &[]),
+        Some(s) if s.starts_with("Cratify/") => tr("Another copy of Cratify is already running.\nQuit it, then open Cratify again.", &[]),
+        _ => tr("Another program is using 127.0.0.1:{port}, which Cratify needs for its local server.\nQuit that program (or restart the Mac), then open Cratify again.", &[("port", &PORT)]),
+    }
+}
+
 fn port_open() -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], PORT));
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
@@ -132,7 +166,7 @@ fn find_python() -> Result<PathBuf, String> {
 
 fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
     if port_open() {
-        return Err(tr("127.0.0.1:{port} is already in use (maybe another Backstage is still open).\nQuit it, then open Backstage again.", &[("port", &PORT)]));
+        return Err(port_in_use_message());
     }
     let python = find_python()?;
     app_log(&format!("python: {}", python.display()));
@@ -162,18 +196,18 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let sep = || PredefinedMenuItem::separator(app);
     let app_menu = Submenu::with_items(
         app,
-        "Backstage",
+        "Cratify",
         true,
         &[
-            &PredefinedMenuItem::about(app, Some(&t("About Backstage")), None)?,
+            &PredefinedMenuItem::about(app, Some(&t("About Cratify")), None)?,
             &sep()?,
             &PredefinedMenuItem::services(app, Some(&t("Services")))?,
             &sep()?,
-            &PredefinedMenuItem::hide(app, Some(&t("Hide Backstage")))?,
+            &PredefinedMenuItem::hide(app, Some(&t("Hide Cratify")))?,
             &PredefinedMenuItem::hide_others(app, Some(&t("Hide Others")))?,
             &PredefinedMenuItem::show_all(app, Some(&t("Show All")))?,
             &sep()?,
-            &PredefinedMenuItem::quit(app, Some(&t("Quit Backstage")))?,
+            &PredefinedMenuItem::quit(app, Some(&t("Quit Cratify")))?,
         ],
     )?;
     let edit = Submenu::with_items(
@@ -190,7 +224,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::select_all(app, Some(&t("Select All")))?,
         ],
     )?;
-    // Item ids are the page commands (window.__crateDesk.command in static/js/main.js).
+    // Item ids are the page commands (window.__cratify.command in static/js/main.js).
     let view = Submenu::new(app, t("View"), true)?;
     view.append(&MenuItem::with_id(app, "reload", t("Reload Serato Snapshot"), true, Some("CmdOrCtrl+R"))?)?;
     view.append(&sep()?)?;
@@ -218,8 +252,8 @@ fn run_page_command(app: &AppHandle, id: &str) {
         return;
     }
     if let Some(window) = app.get_webview_window("main") {
-        // Before the page has loaded (the bundled loading page) there is no __crateDesk: nothing happens.
-        let _ = window.eval(format!("window.__crateDesk?.command?.({})", serde_json_string(id)));
+        // Before the page has loaded (the bundled loading page) there is no __cratify: nothing happens.
+        let _ = window.eval(format!("window.__cratify?.command?.({})", serde_json_string(id)));
     }
 }
 
@@ -353,16 +387,22 @@ fn main() {
         .menu(|handle| build_menu(handle))
         .on_menu_event(|handle, event| run_page_command(handle, event.id().as_ref()))
         .setup(|app| {
-            migrate_old_data_dir();
+            // With the port taken (e.g. the old app still open) nothing is moved or created; start_server explains.
+            let port_busy = port_open();
+            if !port_busy {
+                migrate_from_backstage(&app.config().identifier);
+            }
             let data_dir = data_dir();
-            let _ = std::fs::create_dir_all(&data_dir);
+            if !port_busy {
+                let _ = std::fs::create_dir_all(&data_dir);
+            }
             // Navigate to the server only after the bundled loading page has finished loading;
             // navigating earlier can be overridden by that first load.
             let loading_done = Arc::new(AtomicBool::new(false));
             let loading_flag = loading_done.clone();
             let saved = load_geometry().filter(|g| g.width >= MIN_SIZE.0 && g.height >= MIN_SIZE.1);
             let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Backstage")
+                .title("Cratify")
                 .min_inner_size(MIN_SIZE.0, MIN_SIZE.1);
             builder = match saved {
                 Some(g) => {
@@ -389,7 +429,7 @@ fn main() {
                     if let DownloadEvent::Finished { path: Some(path), success: true, .. } = event {
                         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                         let msg = serde_json_string(&tr("Saved to Downloads: {name}", &[("name", &name)]));
-                        let _ = webview.eval(format!("window.__crateDesk?.toast?.({msg})"));
+                        let _ = webview.eval(format!("window.__cratify?.toast?.({msg})"));
                     }
                     true
                 })
@@ -446,7 +486,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("failed to build Backstage");
+        .expect("failed to build Cratify");
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {

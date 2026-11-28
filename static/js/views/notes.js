@@ -310,7 +310,7 @@ export function createNotesView() {
       lines.push(`## ${when(n.created)}${n.song ? ` · ${songLabel(n.song)}` : ''}`, '', n.text, '');
     }
     const d = new Date();
-    download(`backstage-notes-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.md`, lines.join('\n'), 'text/markdown');
+    download(`cratify-notes-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.md`, lines.join('\n'), 'text/markdown');
   }
 
   // ---------- updates ----------

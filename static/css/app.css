@@ -92,7 +92,7 @@ kbd {
   border-bottom: 1px solid var(--border); background: var(--panel);
 }
 .brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; letter-spacing: 0.2px; }
-.brand-mark { color: var(--accent); font-size: 18px; }
+.brand-mark { width: 22px; height: 22px; }
 .tabs { display: flex; gap: 2px; }
 .tab {
   border: 0; background: transparent; padding: 7px 12px; border-radius: 8px; cursor: pointer; color: var(--muted);
@@ -382,6 +382,14 @@ select.input-sm { flex: none; min-width: 0; }
 .modal-title { font-size: 16px; margin-bottom: 12px; }
 .modal-body p { margin: 0; color: var(--muted); }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.mf-list { display: grid; gap: 6px; margin: 12px 0 10px; }
+.mf-row { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.mf-path { flex: 1; min-width: 0; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mf-missing { color: var(--warn); font-size: 12px; white-space: nowrap; }
+.mf-empty { padding: 8px 2px; }
+.mf-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.modal-body .mf-hint { margin-top: 8px; }
+.guide-version { margin-top: 16px; padding-left: 10px; }
 .help { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 24px; }
 .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; align-items: center; }
 .keys dd { margin: 0; color: var(--muted); }

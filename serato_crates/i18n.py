@@ -1,51 +1,57 @@
 """Server-side messages: English in the code, Traditional Chinese when the page is set to Chinese.
 
 The page tells the server its language (POST /api/settings). It is stored in settings.json in the
-data folder, so the next server start and the Mac app's startup dialogs use it too.
+data folder, so the next server start and the Mac app's startup dialogs use it too. Until a language
+is chosen, it follows the Mac's first preferred language (Chinese → Traditional Chinese, else English).
 The translation function is tr(), not _(), because several modules use _ as a throwaway variable.
 """
 
 from __future__ import annotations
 
-import json
-import os
+import re
+import subprocess
 from pathlib import Path
 
 from .locale_zh import ZH
+from .settings import read_settings, update_settings
 
 LANGS = ("en", "zh")
 _lang = "en"
+_saved = False
 
 
 def lang() -> str:
     return _lang
 
 
-def _read(path: Path) -> dict:
+def saved() -> bool:
+    """Whether the language was chosen (False: it follows the Mac's language)."""
+    return _saved
+
+
+def system_lang() -> str:
+    """'zh' when Chinese is the Mac's first preferred language, else 'en'."""
     try:
-        data = json.loads(path.read_text())
-    except (OSError, ValueError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        out = subprocess.run(["defaults", "read", "-g", "AppleLanguages"], capture_output=True, text=True, timeout=3).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return "en"
+    first = re.findall(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]+)*", out)  # e.g. ( "zh-Hant-TW", "en-TW" )
+    return "zh" if first and first[0].lower().startswith("zh") else "en"
 
 
 def load(data_dir: Path) -> None:
-    global _lang
-    value = _read(data_dir / "settings.json").get("lang")
-    _lang = value if value in LANGS else "en"
+    global _lang, _saved
+    value = read_settings(data_dir).get("lang")
+    _saved = value in LANGS
+    _lang = value if _saved else system_lang()
 
 
 def save(data_dir: Path, value: str) -> None:
-    global _lang
+    global _lang, _saved
     if value not in LANGS:
         raise ValueError(f"unknown language: {value}")
-    path = data_dir / "settings.json"
-    settings = _read(path)
-    settings["lang"] = value
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2))
-    os.replace(tmp, path)
-    _lang = value
+    update_settings(data_dir, lang=value)
+    _lang, _saved = value, True
 
 
 def tr(text: str, **params) -> str:

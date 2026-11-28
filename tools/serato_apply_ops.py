@@ -10,7 +10,7 @@ removeTrack never moves files here: deleteFile is ignored, the files stay where 
 
 Without --apply it copies Serato's database (byte copy, safe while Serato is open), applies the ops to
 the copy and prints the checks. --apply needs Serato closed and nothing else using the database; it
-rehearses on a copy of the closed files, backs up master.sqlite and root.sqlite to ~/Backstage Backups
+rehearses on a copy of the closed files, backs up master.sqlite and root.sqlite to ~/Cratify Backups
 (the Plan view's "Restore the backup from before the last apply" restores it) and checks integrity,
 foreign keys and that master and root match before committing.
 """
@@ -42,7 +42,7 @@ def main() -> None:
         op.pop("deleteFile", None)  # this tool never moves music files
     changes = [{"ops": ops}]
 
-    with tempfile.TemporaryDirectory(prefix="backstage-ops-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cratify-ops-") as tmp:
         try:
             result = apply_changes(copy_library(Path(tmp)), changes, None)
         except ApplyError as e:
@@ -56,7 +56,7 @@ def main() -> None:
     busy = files_in_use(SERATO_LIBRARY)
     if busy:
         raise SystemExit(f"Another program is using the Serato database ({', '.join(busy)}); nothing was written.")
-    with tempfile.TemporaryDirectory(prefix="backstage-ops-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cratify-ops-") as tmp:
         lib = Path(tmp)
         for name in ("master.sqlite", "master.sqlite-wal", "master.sqlite-shm", "root.sqlite"):
             if (SERATO_LIBRARY / name).exists():

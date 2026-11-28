@@ -166,8 +166,8 @@ def backup(lib_dir: Path, backups_root: Path, label: str) -> Path:
                 raise ApplyError(tr("Backing up {name} failed (the copy differs)", name=name))
     (dest / tr("How to restore.txt")).write_text(
         tr(
-            "This is a backup of the Serato database, made by Backstage before applying changes.\n"
-            "To restore: quit Serato DJ, then press \"Restore the backup from before the last apply\" in Backstage's Plan view,\n"
+            "This is a backup of the Serato database, made by Cratify before applying changes.\n"
+            "To restore: quit Serato DJ, then press \"Restore the backup from before the last apply\" in Cratify's Plan view,\n"
             "or copy the files here back to {lib_dir} by hand (and delete any extra -wal / -shm files there).\n",
             lib_dir=lib_dir,
         ),
@@ -629,7 +629,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         if not set(versions.values()) <= KNOWN_SCHEMAS:
             raise ApplyError(
                 tr(
-                    "The Serato database version is {main} (root {root}), but Backstage has only been verified with {known} (Serato DJ Pro 4.0). "
+                    "The Serato database version is {main} (root {root}), but Cratify has only been verified with {known} (Serato DJ Pro 4.0). "
                     "Serato may have been updated. To be safe, nothing is written until the new database format has been checked. Nothing was changed.",
                     main=versions["main"],
                     root=versions["db1"],
@@ -689,7 +689,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
                 )
                 raise ApplyError(
                     tr(
-                        "The crates after applying differ from what was expected: {details}. Usually a crate was changed in Serato after Backstage read the snapshot: "
+                        "The crates after applying differ from what was expected: {details}. Usually a crate was changed in Serato after Cratify read the snapshot: "
                         "press \"↻ Reload\" at the top right, check the plan, then apply again.",
                         details=details,
                     )
@@ -698,7 +698,7 @@ def apply_changes(lib_dir: Path, changes: list[dict], expected: dict[str, list[i
         if expected_order:
             problems = w.order_problems(expected_order)
             if problems:
-                raise ApplyError(tr("Crate order after applying differs from the plan: {problems}. Usually crates were added or moved in Serato after Backstage read the snapshot: press \"↻ Reload\" at the top right, check the plan, then apply again. Nothing was written.", problems=tr("; ").join(problems)))
+                raise ApplyError(tr("Crate order after applying differs from the plan: {problems}. Usually crates were added or moved in Serato after Cratify read the snapshot: press \"↻ Reload\" at the top right, check the plan, then apply again. Nothing was written.", problems=tr("; ").join(problems)))
             checks.append(trn(len(expected_order), "The crates are in the planned order ({n} level)", "The crates are in the planned order ({n} levels)"))
         if dry_run:
             con.execute("ROLLBACK")

@@ -1,18 +1,18 @@
-"""Proof of concept: add one song to Serato DJ from Backstage, the way Serato's own import does.
+"""Proof of concept: add one song to Serato DJ from Cratify, the way Serato's own import does.
 
     uv run --no-project tools/serato_import_poc.py FILE --crate "Crate 2"            # rehearse on a copy only
     uv run --no-project tools/serato_import_poc.py FILE --crate "Crate 2" --apply    # write (Serato closed)
 
-Backstage fills only what describes the file (file name, size, bit rate, sample rate and length from
+Cratify fills only what describes the file (file name, size, bit rate, sample rate and length from
 macOS `afinfo`, the same numbers Serato stores) plus the title tag. Artist, BPM, key, beatgrid and
 waveform are left to Serato's own analysis: the song is stored as "not analysed" (analysis_flags 0).
 
 Without --apply it copies Serato's database (byte copy, safe while Serato is open), adds the song to
 the copy and prints what was written. --apply uses the same safety as "Apply to Serato": Serato must be
 closed and nothing else may use the database; it rehearses on a private copy, backs up master.sqlite and
-root.sqlite to ~/Backstage Backups (the Plan view's "Restore the backup from before the last apply"
+root.sqlite to ~/Cratify Backups (the Plan view's "Restore the backup from before the last apply"
 restores it), copies the music file into that backup too, and checks integrity, foreign keys and that
-master and root match before committing. The music file itself is never written by Backstage.
+master and root match before committing. The music file itself is never written by Cratify.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def main() -> None:
         raise SystemExit(f"Not a file: {path}")
 
     info = file_info(path)
-    with tempfile.TemporaryDirectory(prefix="backstage-import-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cratify-import-") as tmp:
         rehearsal = copy_library(Path(tmp))
         op = {"type": "importTrack", "id": "poc", "path": str(path), **info}
         if args.crate:
@@ -117,7 +117,7 @@ def main() -> None:
     if busy:
         raise SystemExit(f"Another program is using the Serato database ({', '.join(busy)}); nothing was written.")
     # Same order as "Apply to Serato": rehearse on the real (closed) files, back up, then write.
-    with tempfile.TemporaryDirectory(prefix="backstage-import-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="cratify-import-") as tmp:
         lib = Path(tmp)
         for name in ("master.sqlite", "master.sqlite-wal", "master.sqlite-shm", "root.sqlite"):
             if (SERATO_LIBRARY / name).exists():

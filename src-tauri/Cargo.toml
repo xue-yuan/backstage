@@ -1,7 +1,7 @@
 [package]
-name = "backstage"
+name = "cratify"
 version = "0.1.0"
-description = "Backstage: organise your Serato DJ library"
+description = "Cratify: organise your Serato DJ library"
 edition = "2021"
 
 [build-dependencies]

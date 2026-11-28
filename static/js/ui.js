@@ -1,4 +1,4 @@
-import { _, _n } from './i18n.js';
+import { _, _n, STORAGE_PREFIX } from './i18n.js';
 // Small DOM helpers, virtual list, toasts and modal dialogs (no browser alert/confirm).
 
 export function h(tag, props = {}, ...children) {
@@ -69,7 +69,7 @@ export function isTyping(e) {
 export const prefs = {
   get(key, fallback) {
     try {
-      const v = localStorage.getItem(`crate-desk:${key}`);
+      const v = localStorage.getItem(`${STORAGE_PREFIX}${key}`);
       return v == null ? fallback : JSON.parse(v);
     } catch {
       return fallback;
@@ -77,7 +77,7 @@ export const prefs = {
   },
   set(key, value) {
     try {
-      localStorage.setItem(`crate-desk:${key}`, JSON.stringify(value));
+      localStorage.setItem(`${STORAGE_PREFIX}${key}`, JSON.stringify(value));
     } catch {
       /* storage unavailable: preference just isn't remembered */
     }

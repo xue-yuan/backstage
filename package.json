@@ -1,12 +1,13 @@
 {
-  "name": "backstage",
+  "name": "cratify",
   "private": true,
   "version": "0.1.0",
-  "description": "Backstage Mac app shell (Tauri). The app itself is the Python server in app.py + static/.",
+  "description": "Cratify Mac app shell (Tauri). The app itself is the Python server in app.py + static/.",
   "scripts": {
     "tauri": "tauri",
     "app:dev": "tauri dev",
-    "app:build": "tauri build --bundles app"
+    "app:build": "tauri build --bundles app",
+    "app:release": "sh tools/package_release.sh"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.6"
