@@ -8,7 +8,7 @@
     "app:dev": "sh tools/bundle_python.sh && tauri dev",
     "app:build": "sh tools/bundle_python.sh && tauri build --bundles app",
     "app:release": "sh tools/package_release.sh",
-    "test": "uv run --no-project python -m unittest discover -s tests -t . && node --test tests/js/"
+    "test": "uv run --no-project python -m unittest discover -s tests -t . && node --test tests/js/ && cargo test --quiet --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.12.6"

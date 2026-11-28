@@ -60,22 +60,24 @@ fn data_dir() -> PathBuf {
 /// server's app.py moves the backups folder), and WebKit's website data is copied, because macOS keeps
 /// it per bundle id and it holds the page's saved settings (localStorage). Called only while the old
 /// app is not running, and before the window (and so WebKit) starts.
-fn migrate_from_backstage(identifier: &str) {
-    let old = home().join("Library/Application Support/Backstage");
-    let new = data_dir();
+/// Returns a line for the log when something was carried over.
+fn migrate_from_backstage(home: &Path, identifier: &str) -> Option<String> {
+    let old = home.join("Library/Application Support/Backstage");
+    let new = home.join("Library/Application Support/Cratify");
     if new.exists() || !old.is_dir() {
-        return;
+        return None;
     }
     let _ = std::fs::rename(&old, &new);
     // Cratify never ran with data yet, so a WebKit folder of its own (left by a start that failed)
     // holds no page data: the old folder's contents are copied into it.
-    let old_webkit = home().join("Library/WebKit/local.cratedesk.app");
-    let new_webkit = home().join("Library/WebKit").join(identifier);
-    if old_webkit.is_dir() {
-        let _ = std::fs::create_dir_all(&new_webkit);
-        let copied = Command::new("/bin/cp").arg("-Rp").arg(old_webkit.join(".")).arg(&new_webkit).stdin(Stdio::null()).status();
-        app_log(&format!("copied {} to {}: {copied:?}", old_webkit.display(), new_webkit.display()));
+    let old_webkit = home.join("Library/WebKit/local.cratedesk.app");
+    let new_webkit = home.join("Library/WebKit").join(identifier);
+    if !old_webkit.is_dir() {
+        return Some(format!("moved {} to {}", old.display(), new.display()));
     }
+    let _ = std::fs::create_dir_all(&new_webkit);
+    let copied = Command::new("/bin/cp").arg("-Rp").arg(old_webkit.join(".")).arg(&new_webkit).stdin(Stdio::null()).status();
+    Some(format!("moved {} to {}; copied {} to {}: {copied:?}", old.display(), new.display(), old_webkit.display(), new_webkit.display()))
 }
 
 /// Append a line to app.log in the data folder (the window side; the server writes server.log).
@@ -90,14 +92,17 @@ fn app_log(message: &str) {
 /// or, until one is chosen, the Mac's first preferred language, as the server does. Read on each
 /// call because the page can switch while the app runs.
 fn lang_is_zh() -> bool {
-    let chosen = std::fs::read_to_string(data_dir().join("settings.json"))
-        .ok()
-        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .and_then(|v| v.get("lang")?.as_str().map(str::to_string));
-    match chosen.as_deref() {
-        Some("zh") => true,
-        Some("en") => false,
-        _ => mac_prefers_chinese(),
+    let settings = std::fs::read_to_string(data_dir().join("settings.json")).ok();
+    chinese_chosen(settings.as_deref()).unwrap_or_else(mac_prefers_chinese)
+}
+
+/// The language saved in settings.json: Some(true) for Chinese, Some(false) for English, None if none is chosen.
+fn chinese_chosen(settings: Option<&str>) -> Option<bool> {
+    let v: serde_json::Value = serde_json::from_str(settings?).ok()?;
+    match v.get("lang")?.as_str()? {
+        "zh" => Some(true),
+        "en" => Some(false),
+        _ => None,
     }
 }
 
@@ -105,14 +110,19 @@ fn lang_is_zh() -> bool {
 fn mac_prefers_chinese() -> bool {
     static ZH: OnceLock<bool> = OnceLock::new();
     *ZH.get_or_init(|| {
-        let Ok(out) = Command::new("defaults").args(["read", "-g", "AppleLanguages"]).stdin(Stdio::null()).output() else {
-            return false;
-        };
-        // e.g. ( "zh-Hant-TW", "en-TW" ): the first quoted or bare language tag
-        let text = String::from_utf8_lossy(&out.stdout);
-        let first = text.trim_start_matches(|c: char| c == '(' || c.is_whitespace()).trim_start_matches('"');
-        first.to_ascii_lowercase().starts_with("zh")
+        Command::new("defaults")
+            .args(["read", "-g", "AppleLanguages"])
+            .stdin(Stdio::null())
+            .output()
+            .map(|out| first_language_is_chinese(&String::from_utf8_lossy(&out.stdout)))
+            .unwrap_or(false)
     })
+}
+
+/// From the output of `defaults read -g AppleLanguages`, e.g. ( "zh-Hant-TW", "en-TW" ): is the first tag Chinese?
+fn first_language_is_chinese(defaults_output: &str) -> bool {
+    let first = defaults_output.trim_start_matches(|c: char| c == '(' || c.is_whitespace()).trim_start_matches('"');
+    first.to_ascii_lowercase().starts_with("zh")
 }
 
 // Interface text shared with the page and the server, embedded at build time.
@@ -129,6 +139,11 @@ fn text_table(zh: bool) -> &'static serde_json::Map<String, serde_json::Value> {
 /// The text for `key` (Chinese when the page is in Chinese, else English), with {name} placeholders
 /// filled in. A counted entry gives its "other" form; an unknown key is shown as is, so a gap is visible.
 fn tr(key: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
+    text(key, lang_is_zh(), args)
+}
+
+/// tr() for a given language.
+fn text(key: &str, zh: bool, args: &[(&str, &dyn std::fmt::Display)]) -> String {
     let lookup = |zh: bool| -> Option<String> {
         match text_table(zh).get(key)? {
             serde_json::Value::String(s) => Some(s.clone()),
@@ -136,7 +151,7 @@ fn tr(key: &str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
             _ => None,
         }
     };
-    let mut out = if lang_is_zh() { lookup(true) } else { None }.or_else(|| lookup(false)).unwrap_or_else(|| key.to_string());
+    let mut out = if zh { lookup(true) } else { None }.or_else(|| lookup(false)).unwrap_or_else(|| key.to_string());
     for (name, value) in args {
         out = out.replace(&format!("{{{name}}}"), &value.to_string());
     }
@@ -156,10 +171,15 @@ fn port_owner() -> Option<String> {
 
 /// Why the app's port is taken, in words the user can act on.
 fn port_in_use_message() -> String {
-    match port_owner() {
-        Some(s) if s.starts_with("Backstage/") => tr("startup.backstageRunning", &[]),
-        Some(s) if s.starts_with("Cratify/") => tr("startup.alreadyRunning", &[]),
-        _ => tr("startup.portInUse", &[("port", &PORT)]),
+    tr(port_in_use_key(port_owner().as_deref()), &[("port", &PORT)])
+}
+
+/// The message for the program that answers on the app's port, by its Server header.
+fn port_in_use_key(server_header: Option<&str>) -> &'static str {
+    match server_header {
+        Some(s) if s.starts_with("Backstage/") => "startup.backstageRunning",
+        Some(s) if s.starts_with("Cratify/") => "startup.alreadyRunning",
+        _ => "startup.portInUse",
     }
 }
 
@@ -180,8 +200,7 @@ fn find_uv() -> Option<PathBuf> {
 /// The Python that runs the server: the one bundled in the app (Resources/python, copied by
 /// tools/bundle_python.sh), or, for a build without it, a uv-managed interpreter (never the system one).
 fn find_python(resource_dir: &Path) -> Result<PathBuf, String> {
-    let bundled = resource_dir.join("python/bin/python3");
-    if bundled.is_file() {
+    if let Some(bundled) = bundled_python(resource_dir) {
         return Ok(bundled);
     }
     let uv = find_uv().ok_or_else(|| tr("startup.uvMissing", &[]))?;
@@ -198,6 +217,11 @@ fn find_python(resource_dir: &Path) -> Result<PathBuf, String> {
         ));
     }
     Ok(path)
+}
+
+/// The Python bundled in the app's resources, if there is one.
+fn bundled_python(resource_dir: &Path) -> Option<PathBuf> {
+    Some(resource_dir.join("python/bin/python3")).filter(|p| p.is_file())
 }
 
 fn start_server(server_dir: &Path, data_dir: &Path) -> Result<Child, String> {
@@ -290,7 +314,7 @@ fn run_page_command(app: &AppHandle, id: &str) {
     }
     if let Some(window) = app.get_webview_window("main") {
         // Before the page has loaded (the bundled loading page) there is no __cratify: nothing happens.
-        let _ = window.eval(format!("window.__cratify?.command?.({})", serde_json_string(id)));
+        let _ = window.eval(format!("window.__cratify?.command?.({})", js_string(id)));
     }
 }
 
@@ -313,8 +337,11 @@ fn geometry_path() -> PathBuf {
 }
 
 fn load_geometry() -> Option<Geometry> {
-    let text = std::fs::read_to_string(geometry_path()).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    parse_geometry(&std::fs::read_to_string(geometry_path()).ok()?)
+}
+
+fn parse_geometry(text: &str) -> Option<Geometry> {
+    let v: serde_json::Value = serde_json::from_str(text).ok()?;
     let num = |k: &str| v.get(k).and_then(|n| n.as_f64());
     Some(Geometry {
         width: num("width")?,
@@ -326,11 +353,17 @@ fn load_geometry() -> Option<Geometry> {
 }
 
 fn save_geometry(g: &Geometry) {
-    if g.width < MIN_SIZE.0 || g.height < MIN_SIZE.1 {
-        return; // never recorded
+    if let Some(json) = geometry_json(g) {
+        let _ = std::fs::write(geometry_path(), json);
     }
-    let json = serde_json::json!({ "width": g.width, "height": g.height, "x": g.x, "y": g.y, "maximized": g.maximized });
-    let _ = std::fs::write(geometry_path(), json.to_string());
+}
+
+/// What window-state.json holds; None for a size that was never recorded (smaller than the minimum).
+fn geometry_json(g: &Geometry) -> Option<String> {
+    if g.width < MIN_SIZE.0 || g.height < MIN_SIZE.1 {
+        return None;
+    }
+    Some(serde_json::json!({ "width": g.width, "height": g.height, "x": g.x, "y": g.y, "maximized": g.maximized }).to_string())
 }
 
 /// The saved title bar still lies on a connected display (a monitor may have been unplugged).
@@ -371,8 +404,11 @@ fn remember_geometry(window: &WebviewWindow, geometry: &Mutex<Geometry>) {
 
 /// Number of unapplied changes in the plan (the count the Plan tab shows).
 fn plan_change_count(path: &Path) -> Option<i64> {
-    let text = std::fs::read_to_string(path).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    count_changes(&std::fs::read_to_string(path).ok()?)
+}
+
+fn count_changes(plan_json: &str) -> Option<i64> {
+    let v: serde_json::Value = serde_json::from_str(plan_json).ok()?;
     Some(v.get("changes")?.as_array()?.len() as i64)
 }
 
@@ -399,24 +435,13 @@ fn watch_plan_for_badge(window: WebviewWindow, plan: PathBuf) {
 }
 
 fn show_error(window: &WebviewWindow, message: &str) {
-    let js = format!("showError({})", serde_json_string(message));
+    let js = format!("showError({})", js_string(message));
     let _ = window.eval(js);
 }
 
-// Minimal JSON string escaping for passing a message into the loading page.
-fn serde_json_string(s: &str) -> String {
-    let mut out = String::from("\"");
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
+/// A JavaScript string literal for `s` (JSON), for scripts run in the page.
+fn js_string(s: &str) -> String {
+    serde_json::Value::String(s.to_string()).to_string()
 }
 
 fn main() {
@@ -427,7 +452,9 @@ fn main() {
             // With the port taken (e.g. the old app still open) nothing is moved or created; start_server explains.
             let port_busy = port_open();
             if !port_busy {
-                migrate_from_backstage(&app.config().identifier);
+                if let Some(line) = migrate_from_backstage(&home(), &app.config().identifier) {
+                    app_log(&line);
+                }
             }
             let data_dir = data_dir();
             if !port_busy {
@@ -456,7 +483,7 @@ fn main() {
                     if payload.event() == PageLoadEvent::Finished {
                         app_log(&format!("page loaded: {}", payload.url()));
                         if payload.url().scheme() != "http" {
-                            let _ = window.eval(format!("setStatus({})", serde_json_string(&tr("startup.starting", &[]))));
+                            let _ = window.eval(format!("setStatus({})", js_string(&tr("startup.starting", &[]))));
                             loading_flag.store(true, Ordering::SeqCst);
                         }
                     }
@@ -465,7 +492,7 @@ fn main() {
                 .on_download(|webview, event| {
                     if let DownloadEvent::Finished { path: Some(path), success: true, .. } = event {
                         let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                        let msg = serde_json_string(&tr("download.saved", &[("name", &name)]));
+                        let msg = js_string(&tr("download.saved", &[("name", &name)]));
                         let _ = webview.eval(format!("window.__cratify?.toast?.({msg})"));
                     }
                     true
@@ -538,4 +565,153 @@ fn main() {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh, empty folder under the system temp folder (removed by the test that uses it).
+    fn temp_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("cratify-test-{name}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn both_text_tables_are_embedded_with_the_same_keys() {
+        let (en, zh) = (text_table(false), text_table(true));
+        assert!(en.len() > 800, "en.json did not parse: {} keys", en.len());
+        let mut en_keys: Vec<_> = en.keys().collect();
+        let mut zh_keys: Vec<_> = zh.keys().collect();
+        en_keys.sort();
+        zh_keys.sort();
+        assert_eq!(en_keys, zh_keys);
+    }
+
+    #[test]
+    fn every_key_this_app_uses_has_text_in_both_languages() {
+        let all = include_str!("main.rs");
+        let source = &all[..all.find("#[cfg(test)]").unwrap()]; // the app's code, not these tests
+        let mut used: Vec<&str> = VIEWS.iter().map(|(_, key)| *key).collect();
+        for (i, _) in source.match_indices("(\"") {
+            // calls of tr("…") and of the menu's t("…")
+            let start = source[..i].rfind(|c: char| !(c.is_alphanumeric() || c == '_')).map_or(0, |p| p + 1);
+            if matches!(&source[start..i], "tr" | "t") {
+                let rest = &source[i + 2..];
+                used.push(&rest[..rest.find('"').unwrap()]);
+            }
+        }
+        assert!(used.len() > 30, "found only {} keys", used.len());
+        for key in used {
+            for zh in [false, true] {
+                assert!(text_table(zh).contains_key(key), "{key} is missing (zh: {zh})");
+            }
+        }
+    }
+
+    #[test]
+    fn text_fills_placeholders_in_the_chosen_language() {
+        assert_eq!(text("menu.quit", false, &[]), "Quit Cratify");
+        assert_eq!(text("menu.quit", true, &[]), "結束 Cratify");
+        assert_eq!(text("download.saved", false, &[("name", &"plan.md")]), "Saved to Downloads: plan.md");
+        assert_eq!(text("startup.portInUse", true, &[("port", &PORT)]), text_table(true)["startup.portInUse"].as_str().unwrap().replace("{port}", "47615"));
+    }
+
+    #[test]
+    fn counted_texts_give_their_other_form_and_unknown_keys_show_as_is() {
+        assert_eq!(text("plan.actionCount", false, &[("n", &3)]), "3 actions");
+        assert_eq!(text("no.such.key", true, &[]), "no.such.key");
+    }
+
+    #[test]
+    fn the_language_chosen_in_the_page_wins() {
+        assert_eq!(chinese_chosen(Some(r#"{"lang": "zh", "musicFolders": []}"#)), Some(true));
+        assert_eq!(chinese_chosen(Some(r#"{"lang":"en"}"#)), Some(false));
+        // Not chosen yet, or unreadable: follow the Mac.
+        assert_eq!(chinese_chosen(Some(r#"{"musicFolders": ["/Music"]}"#)), None);
+        assert_eq!(chinese_chosen(Some(r#"{"lang": "fr"}"#)), None);
+        assert_eq!(chinese_chosen(Some("not json")), None);
+        assert_eq!(chinese_chosen(None), None);
+        // A "lang" inside another value is not the setting (the old text search would have found it).
+        assert_eq!(chinese_chosen(Some(r#"{"musicFolders": ["/lang/zh"], "note": "\"lang\": \"zh\""}"#)), None);
+    }
+
+    #[test]
+    fn the_macs_first_language_decides_until_one_is_chosen() {
+        assert!(first_language_is_chinese("(\n    \"zh-Hant-TW\",\n    \"en-TW\"\n)\n"));
+        assert!(first_language_is_chinese("(\n    \"zh-Hans-CN\"\n)"));
+        assert!(!first_language_is_chinese("(\n    \"en-TW\",\n    \"zh-Hant-TW\"\n)\n"));
+        assert!(first_language_is_chinese("(\n    zh-Hant\n)")); // bare tags have no quotes
+        assert!(!first_language_is_chinese(""));
+    }
+
+    #[test]
+    fn a_taken_port_is_explained_by_who_holds_it() {
+        assert_eq!(port_in_use_key(Some("Backstage/0.9 Python/3.14.0")), "startup.backstageRunning");
+        assert_eq!(port_in_use_key(Some("Cratify/0.1.1 Python/3.14.7")), "startup.alreadyRunning");
+        assert_eq!(port_in_use_key(Some("nginx/1.25")), "startup.portInUse");
+        assert_eq!(port_in_use_key(None), "startup.portInUse");
+    }
+
+    #[test]
+    fn the_bundled_python_is_used_when_present() {
+        let dir = temp_dir("python");
+        assert_eq!(bundled_python(&dir), None);
+        std::fs::create_dir_all(dir.join("python/bin")).unwrap();
+        std::fs::write(dir.join("python/bin/python3"), "").unwrap();
+        assert_eq!(bundled_python(&dir), Some(dir.join("python/bin/python3")));
+        assert_eq!(find_python(&dir), Ok(dir.join("python/bin/python3")));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn window_geometry_round_trips_and_small_sizes_are_not_kept() {
+        let g = Geometry { width: 1440.0, height: 900.0, x: 20.0, y: 40.0, maximized: true };
+        let back = parse_geometry(&geometry_json(&g).unwrap()).unwrap();
+        assert_eq!((back.width, back.height, back.x, back.y, back.maximized), (1440.0, 900.0, 20.0, 40.0, true));
+        assert_eq!(geometry_json(&Geometry { width: 300.0, height: 200.0, ..g }), None);
+        assert!(parse_geometry(r#"{"width": 1200}"#).is_none());
+        let old = parse_geometry(r#"{"width": 1200, "height": 800, "x": 0, "y": 0}"#).unwrap(); // from before "maximized"
+        assert!(!old.maximized);
+    }
+
+    #[test]
+    fn the_dock_badge_counts_the_plans_changes() {
+        assert_eq!(count_changes(r#"{"version": 1, "changes": [{"id": "a"}, {"id": "b"}], "rev": 7}"#), Some(2));
+        assert_eq!(count_changes(r#"{"version": 1, "changes": []}"#), Some(0));
+        assert_eq!(count_changes(r#"{"changes": "#), None); // half written: try again later
+    }
+
+    #[test]
+    fn messages_reach_the_page_as_string_literals() {
+        let message = "Line 1\nQuote \" backslash \\ tab\t 中文 \u{1}";
+        let literal = js_string(message);
+        assert_eq!(serde_json::from_str::<String>(&literal).unwrap(), message);
+        assert!(!literal.contains('\n'));
+    }
+
+    #[test]
+    fn backstage_data_is_moved_once() {
+        let home = temp_dir("home");
+        let old = home.join("Library/Application Support/Backstage");
+        let new = home.join("Library/Application Support/Cratify");
+        let old_webkit = home.join("Library/WebKit/local.cratedesk.app/WebsiteData");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("plan.json"), "{}").unwrap();
+        std::fs::create_dir_all(&old_webkit).unwrap();
+        std::fs::write(old_webkit.join("localstorage.sqlite3"), "x").unwrap();
+
+        assert!(migrate_from_backstage(&home, "dev.xueyuan.cratify").is_some());
+        assert!(!old.exists());
+        assert_eq!(std::fs::read_to_string(new.join("plan.json")).unwrap(), "{}");
+        assert!(home.join("Library/WebKit/dev.xueyuan.cratify/WebsiteData/localstorage.sqlite3").is_file());
+
+        // Once Cratify has its folder, an old one that reappears is left alone.
+        std::fs::create_dir_all(&old).unwrap();
+        assert!(migrate_from_backstage(&home, "dev.xueyuan.cratify").is_none());
+        assert!(old.exists());
+        std::fs::remove_dir_all(home).unwrap();
+    }
 }

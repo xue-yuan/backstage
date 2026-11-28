@@ -52,12 +52,13 @@ The page edits `plan.json`, `screen.json`, `notes.json`, `rules.json` and `marks
 ### Tests
 
 ```bash
-pnpm test             # server tests (unittest) and front-end tests (node --test); no packages to install
+pnpm test             # server (unittest), front end (node --test) and Mac app (cargo test); no packages to install
 ```
 
 - `tests/cases/plan_cases.json` lists plan cases (crate edits, songs, refused edits) that run against both the page's model (`tests/js/plan_cases.test.mjs`) and Apply to Serato (`tests/test_plan_cases.py`), so the preview and the real write agree.
 - Apply is tested on a fresh, empty library built with the schema of the Serato DJ on the Mac. Serato's schema is not stored in this repository; it is read from byte copies of the local library, whose live files are never opened. These tests are skipped on a Mac without Serato DJ 4.
 - `tools/check_i18n.py` (also run by the tests) checks the translation files against the code.
+- The Mac app's tests (`src-tauri/src/main.rs`) cover its texts (both tables embedded, every key it uses present), the language choice, the port-in-use message, the bundled Python, the saved window size, the Dock badge count and the Backstage data move (on a temporary home folder).
 
 ### Releasing
 
