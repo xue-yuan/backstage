@@ -206,7 +206,7 @@ Supported actions:
 
 Cratify is an independent project. It is not made by, affiliated with or endorsed by Serato, and it does not use Serato's logos. Serato and Serato DJ are trademarks of their owner.
 
-Serato DJ's library database is private and undocumented. What Cratify knows about it was worked out by comparing the database before and after Serato's own actions, and `serato_crates/apply.py` documents it. Cratify writes to it only when you press "Apply to Serato", with Serato closed, after rehearsing the changes on a copy and backing the database up to `~/Cratify Backups/`; it checks the result before committing, and refuses database versions it has not been verified with. Even so, a Serato update or an untested library could behave differently. Keep your own backups too, and use Cratify at your own risk. The software is provided as is, without warranty.
+Serato DJ's library database is private and undocumented. What Cratify knows about it was worked out by comparing the database before and after Serato's own actions, and `serato_crates/apply.py` documents it. Cratify writes to it only when you press "Apply to Serato", with Serato closed, after rehearsing the changes on a copy and backing the database up to `~/Cratify Backups/`; it checks the result before committing, and refuses database versions it has not been verified with. Even so, a Serato update or an untested library could behave differently. Keep your own backups too, and use Cratify at your own risk. The software is provided as is, without warranty (see [License](#license)).
 
 ## Limitations
 
@@ -214,3 +214,7 @@ Serato DJ's library database is private and undocumented. What Cratify knows abo
 - Songs added by Cratify are not analysed: select them in Serato and choose "Analyze Files" (loading one on a deck analyses it too). Dragging files into Serato analyses them on import.
 - In a browser, Chrome cannot play AIFF. Safari and the Mac app can.
 - Only the local Serato Library is handled; streaming playlists do not appear.
+
+## License
+
+[MIT](LICENSE). You may use, copy, change and share Cratify, including commercially, as long as the copyright and license notice stay with it. It comes without warranty.
