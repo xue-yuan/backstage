@@ -2,6 +2,8 @@
 
 Each section is also used as the release notes for that version on GitHub (`tools/package_release.sh` copies it).
 
+## 0.1.2
+
 ## 0.1.1
 
 - The app includes its own Python: uv no longer needs to be installed.
