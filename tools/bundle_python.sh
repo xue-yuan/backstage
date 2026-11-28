@@ -12,10 +12,14 @@ root=$(cd "$(dirname "$(realpath "$python")")/.." && pwd -P)
 version=$("$python" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')
 dest=src-tauri/python
 
-rm -rf "$dest"
+# Empty it but keep .gitkeep: the folder is a resource the app build always needs (a build that
+# skips this script gets an empty folder and falls back to uv).
+mkdir -p "$dest"
+find "$dest" -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf {} +
 mkdir -p "$dest/bin"
 rsync -a \
   --exclude "/bin/" \
+  --exclude "/.gitkeep" \
   --exclude "/include/" \
   --exclude "/share/" \
   --exclude "/lib/pkgconfig/" \

@@ -33,11 +33,19 @@ test('songs and crates are named from the library', () => {
   assert.equal(crateName(ctx, 11), 'House / Opening');
 });
 
-test('op text uses the names as they are now', () => {
-  const changes = [{ id: 'a', ops: [{ type: 'add', crate: 11, asset: 1 }, { type: 'renameCrate', crate: 10, name: 'Deep House', from: 'House' }] }];
+test('each step names crates as they are at that step of the plan', () => {
+  const changes = [
+    { id: 'a', ops: [{ type: 'add', crate: 11, asset: 1 }, { type: 'renameCrate', crate: 10, name: 'Deep House', from: 'House' }] },
+    { id: 'b', ops: [{ type: 'add', crate: 11, asset: 2 }, { type: 'moveCrate', crate: 11, parent: 12 }, { type: 'remove', crate: 11, asset: 2 }] },
+  ];
   const ctx = context(changes);
-  assert.equal(opText(ctx, changes[0].ops[0]), 'Add to "Deep House / Opening": Maren Vos – Night Shift');
-  assert.equal(opText(ctx, changes[0].ops[1]), 'Rename "House" → "Deep House"');
+  const [add, rename] = changes[0].ops;
+  const [add2, move, remove] = changes[1].ops;
+  assert.equal(opText(ctx, add), 'Add to "House / Opening": Maren Vos – Night Shift'); // before the rename
+  assert.equal(opText(ctx, rename), 'Rename "House" → "Deep House"');
+  assert.equal(opText(ctx, add2), 'Add to "Deep House / Opening": loop.wav');
+  assert.equal(opText(ctx, move), 'Move "Deep House / Opening" under "Techno"');
+  assert.equal(opText(ctx, remove), 'Remove from "Techno / Opening": loop.wav'); // after the move
 });
 
 test('a crate the plan deletes or merges away keeps its last known path', () => {
@@ -46,10 +54,18 @@ test('a crate the plan deletes or merges away keeps its last known path', () => 
   assert.equal(opText(ctx, changes[0].ops[0]), 'Merge "House / Opening" into "Techno"');
 });
 
-test('a crate created and deleted in the plan is named from its creation', () => {
+test('a crate created and deleted in the plan is named by its path at that step', () => {
   const changes = [{ id: 'a', ops: [{ type: 'createCrate', id: 'new-x', name: 'Closing', parent: 10 }, { type: 'deleteCrate', crate: 'new-x' }] }];
   const ctx = context(changes);
-  assert.equal(opText(ctx, changes[0].ops[1]), 'Delete crate "Closing"');
+  assert.equal(opText(ctx, changes[0].ops[1]), 'Delete crate "House / Closing"');
+  assert.equal(crateName(ctx, 'new-x'), 'Closing'); // gone from the final state: named from its creation
+});
+
+test('a moved crate is named where it was, not by the path it moved to', () => {
+  const changes = [{ id: 'a', ops: [{ type: 'moveCrate', crate: 11, parent: 12 }, { type: 'moveCrate', crate: 12, parent: 0, before: 10, reorder: true }] }];
+  const ctx = context(changes);
+  assert.equal(opText(ctx, changes[0].ops[0]), 'Move "House / Opening" under "Techno"');
+  assert.equal(opText(ctx, changes[0].ops[1]), 'Reorder: "Techno" before "House"');
 });
 
 test('removal reasons are keys; older plans stored the text', () => {
@@ -79,8 +95,9 @@ test('change titles are made from their key and parameters', () => {
 test('plans saved by older versions show their stored text', () => {
   const ctx = context([]);
   assert.equal(changeTitle(ctx, { label: '「Night Shift」→ House', ops: [] }), '「Night Shift」→ House');
-  // A rename from before "from" was recorded: only the stored text has the old name.
-  assert.equal(opText(ctx, { type: 'renameCrate', crate: 10, name: 'House', text: 'Rename "Hous" → "House"' }), 'Rename "Hous" → "House"');
+  // A rename from before "from" was recorded takes the name the crate had at that step.
+  const renames = [{ id: 'r', ops: [{ type: 'renameCrate', crate: 12, name: 'Tekno', text: '重新命名「Techno」→「Tekno」' }] }];
+  assert.equal(opText(context(renames), renames[0].ops[0]), 'Rename "Techno" → "Tekno"');
   // Other ops are rebuilt from their data, whatever their old text said.
   assert.equal(opText(ctx, { type: 'deleteCrate', crate: 12, text: '刪除 crate「Techno」' }), 'Delete crate "Techno"');
 });

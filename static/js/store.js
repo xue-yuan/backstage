@@ -94,19 +94,26 @@ class Store {
       this.saveDoc('rules', { overrides: legacy }, 'store.saveRulesFailed');
     }
     this.marks = { genuine: new Set(marks.genuine || []), dismissedDuplicates: new Set(marks.dismissedDuplicates || []), pinnedCrates: marks.pinnedCrates || [] };
-    if (!marks.rev) this.moveLegacyMarks();
+    this.mergeLegacyMarks();
     this.recompute();
   }
 
-  /** Until 2026-11-28 these marks were kept in the page's storage: move them to marks.json once. */
-  moveLegacyMarks() {
-    const genuine = prefs.get('quality.genuine', []);
-    const dismissed = prefs.get('dupes.dismissed', []);
-    const pinned = prefs.get('inbox.pinned', []);
+  /**
+   * Until 2026-11-28 these marks were kept in the page's storage, separately in the Mac app and in the
+   * browser version. Each adds its own to marks.json the first time it opens (whichever comes first),
+   * and forgets them once they are saved there.
+   */
+  mergeLegacyMarks() {
+    const keys = ['quality.genuine', 'dupes.dismissed', 'inbox.pinned'];
+    const [genuine, dismissed, pinned] = keys.map((k) => prefs.get(k, []));
     if (!genuine.length && !dismissed.length && !pinned.length) return;
-    this.marks = { genuine: new Set(genuine), dismissedDuplicates: new Set(dismissed), pinnedCrates: pinned };
+    for (const k of genuine) this.marks.genuine.add(k);
+    for (const k of dismissed) this.marks.dismissedDuplicates.add(k);
+    const pins = this.marks.pinnedCrates;
+    this.marks.pinnedCrates = [...pins, ...pinned.filter((id) => !pins.includes(id))].slice(0, 9);
+    const before = this.revs.marks ?? 0;
     this.saveMarks().then(() => {
-      if (this.revs.marks) for (const key of ['quality.genuine', 'dupes.dismissed', 'inbox.pinned']) prefs.remove(key);
+      if ((this.revs.marks ?? 0) !== before) for (const k of keys) prefs.remove(k); // saved: no longer needed here
     });
   }
 
@@ -504,7 +511,8 @@ class Store {
 
   // ---- text for the plan, made when shown (planText.js) ----
   textContext() {
-    return { eff: this.eff, changes: this.plan.changes, quality: (id) => this.trackQuality(this.base.tracks.get(id)).label };
+    const quality = (id) => (this.base.tracks.has(id) ? this.trackQuality(this.base.tracks.get(id)).label : null);
+    return { eff: this.eff, changes: this.plan.changes, quality };
   }
   changeTitle(change) {
     return changeTitle(this.textContext(), change);
@@ -575,7 +583,25 @@ class Store {
 
   persist() {
     clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => this.saveDoc('plan', { ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt }, 'store.savePlanFailed'), 250);
+    this._saveTimer = setTimeout(() => this.savePlanNow(), 250);
+  }
+  savePlanNow() {
+    this._saveTimer = null;
+    return this.saveDoc('plan', { ...this.plan, snapshotTakenAt: this.base?.snapshot?.takenAt }, 'store.savePlanFailed');
+  }
+  /**
+   * Whether the plan in this page is the one in plan.json: pending saves are written first. False when
+   * another window changed it (then this page must be reloaded before the plan is applied).
+   */
+  async planIsCurrent() {
+    if (this._saveTimer) {
+      clearTimeout(this._saveTimer);
+      this.savePlanNow();
+    }
+    await this._saves.plan;
+    if (this.conflicts.has('plan')) return false;
+    const { rev } = await api.doc('plan');
+    return rev === (this.revs.plan ?? 0);
   }
 
   // ---- display names ----

@@ -494,7 +494,7 @@ export function createCleanupView({ navigate }) {
     const { ops, trashed } = dupeOps(g, keepId, { trash });
     if (!ops.length) return;
     const keeper = store.base.tracks.get(keepId);
-    store.commit(withTrash({ key: 'cleanup.mergeDuplicatesChange', params: { title: keeper.title || keeper.fileName, quality: { quality: keepId } } }, trashed), ops);
+    store.commit(withTrash({ key: 'cleanup.mergeDuplicatesChange', params: { title: keeper.title || keeper.fileName, quality: { quality: keepId, label: store.trackQuality(keeper).label } } }, trashed), ops);
   }
 
   // Merge every listed group at once, each keeping its selected copy. One change in the plan; each

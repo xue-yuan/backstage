@@ -43,7 +43,8 @@ class Server(unittest.TestCase):
                 raw = res.read()
                 return res.status, json.loads(raw) if res.headers.get_content_type() == "application/json" else raw
         except urllib.error.HTTPError as e:
-            return e.code, json.loads(e.read() or b"{}")
+            with e:
+                return e.code, json.loads(e.read() or b"{}")
 
     def test_page_and_static_files(self):
         status, page = self.call("GET", "/")

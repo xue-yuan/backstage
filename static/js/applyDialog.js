@@ -181,6 +181,11 @@ export async function openApplyDialog() {
   }
 
   async function run() {
+    if (!(await store.planIsCurrent())) {
+      phase = 'failed';
+      result = { error: _('apply.planChangedElsewhere') };
+      return render();
+    }
     const { supported } = split();
     let expected;
     let expectedOrder;

@@ -2,7 +2,8 @@
 node_modules/
 src-tauri/target/
 src-tauri/gen/
-src-tauri/python/
+src-tauri/python/*
+!src-tauri/python/.gitkeep
 __pycache__/
 *.pyc
 .DS_Store

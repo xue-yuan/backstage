@@ -67,7 +67,7 @@ export function consolidateOps() {
     const key = norm(eff.crates.get(id).name);
     if (taken.has(key)) ops.push(store.opMerge(id, taken.get(key)));
     else {
-      ops.push({ ...store.opMove(id, inbox), text: _('op.moveCrateUnder', { crate: eff.pathOf(id), parent: INBOX }) });
+      ops.push(store.opMove(id, inbox));
       taken.set(key, id);
     }
   };
@@ -97,11 +97,11 @@ export function consolidateOps() {
   if (loose.length) {
     let target = LOOSE_NAMES.map((n) => taken.get(norm(n))).find((id) => id != null);
     if (target == null) {
-      const op = { ...store.opCreate(LOOSE, inbox), text: _('op.createCrateUnder', { name: LOOSE, parent: INBOX }) };
+      const op = store.opCreate(LOOSE, inbox);
       ops.push(op);
       target = op.id;
     }
-    for (const t of loose) ops.push({ type: 'add', crate: target, asset: t.id, text: _('op.addToCrate', { crate: `${INBOX} / ${LOOSE}`, track: store.trackLabel(t.id) }) });
+    for (const t of loose) ops.push(store.opAdd(target, t.id));
   }
   return { ops, moved, removed: emptied.map((id) => eff.pathOf(id)), loose: loose.length };
 }

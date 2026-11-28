@@ -1,165 +1,680 @@
 {
   "about": "Plan cases run against both the page's model (tests/js/plan_cases.test.mjs) and Apply to Serato (tests/test_plan_cases.py), so the preview and the real write agree. Crates are referred to by path ('' is the top level), new crates by their 'new-…' id, songs by name. 'tree' is every crate's songs afterwards, 'order' the child order of the listed levels, 'error' that the plan is refused.",
   "setup": {
-    "crates": ["House", "House/Opening", "House/Peak", "Techno", "Inbox", "Inbox/New"],
-    "songs": ["s1", "s2", "s3", "s4"],
-    "members": { "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Inbox/New": ["s3", "s4"] }
+    "crates": [
+      "House",
+      "House/Opening",
+      "House/Peak",
+      "Techno",
+      "Inbox",
+      "Inbox/New"
+    ],
+    "songs": [
+      "s1",
+      "s2",
+      "s3",
+      "s4"
+    ],
+    "members": {
+      "House/Opening": [
+        "s1",
+        "s2"
+      ],
+      "House/Peak": [
+        "s3"
+      ],
+      "Inbox/New": [
+        "s3",
+        "s4"
+      ]
+    }
   },
   "cases": [
     {
       "name": "add a song to a crate",
-      "ops": [{ "type": "add", "crate": "House/Peak", "asset": "s4" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3", "s4"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "add",
+          "crate": "House/Peak",
+          "asset": "s4"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3",
+          "s4"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "adding a song that is already in the crate changes nothing",
-      "ops": [{ "type": "add", "crate": "House/Peak", "asset": "s3" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "add",
+          "crate": "House/Peak",
+          "asset": "s3"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "remove a song from a crate",
-      "ops": [{ "type": "remove", "crate": "House/Opening", "asset": "s1" }],
-      "tree": { "House": [], "House/Opening": ["s2"], "House/Peak": ["s3"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "remove",
+          "crate": "House/Opening",
+          "asset": "s1"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "create a crate and add a song to it",
       "ops": [
-        { "type": "createCrate", "id": "new-c", "name": "Closing", "parent": "House" },
-        { "type": "add", "crate": "new-c", "asset": "s1" }
+        {
+          "type": "createCrate",
+          "id": "new-c",
+          "name": "Closing",
+          "parent": "House"
+        },
+        {
+          "type": "add",
+          "crate": "new-c",
+          "asset": "s1"
+        }
       ],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "House/Closing": ["s1"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] },
-      "order": { "House": ["Opening", "Peak", "Closing"] }
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "House/Closing": [
+          "s1"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      },
+      "order": {
+        "House": [
+          "Opening",
+          "Peak",
+          "Closing"
+        ]
+      }
     },
     {
       "name": "a crate name already used at that level is refused, whatever the letter case",
-      "ops": [{ "type": "createCrate", "id": "new-c", "name": "opening", "parent": "House" }],
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-c",
+          "name": "opening",
+          "parent": "House"
+        }
+      ],
       "error": true
     },
     {
       "name": "letter case of non-English letters counts as the same name too",
       "ops": [
-        { "type": "createCrate", "id": "new-a", "name": "Été", "parent": "" },
-        { "type": "createCrate", "id": "new-b", "name": "été", "parent": "" }
+        {
+          "type": "createCrate",
+          "id": "new-a",
+          "name": "Été",
+          "parent": ""
+        },
+        {
+          "type": "createCrate",
+          "id": "new-b",
+          "name": "été",
+          "parent": ""
+        }
       ],
       "error": true
     },
     {
+      "name": "an accented letter written as one or two code points counts as the same name",
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-a",
+          "name": "Café",
+          "parent": ""
+        },
+        {
+          "type": "createCrate",
+          "id": "new-b",
+          "name": "Café",
+          "parent": ""
+        }
+      ],
+      "error": true
+    },
+    {
+      "name": "full-width letters count as the same name",
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-a",
+          "name": "Ｔｅｃｈｎｏ",
+          "parent": ""
+        }
+      ],
+      "error": true
+    },
+    {
+      "name": "accents make a different name",
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-a",
+          "name": "Cafe",
+          "parent": ""
+        },
+        {
+          "type": "createCrate",
+          "id": "new-b",
+          "name": "Café",
+          "parent": ""
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ],
+        "Cafe": [],
+        "Café": []
+      }
+    },
+    {
       "name": "the same name under another crate is fine",
-      "ops": [{ "type": "createCrate", "id": "new-c", "name": "Opening", "parent": "Techno" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Techno": [], "Techno/Opening": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-c",
+          "name": "Opening",
+          "parent": "Techno"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Techno/Opening": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "spaces around a new crate name are dropped",
-      "ops": [{ "type": "createCrate", "id": "new-c", "name": "  Deep  ", "parent": "" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"], "Deep": [] }
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-c",
+          "name": "  Deep  ",
+          "parent": ""
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ],
+        "Deep": []
+      }
     },
     {
       "name": "an empty crate name is refused",
-      "ops": [{ "type": "createCrate", "id": "new-c", "name": "   ", "parent": "" }],
+      "ops": [
+        {
+          "type": "createCrate",
+          "id": "new-c",
+          "name": "   ",
+          "parent": ""
+        }
+      ],
       "error": true
     },
     {
       "name": "rename a crate",
-      "ops": [{ "type": "renameCrate", "crate": "Techno", "name": "Tech House" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Tech House": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "renameCrate",
+          "crate": "Techno",
+          "name": "Tech House"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Tech House": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "renaming to a name used at that level is refused",
-      "ops": [{ "type": "renameCrate", "crate": "House/Peak", "name": "OPENING" }],
+      "ops": [
+        {
+          "type": "renameCrate",
+          "crate": "House/Peak",
+          "name": "OPENING"
+        }
+      ],
       "error": true
     },
     {
       "name": "renaming to an empty name is refused",
-      "ops": [{ "type": "renameCrate", "crate": "Techno", "name": "" }],
+      "ops": [
+        {
+          "type": "renameCrate",
+          "crate": "Techno",
+          "name": ""
+        }
+      ],
       "error": true
     },
     {
       "name": "move a crate to the top level",
-      "ops": [{ "type": "moveCrate", "crate": "House/Peak", "parent": "" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "Peak": ["s3"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] },
-      "order": { "": ["House", "Techno", "Inbox", "Peak"] }
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "House/Peak",
+          "parent": ""
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      },
+      "order": {
+        "": [
+          "House",
+          "Techno",
+          "Inbox",
+          "Peak"
+        ]
+      }
     },
     {
       "name": "move a crate with its songs under another crate",
-      "ops": [{ "type": "moveCrate", "crate": "Inbox/New", "parent": "House" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "House/New": ["s3", "s4"], "Techno": [], "Inbox": [] }
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "Inbox/New",
+          "parent": "House"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "House/New": [
+          "s3",
+          "s4"
+        ],
+        "Techno": [],
+        "Inbox": []
+      }
     },
     {
       "name": "a crate cannot move into its own child",
-      "ops": [{ "type": "moveCrate", "crate": "House", "parent": "House/Opening" }],
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "House",
+          "parent": "House/Opening"
+        }
+      ],
       "error": true
     },
     {
       "name": "moving next to a crate with the same name is refused",
       "ops": [
-        { "type": "createCrate", "id": "new-p", "name": "Peak", "parent": "Techno" },
-        { "type": "moveCrate", "crate": "new-p", "parent": "House" }
+        {
+          "type": "createCrate",
+          "id": "new-p",
+          "name": "Peak",
+          "parent": "Techno"
+        },
+        {
+          "type": "moveCrate",
+          "crate": "new-p",
+          "parent": "House"
+        }
       ],
       "error": true
     },
     {
       "name": "reorder a crate before another",
-      "ops": [{ "type": "moveCrate", "crate": "Inbox", "parent": "", "before": "House", "reorder": true }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3"], "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] },
-      "order": { "": ["Inbox", "House", "Techno"] }
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "Inbox",
+          "parent": "",
+          "before": "House",
+          "reorder": true
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      },
+      "order": {
+        "": [
+          "Inbox",
+          "House",
+          "Techno"
+        ]
+      }
     },
     {
       "name": "reorder a crate to the end of its level",
-      "ops": [{ "type": "moveCrate", "crate": "House", "parent": "", "before": null, "reorder": true }],
-      "order": { "": ["Techno", "Inbox", "House"] }
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "House",
+          "parent": "",
+          "before": null,
+          "reorder": true
+        }
+      ],
+      "order": {
+        "": [
+          "Techno",
+          "Inbox",
+          "House"
+        ]
+      }
     },
     {
       "name": "move a crate into another level, before a given crate",
-      "ops": [{ "type": "moveCrate", "crate": "Techno", "parent": "House", "before": "House/Peak" }],
-      "order": { "": ["House", "Inbox"], "House": ["Opening", "Techno", "Peak"] }
+      "ops": [
+        {
+          "type": "moveCrate",
+          "crate": "Techno",
+          "parent": "House",
+          "before": "House/Peak"
+        }
+      ],
+      "order": {
+        "": [
+          "House",
+          "Inbox"
+        ],
+        "House": [
+          "Opening",
+          "Techno",
+          "Peak"
+        ]
+      }
     },
     {
       "name": "delete a crate with its child crates",
-      "ops": [{ "type": "deleteCrate", "crate": "House" }],
-      "tree": { "Techno": [], "Inbox": [], "Inbox/New": ["s3", "s4"] }
+      "ops": [
+        {
+          "type": "deleteCrate",
+          "crate": "House"
+        }
+      ],
+      "tree": {
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s3",
+          "s4"
+        ]
+      }
     },
     {
       "name": "merge a crate into another: songs are combined",
-      "ops": [{ "type": "mergeCrate", "from": "Inbox/New", "into": "House/Peak" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": ["s3", "s4"], "Techno": [], "Inbox": [] }
+      "ops": [
+        {
+          "type": "mergeCrate",
+          "from": "Inbox/New",
+          "into": "House/Peak"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [
+          "s3",
+          "s4"
+        ],
+        "Techno": [],
+        "Inbox": []
+      }
     },
     {
       "name": "merging combines child crates with the same name and moves the others",
       "ops": [
-        { "type": "createCrate", "id": "new-o", "name": "opening", "parent": "Inbox" },
-        { "type": "add", "crate": "new-o", "asset": "s4" },
-        { "type": "mergeCrate", "from": "Inbox", "into": "House" }
+        {
+          "type": "createCrate",
+          "id": "new-o",
+          "name": "opening",
+          "parent": "Inbox"
+        },
+        {
+          "type": "add",
+          "crate": "new-o",
+          "asset": "s4"
+        },
+        {
+          "type": "mergeCrate",
+          "from": "Inbox",
+          "into": "House"
+        }
       ],
-      "tree": { "House": [], "House/Opening": ["s1", "s2", "s4"], "House/Peak": ["s3"], "House/New": ["s3", "s4"], "Techno": [] }
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2",
+          "s4"
+        ],
+        "House/Peak": [
+          "s3"
+        ],
+        "House/New": [
+          "s3",
+          "s4"
+        ],
+        "Techno": []
+      }
     },
     {
       "name": "a crate cannot be merged into its own child",
-      "ops": [{ "type": "mergeCrate", "from": "House", "into": "House/Opening" }],
+      "ops": [
+        {
+          "type": "mergeCrate",
+          "from": "House",
+          "into": "House/Opening"
+        }
+      ],
       "error": true
     },
     {
       "name": "a crate cannot be merged into itself",
-      "ops": [{ "type": "mergeCrate", "from": "Techno", "into": "Techno" }],
+      "ops": [
+        {
+          "type": "mergeCrate",
+          "from": "Techno",
+          "into": "Techno"
+        }
+      ],
       "error": true
     },
     {
       "name": "removing a song from the library takes it out of every crate",
-      "ops": [{ "type": "removeTrack", "asset": "s3", "reason": "cleanup.duplicate" }],
-      "tree": { "House": [], "House/Opening": ["s1", "s2"], "House/Peak": [], "Techno": [], "Inbox": [], "Inbox/New": ["s4"] }
+      "ops": [
+        {
+          "type": "removeTrack",
+          "asset": "s3",
+          "reason": "cleanup.duplicate"
+        }
+      ],
+      "tree": {
+        "House": [],
+        "House/Opening": [
+          "s1",
+          "s2"
+        ],
+        "House/Peak": [],
+        "Techno": [],
+        "Inbox": [],
+        "Inbox/New": [
+          "s4"
+        ]
+      }
     },
     {
       "name": "a song removed from the library cannot be added to a crate",
       "ops": [
-        { "type": "removeTrack", "asset": "s1", "reason": "" },
-        { "type": "add", "crate": "Techno", "asset": "s1" }
+        {
+          "type": "removeTrack",
+          "asset": "s1",
+          "reason": ""
+        },
+        {
+          "type": "add",
+          "crate": "Techno",
+          "asset": "s1"
+        }
       ],
       "error": true
     },
     {
       "name": "a crate deleted earlier in the plan cannot receive songs",
       "ops": [
-        { "type": "deleteCrate", "crate": "Techno" },
-        { "type": "add", "crate": "Techno", "asset": "s1" }
+        {
+          "type": "deleteCrate",
+          "crate": "Techno"
+        },
+        {
+          "type": "add",
+          "crate": "Techno",
+          "asset": "s1"
+        }
       ],
       "error": true
     }

@@ -26,6 +26,7 @@
   "apply.keepSeratoClosed": "Do not open Serato DJ",
   "apply.nothingApplied": "Nothing was applied; Serato is unchanged.",
   "apply.nothingToApply": "The plan has nothing that can be applied.",
+  "apply.planChangedElsewhere": "The plan was changed in another window. Reload the page and check the plan before applying.",
   "apply.progress": "Applying: test → back up → write → verify…",
   "apply.removeSongReject": "Remove song / reject",
   "apply.restoreConfirm": "Restore the backup from before the last apply?",

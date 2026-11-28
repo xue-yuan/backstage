@@ -174,8 +174,25 @@ export function applyPlan(base, changes) {
     }
   };
 
+  // Names of the crates each op refers to, as they are just before it runs, so the plan's steps read
+  // in order (planText.js); the rest of the app uses the final state.
+  const stepNames = new Map();
+  const pathNow = (id) => {
+    const parts = [];
+    for (let c = crates.get(id); c; c = crates.get(c.parent)) parts.unshift(c.name);
+    return parts.length ? parts.join(' / ') : null;
+  };
+  const recordNames = (op) => {
+    const at = {};
+    for (const field of ['crate', 'parent', 'from', 'into']) if (op[field] != null) at[field] = pathNow(op[field]);
+    if (op.before != null) at.before = crates.get(op.before)?.name ?? null;
+    if (op.crate != null) at.name = crates.get(op.crate)?.name ?? null;
+    stepNames.set(op, at);
+  };
+
   for (const ch of changes) {
     for (const op of ch.ops) {
+      recordNames(op);
       const problem = apply(op);
       if (problem) issues.push({ changeId: ch.id, op, message: problem });
     }
@@ -198,7 +215,7 @@ export function applyPlan(base, changes) {
     return p;
   };
 
-  return { base, crates, members, children, cratesOf, removedTracks, rejectedTracks, relocated, imports, issues, pathOf, rootId: base.rootId };
+  return { base, crates, members, children, cratesOf, removedTracks, rejectedTracks, relocated, imports, issues, pathOf, stepNames, rootId: base.rootId };
 }
 
 export function liveTracks(eff) {

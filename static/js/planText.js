@@ -30,6 +30,12 @@ export function crateName(ctx, id) {
   return findOp(ctx, (o) => o.type === 'createCrate' && o.id === id)?.name ?? `#${id}`;
 }
 
+/** A crate's own name (without its parents), wherever it is known from. */
+export function crateOwnName(ctx, id) {
+  const { eff } = ctx;
+  return eff.crates.get(id)?.name ?? eff.base.crates.get(id)?.name ?? findOp(ctx, (o) => o.type === 'createCrate' && o.id === id)?.name ?? `#${id}`;
+}
+
 /** A removal reason: an i18n key, or text saved by an older version. */
 export function reasonText(reason) {
   return has(reason) ? _(reason) : reason || '';
@@ -45,38 +51,47 @@ export function changeTitle(ctx, change) {
 
 function render(ctx, { key, n, params = {} }) {
   const p = {};
-  for (const [name, value] of Object.entries(params)) p[name] = value && typeof value === 'object' && 'quality' in value ? ctx.quality(value.quality) : value;
+  for (const [name, value] of Object.entries(params)) {
+    // { quality: songId, label }: the song's quality label now, or the one saved with it if the song is gone
+    p[name] = value && typeof value === 'object' && 'quality' in value ? (ctx.quality(value.quality) ?? value.label ?? '') : value;
+  }
   return n == null ? _(key, p) : _n(n, key, p);
 }
 
-/** What one op does, e.g. 'Add to "House / Opening": Artist – Title'. */
+/**
+ * What one op does, e.g. 'Add to "House / Opening": Artist – Title'. Crates are named as they were at
+ * that step of the plan (model.applyPlan records it), so a list of the steps reads in order.
+ */
 export function opText(ctx, op) {
-  const crate = (id) => crateName(ctx, id);
-  const track = (id) => trackName(ctx, id);
   const { eff } = ctx;
+  const at = eff.stepNames?.get(op) || {};
+  const path = (field, id) => at[field] ?? crateName(ctx, id);
+  const track = (id) => trackName(ctx, id);
   switch (op.type) {
     case 'add':
-      return _('op.addToCrate', { crate: crate(op.crate), track: track(op.asset) });
+      return _('op.addToCrate', { crate: path('crate', op.crate), track: track(op.asset) });
     case 'remove':
-      return _('op.removeFromCrate', { crate: crate(op.crate), track: track(op.asset) });
+      return _('op.removeFromCrate', { crate: path('crate', op.crate), track: track(op.asset) });
     case 'createCrate':
-      return op.parent === eff.rootId ? _('op.createCrateTop', { name: op.name }) : _('op.createCrateUnder', { name: op.name, parent: crate(op.parent) });
-    case 'renameCrate':
-      // Older plans did not keep the previous name; their text has it.
-      return op.from == null && op.text ? op.text : _('op.renameCrate', { crate: op.from ?? crate(op.crate), name: op.name });
+      return op.parent === eff.rootId ? _('op.createCrateTop', { name: op.name }) : _('op.createCrateUnder', { name: op.name, parent: path('parent', op.parent) });
+    case 'renameCrate': {
+      const from = op.from ?? at.name; // plans from before "from" was kept: the name at that step
+      return from == null && op.text ? op.text : _('op.renameCrate', { crate: from ?? crateName(ctx, op.crate), name: op.name });
+    }
     case 'moveCrate': {
+      const moved = at.crate ?? crateOwnName(ctx, op.crate); // where it was, before the move
       if (op.before === undefined) {
-        return op.parent === eff.rootId ? _('op.moveCrateTop', { crate: crate(op.crate) }) : _('op.moveCrateUnder', { crate: crate(op.crate), parent: crate(op.parent) });
+        return op.parent === eff.rootId ? _('op.moveCrateTop', { crate: moved }) : _('op.moveCrateUnder', { crate: moved, parent: path('parent', op.parent) });
       }
-      const level = op.parent === eff.rootId ? _('store.levelTop') : _('store.levelCrate', { name: crate(op.parent) });
-      const before = op.before != null ? crateName(ctx, op.before).split(' / ').pop() : null;
-      if (op.reorder) return before != null ? _('op.reorderBefore', { crate: crate(op.crate), before }) : _('op.reorderEnd', { crate: crate(op.crate), level });
-      return before != null ? _('op.moveBefore', { crate: crate(op.crate), level, before }) : _('op.moveEnd', { crate: crate(op.crate), level });
+      const level = op.parent === eff.rootId ? _('store.levelTop') : _('store.levelCrate', { name: path('parent', op.parent) });
+      const before = op.before != null ? (at.before ?? crateOwnName(ctx, op.before)) : null;
+      if (op.reorder) return before != null ? _('op.reorderBefore', { crate: moved, before }) : _('op.reorderEnd', { crate: moved, level });
+      return before != null ? _('op.moveBefore', { crate: moved, level, before }) : _('op.moveEnd', { crate: moved, level });
     }
     case 'deleteCrate':
-      return _('op.deleteCrate', { crate: crate(op.crate) });
+      return _('op.deleteCrate', { crate: path('crate', op.crate) });
     case 'mergeCrate':
-      return _('op.mergeCrate', { from: crate(op.from), into: crate(op.into) });
+      return _('op.mergeCrate', { from: path('from', op.from), into: path('into', op.into) });
     case 'removeTrack': {
       if (op.deleteFile && op.reason === 'common.reject') return _('op.rejectTrack', { track: track(op.asset) });
       const main = op.deleteFile ? _('op.removeAndTrash', { track: track(op.asset) }) : _('op.removeTrack', { track: track(op.asset) });
@@ -87,8 +102,7 @@ export function opText(ctx, op) {
       return _('op.relocate', { track: track(op.asset), path: op.path });
     case 'importTrack': {
       if (op.crate == null) return _('op.import', { file: fileName(op.path) });
-      const where = eff.crates.has(op.crate) || eff.base.crates.has(op.crate) ? crate(op.crate) : op.crateName ?? crate(op.crate);
-      return _('op.importInto', { file: fileName(op.path), crate: where });
+      return _('op.importInto', { file: fileName(op.path), crate: at.crate ?? op.crateName ?? crateName(ctx, op.crate) });
     }
     default:
       return op.text || op.type;

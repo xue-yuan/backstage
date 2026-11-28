@@ -26,6 +26,7 @@
   "apply.keepSeratoClosed": "請勿打開 Serato DJ",
   "apply.nothingApplied": "未套用任何變更，Serato 未被修改。",
   "apply.nothingToApply": "變更計畫中沒有可套用的動作。",
+  "apply.planChangedElsewhere": "變更計畫已在其他視窗變更，請重新載入頁面並確認計畫後再套用。",
   "apply.progress": "套用中：測試 → 備份 → 寫入 → 驗證…",
   "apply.removeSongReject": "移除歌曲 / 淘汰",
   "apply.restoreConfirm": "還原上次套用前的備份？",

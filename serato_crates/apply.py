@@ -81,6 +81,10 @@ def serato_str_norm(value):
 _FORMATS = {"aif": "aiff"}  # what Serato stores in asset.format when it differs from the extension
 
 
+def _name_key(name: str) -> str:
+    return unicodedata.normalize("NFKC", name).lower()
+
+
 def _path_key(pid: str) -> str:
     """A path the way two spellings of the same file compare equal (Unicode form and case)."""
     return unicodedata.normalize("NFC", pid).casefold()
@@ -256,10 +260,12 @@ class _Writer:
         return rasset, msa, rsa
 
     def _sibling_named(self, mparent: int, name: str, except_mid: int | None = None) -> int | None:
-        """The crate under `mparent` with this name, ignoring letter case of any alphabet (as the page does)."""
-        key = name.casefold()
+        """The crate under `mparent` with this name, compared as the page compares names (sameName in model.js):
+        letter case of any alphabet and Unicode-equivalent forms (é as one or two code points, full-width
+        letters) count as the same; accents do not."""
+        key = _name_key(name)
         for cid, cname in self.con.execute("SELECT id, name FROM main.container WHERE parent_id = ? AND type = 1", (mparent,)):
-            if cid != except_mid and cname.casefold() == key:
+            if cid != except_mid and _name_key(cname) == key:
                 return cid
         return None
 

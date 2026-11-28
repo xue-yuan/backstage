@@ -4,7 +4,7 @@ Cratify is a Mac app for organising a Serato DJ 4 library. It shows which music 
 
 The interface is available in English and Traditional Chinese.
 
-Website: https://xue-yuan.github.io/cratify/ · Download: [GitHub Releases](https://github.com/xue-yuan/cratify/releases/latest)
+Website: https://xueyuan.dev/cratify/ · Download: [GitHub Releases](https://github.com/xue-yuan/cratify/releases/latest)
 
 Cratify is an independent project and is not affiliated with Serato. It writes to Serato DJ's library database; read the [Disclaimer](#disclaimer) before using it.
 
